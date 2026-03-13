@@ -1,6 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import type {
+  AgentCommentsDraft,
+  AgentPlan,
+  AgentPlanStep,
+  AgentPostDraft,
+  AgentResearchResult,
+  AgentResearchSummary,
   GitHubRepo,
   MarketInsightReport,
   PlayStoreAppDetail,
@@ -13,6 +19,32 @@ interface RepositorySelectionResponse {
     score: number;
     reasoning: string;
   }>;
+}
+
+interface AgentPlanResponse {
+  summary?: string;
+  tone?: string;
+  estimatedMinutes?: number;
+  approvalRequired?: boolean;
+  deliverables?: string[];
+  researchQueries?: string[];
+  steps?: Array<Partial<AgentPlanStep>>;
+}
+
+interface AgentResearchSummaryResponse {
+  executiveSummary?: string;
+  keyFindings?: string[];
+  contentAngles?: string[];
+}
+
+interface AgentPostDraftResponse {
+  headline?: string;
+  body?: string;
+  callToAction?: string;
+}
+
+interface AgentCommentsDraftResponse {
+  comments?: string[];
 }
 
 const DEFAULT_BASE_URL = process.env.ANTHROPIC_BASE_URL ?? process.env.ZAI_BASE_URL;
@@ -35,6 +67,29 @@ function chunkArray<T>(items: T[], chunkSize: number): T[][] {
     chunks.push(items.slice(index, index + chunkSize));
   }
   return chunks;
+}
+
+function uniqueStrings(values: string[], limit?: number): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const value of values) {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      continue;
+    }
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    output.push(normalized);
+    if (typeof limit === "number" && output.length >= limit) {
+      break;
+    }
+  }
+
+  return output;
 }
 
 function extractTextContent(content: unknown): string {
@@ -73,6 +128,56 @@ function extractJsonPayload<T>(raw: string): T {
     }
     throw new Error(`could not parse Claude JSON response: ${trimmed.slice(0, 240)}`);
   }
+}
+
+function normalizePlanSteps(steps: Array<Partial<AgentPlanStep>> | undefined): AgentPlanStep[] {
+  const allowedKinds = new Set<AgentPlanStep["kind"]>([
+    "research",
+    "draft_post",
+    "draft_comments",
+    "review",
+    "report"
+  ]);
+
+  const normalized: Array<AgentPlanStep | null> = (steps ?? []).map((step, index) => {
+      const kind =
+        typeof step.kind === "string" && allowedKinds.has(step.kind as AgentPlanStep["kind"])
+          ? (step.kind as AgentPlanStep["kind"])
+          : null;
+      if (!kind) {
+        return null;
+      }
+
+      return {
+        id: String(step.id ?? `step_${index + 1}`),
+        kind,
+        title: String(step.title ?? kind.replace(/_/g, " ")).trim(),
+        goal: String(step.goal ?? "").trim() || "Complete this step well.",
+        status: "pending"
+      };
+    });
+
+  return normalized.filter((step): step is AgentPlanStep => step !== null);
+}
+
+function buildFallbackPlan(instruction: string): AgentPlan {
+  return {
+    summary: instruction.trim(),
+    tone: "clear, upbeat, and human",
+    estimatedMinutes: 15,
+    approvalRequired: true,
+    deliverables: ["job report"],
+    researchQueries: [],
+    steps: [
+      {
+        id: "step_1",
+        kind: "report",
+        title: "Prepare report",
+        goal: "Summarize the plan and current outputs.",
+        status: "pending"
+      }
+    ]
+  };
 }
 
 export class LlmService {
@@ -238,5 +343,185 @@ export class LlmService {
     ].join("\n");
 
     return this.requestJson<MarketInsightReport>(system, prompt, 4_000);
+  }
+
+  async planAgentJob(input: {
+    instruction: string;
+    memory?: string;
+    maxQueries?: number;
+  }): Promise<AgentPlan> {
+    const maxQueries = Math.max(0, Math.min(5, input.maxQueries ?? 3));
+    const system = [
+      "You are an execution planner for a simple browser agent.",
+      "Turn a natural-language request into a small, realistic plan that can be executed in order.",
+      "Prefer simple steps, concrete deliverables, and human review before anything public-facing."
+    ].join(" ");
+
+    const prompt = [
+      "Plan this job.",
+      `Instruction: ${input.instruction}`,
+      input.memory ? `Memory / product context:\n${input.memory}` : "Memory / product context: none provided",
+      "",
+      "Return strict JSON with this exact schema:",
+      '{"summary":"...","tone":"...","estimatedMinutes":18,"approvalRequired":true,"deliverables":["..."],"researchQueries":["..."],"steps":[{"id":"step_1","kind":"research","title":"...","goal":"...","status":"pending"}]}',
+      "Rules:",
+      `- Keep researchQueries to at most ${maxQueries}.`,
+      "- Allowed step kinds: research, draft_post, draft_comments, review, report.",
+      "- Use review for any step that should wait for user approval.",
+      "- Make the tone match the request. If the request feels joyful, keep it bright and warm instead of clinical.",
+      "- Keep the plan realistic for a single run.",
+      "- Do not include prose outside the JSON."
+    ].join("\n");
+
+    const payload = await this.requestJson<AgentPlanResponse>(system, prompt, 3_000);
+    const steps = normalizePlanSteps(payload.steps);
+
+    const normalizedPlan: AgentPlan = {
+      summary: String(payload.summary ?? input.instruction).trim() || input.instruction.trim(),
+      tone: String(payload.tone ?? "clear, upbeat, and human").trim() || "clear, upbeat, and human",
+      estimatedMinutes: Math.max(
+        5,
+        Math.min(180, Math.round(Number(payload.estimatedMinutes ?? 15) || 15))
+      ),
+      approvalRequired: payload.approvalRequired !== false,
+      deliverables: uniqueStrings(
+        Array.isArray(payload.deliverables) ? payload.deliverables.map(String) : ["job report"],
+        8
+      ),
+      researchQueries: uniqueStrings(
+        Array.isArray(payload.researchQueries) ? payload.researchQueries.map(String) : [],
+        maxQueries
+      ),
+      steps:
+        steps.length > 0
+          ? steps
+          : buildFallbackPlan(input.instruction).steps
+    };
+
+    if (normalizedPlan.deliverables.length === 0) {
+      normalizedPlan.deliverables = ["job report"];
+    }
+
+    return normalizedPlan;
+  }
+
+  async synthesizeAgentResearch(input: {
+    instruction: string;
+    research: AgentResearchResult[];
+  }): Promise<AgentResearchSummary> {
+    const system = [
+      "You synthesize light web research for product and content work.",
+      "Prefer concrete patterns, repeated signals, and useful marketing angles over generic summaries."
+    ].join(" ");
+
+    const prompt = [
+      `Instruction: ${input.instruction}`,
+      "Return strict JSON with this exact schema:",
+      '{"executiveSummary":"...","keyFindings":["..."],"contentAngles":["..."]}',
+      "Rules:",
+      "- Use only the supplied research snippets and page digests.",
+      "- Keep findings concise and evidence-oriented.",
+      "- Keep content angles lively and practical.",
+      "- Do not include prose outside the JSON.",
+      "",
+      JSON.stringify({ research: input.research }, null, 2)
+    ].join("\n");
+
+    const payload = await this.requestJson<AgentResearchSummaryResponse>(system, prompt, 3_000);
+    return {
+      executiveSummary:
+        String(payload.executiveSummary ?? "").trim() || "Research gathered. Review the source notes below.",
+      keyFindings: uniqueStrings(
+        Array.isArray(payload.keyFindings) ? payload.keyFindings.map(String) : [],
+        6
+      ),
+      contentAngles: uniqueStrings(
+        Array.isArray(payload.contentAngles) ? payload.contentAngles.map(String) : [],
+        6
+      )
+    };
+  }
+
+  async draftAgentPost(input: {
+    instruction: string;
+    plan: AgentPlan;
+    researchSummary?: AgentResearchSummary | null;
+    memory?: string;
+  }): Promise<AgentPostDraft> {
+    const system = [
+      "You write polished social and product marketing drafts.",
+      "Sound human, specific, and lively. Avoid stiff corporate filler."
+    ].join(" ");
+
+    const prompt = [
+      `Instruction: ${input.instruction}`,
+      `Plan summary: ${input.plan.summary}`,
+      `Desired tone: ${input.plan.tone}`,
+      input.memory ? `Memory / product context:\n${input.memory}` : "Memory / product context: none provided",
+      "",
+      "Research summary:",
+      JSON.stringify(input.researchSummary ?? null, null, 2),
+      "",
+      "Return strict JSON with this exact schema:",
+      '{"headline":"...","body":"...","callToAction":"..."}',
+      "Rules:",
+      "- Write one strong draft post.",
+      "- Keep it warm, specific, and easy to edit.",
+      "- The body can be multi-paragraph plain text.",
+      "- Avoid making factual claims that are not supported by the research summary or provided memory.",
+      "- Do not include prose outside the JSON."
+    ].join("\n");
+
+    const payload = await this.requestJson<AgentPostDraftResponse>(system, prompt, 2_500);
+    return {
+      headline: String(payload.headline ?? "Draft Post").trim() || "Draft Post",
+      body: String(payload.body ?? "").trim() || "Draft body not generated.",
+      callToAction: String(payload.callToAction ?? "").trim() || "Tell me what to refine before publishing."
+    };
+  }
+
+  async draftAgentComments(input: {
+    instruction: string;
+    plan: AgentPlan;
+    researchSummary?: AgentResearchSummary | null;
+    memory?: string;
+    count?: number;
+  }): Promise<AgentCommentsDraft> {
+    const desiredCount = Math.max(1, Math.min(10, input.count ?? 5));
+    const system = [
+      "You write short, human comments for communities and social threads.",
+      "Comments should feel natural, useful, and not spammy."
+    ].join(" ");
+
+    const prompt = [
+      `Instruction: ${input.instruction}`,
+      `Plan summary: ${input.plan.summary}`,
+      `Desired tone: ${input.plan.tone}`,
+      input.memory ? `Memory / product context:\n${input.memory}` : "Memory / product context: none provided",
+      "",
+      "Research summary:",
+      JSON.stringify(input.researchSummary ?? null, null, 2),
+      "",
+      "Return strict JSON with this exact schema:",
+      `{"comments":["..."]}`,
+      "Rules:",
+      `- Write exactly ${desiredCount} distinct comments.`,
+      "- Keep each comment concise, warm, and believable.",
+      "- Avoid sounding like a hard sell.",
+      "- Do not include prose outside the JSON."
+    ].join("\n");
+
+    const payload = await this.requestJson<AgentCommentsDraftResponse>(system, prompt, 2_500);
+    const comments = uniqueStrings(
+      Array.isArray(payload.comments) ? payload.comments.map(String) : [],
+      desiredCount
+    );
+
+    return {
+      comments:
+        comments.length > 0
+          ? comments
+          : ["Draft comment not generated. Ask for a fresh draft after reviewing the brief."]
+    };
   }
 }

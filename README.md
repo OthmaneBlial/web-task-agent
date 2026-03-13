@@ -6,6 +6,7 @@ CDP-based browser automation for repetitive web research tasks using a real Chro
 
 - Scans GitHub search result pages across pagination and ranks interesting repositories with Claude.
 - Scrapes Google Play search results, opens app detail pages in human-like flows, and generates market insight reports.
+- Plans higher-level agent jobs from a single instruction, does lightweight browser research, drafts content, and produces a review-ready report.
 - Attaches to an already running Chrome debugger session instead of using Puppeteer or Playwright.
 - Saves incremental task state to `.cache/` so runs can resume.
 
@@ -33,7 +34,9 @@ ANTHROPIC_MODEL=claude-sonnet-4-20250514
 ANTHROPIC_TIMEOUT_MS=90000
 ```
 
-## Start Chrome
+## Start Chrome First
+
+All real runs are meant to use a real visible Chrome window. Start Chrome first, keep it open, then run the task in a second terminal.
 
 ```bash
 cd /home/othmane/Downloads/automation/web-task-agent
@@ -47,6 +50,7 @@ If the `curl` command returns browser JSON, the debugger is ready.
 
 ```bash
 cd /home/othmane/Downloads/automation/web-task-agent
+npm run chrome:start
 npm run start -- github --url 'https://github.com/search?q=language%3AC+stars%3A%3C500&type=repositories' --pages 30 --criteria 'Hidden gems with less than 500 stars that do low level systems programming'
 ```
 
@@ -54,17 +58,51 @@ npm run start -- github --url 'https://github.com/search?q=language%3AC+stars%3A
 
 ```bash
 cd /home/othmane/Downloads/automation/web-task-agent
-npm run start -- playstore --query 'habit tracker adhd' --analyze-top 10
+npm run chrome:start
+npm run start -- playstore --query 'gratitude journal' --analyze-top 10
 ```
 
 ## Resume A Previous Run
 
 ```bash
 cd /home/othmane/Downloads/automation/web-task-agent
+npm run chrome:start
 npm run start -- github --url 'https://github.com/search?q=language%3AC+stars%3A%3C500&type=repositories' --pages 30 --criteria 'Hidden gems with less than 500 stars that do low level systems programming' --resume
 
-npm run start -- playstore --query 'habit tracker adhd' --analyze-top 10 --resume
+npm run start -- playstore --query 'gratitude journal' --analyze-top 10 --resume
 ```
+
+## Agent Example
+
+```bash
+cd /home/othmane/Downloads/automation/web-task-agent
+npm run chrome:start
+npm run start -- agent run "Research cheerful campaign ideas for our product, draft one bright launch post, write 5 friendly community comments, and wait for my review"
+```
+
+Expected end-of-run output shape:
+
+```text
+[timestamp] attached to visible Chrome debugger session
+[timestamp] researching: cheerful marketing campaign examples
+[timestamp] scanning results for "..." for about 6s
+[timestamp] opening article: ...
+[timestamp] reading article: ... for about 14s
+Agent job update.
+Status: waiting_review
+Estimated time: 4 minutes
+Cache: /home/othmane/Downloads/automation/web-task-agent/.cache/agent_run_<id>.json
+Report: /home/othmane/Downloads/automation/web-task-agent/reports/agent-job-<id>/report.md
+Artifacts: /home/othmane/Downloads/automation/web-task-agent/reports/agent-job-<id>
+```
+
+If you paste a quoted instruction across multiple lines, your shell can insert a real newline into the text. The CLI now normalizes extra whitespace, but it is still better to keep the instruction on one line.
+
+For research runs, the agent now behaves more like a real person:
+
+- It spends a few seconds scanning the search results page.
+- It keeps a useful article open for 10-20 seconds with staggered scrolling.
+- It closes thin, broken, or error-like pages quickly and moves on.
 
 ## Real Run Smoke Tests
 
@@ -74,7 +112,8 @@ These are the exact real runs validated against a live Chrome session.
 
 ```bash
 cd /home/othmane/Downloads/automation/web-task-agent
-npm run start -- playstore --query 'habit tracker adhd' --analyze-top 1 --report /tmp/playstore-smoke-report.md
+npm run chrome:start
+npm run start -- playstore --query 'gratitude journal' --analyze-top 1 --report /tmp/playstore-smoke-report.md
 ```
 
 Expected successful end-of-run output shape:
@@ -92,6 +131,7 @@ Apps analyzed: 1
 
 ```bash
 cd /home/othmane/Downloads/automation/web-task-agent
+npm run chrome:start
 curl -s http://127.0.0.1:9222/json/version
 curl -s http://127.0.0.1:9222/json/list | head
 ```
@@ -100,13 +140,15 @@ curl -s http://127.0.0.1:9222/json/list | head
 
 ```bash
 cd /home/othmane/Downloads/automation/web-task-agent
-npm run start -- playstore --query 'habit tracker adhd' --analyze-top 10
+npm run chrome:start
+npm run start -- playstore --query 'gratitude journal' --analyze-top 10
 ```
 
 ### 4. Full GitHub run
 
 ```bash
 cd /home/othmane/Downloads/automation/web-task-agent
+npm run chrome:start
 npm run start -- github --url 'https://github.com/search?q=language%3AC+stars%3A%3C500&type=repositories' --pages 30 --criteria 'Hidden gems with less than 500 stars that do low level systems programming'
 ```
 

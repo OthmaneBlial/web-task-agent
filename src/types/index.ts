@@ -153,6 +153,116 @@ export interface MarketInsightReport {
   standoutApps: string[];
 }
 
+export type AgentJobStatus = "planning" | "running" | "waiting_review" | "completed" | "failed";
+
+export type AgentStepStatus = "pending" | "running" | "completed" | "failed" | "skipped";
+
+export type AgentStepKind =
+  | "research"
+  | "draft_post"
+  | "draft_comments"
+  | "review"
+  | "report";
+
+export interface AgentPlanStep {
+  id: string;
+  kind: AgentStepKind;
+  title: string;
+  goal: string;
+  status: AgentStepStatus;
+}
+
+export interface AgentPlan {
+  summary: string;
+  tone: string;
+  estimatedMinutes: number;
+  approvalRequired: boolean;
+  deliverables: string[];
+  researchQueries: string[];
+  steps: AgentPlanStep[];
+}
+
+export interface AgentPageDigest {
+  title: string;
+  url: string;
+  description: string;
+  h1: string | null;
+  headings: string[];
+  paragraphs: string[];
+  capturedAt: string;
+}
+
+export interface AgentSearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+  site: string;
+  page?: AgentPageDigest;
+  reviewStatus?: "read" | "skipped" | "error";
+  dwellSeconds?: number;
+  skipReason?: string;
+}
+
+export interface AgentResearchResult {
+  query: string;
+  searchedAt: string;
+  results: AgentSearchResult[];
+  error?: string;
+}
+
+export interface AgentResearchSummary {
+  executiveSummary: string;
+  keyFindings: string[];
+  contentAngles: string[];
+}
+
+export interface AgentPostDraft {
+  headline: string;
+  body: string;
+  callToAction: string;
+}
+
+export interface AgentCommentsDraft {
+  comments: string[];
+}
+
+export interface AgentRunOptions {
+  instruction: string;
+  resume: boolean;
+  cachePath?: string;
+  cacheDir?: string;
+  reportPath?: string;
+  memoryPath?: string;
+  maxQueries?: number;
+  maxResultsPerQuery?: number;
+}
+
+export interface AgentRunState {
+  task: "agent";
+  runId: string;
+  startedAt: string;
+  updatedAt: string;
+  status: AgentJobStatus;
+  input: {
+    instruction: string;
+    memoryPath: string | null;
+    maxQueries: number;
+    maxResultsPerQuery: number;
+  };
+  reportPath: string;
+  artifactDir: string;
+  plan: AgentPlan | null;
+  research: AgentResearchResult[];
+  researchSummary: AgentResearchSummary | null;
+  outputs: {
+    planPath: string | null;
+    researchSummaryPath: string | null;
+    postDraftPath: string | null;
+    commentsDraftPath: string | null;
+  };
+  notes: string[];
+}
+
 export interface CacheEnvelope<T> {
   version: number;
   task: string;
