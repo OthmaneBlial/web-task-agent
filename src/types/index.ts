@@ -1,13 +1,5 @@
 export type CDPClient = any;
 
-export interface PageTarget {
-  id: string;
-  title: string;
-  type: string;
-  url: string;
-  webSocketDebuggerUrl?: string;
-}
-
 export interface BoundingBox {
   x: number;
   y: number;

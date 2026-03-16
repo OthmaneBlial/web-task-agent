@@ -3,13 +3,10 @@ import path from "node:path";
 
 import { createOrResumeState, createRunId, ensureDir, saveTaskState } from "../lib/cache";
 import {
-  bringPageToFront,
   captureScreenshot,
-  closeTarget,
-  connectToTarget,
+  closePageSession,
+  createPageSession,
   evaluateInBrowser,
-  listPageTargets,
-  openNewTab,
   sleep,
   waitForLoadEvent,
   waitForAnySelector,
@@ -22,7 +19,6 @@ import { BaseTask } from "./BaseTask";
 import type {
   CDPClient,
   MarketInsightReport,
-  PageTarget,
   PlayStoreAnalyzerOptions,
   PlayStoreAnalyzerState,
   PlayStoreAppDetail,
@@ -177,60 +173,11 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
     throw new Error(`timed out waiting for at least ${minimum} Play Store app links`);
   }
 
-  private buildAppSelector(summary: PlayStoreAppSummary): string {
-    if (!summary.appId) {
-      throw new Error(`cannot build selector for app without appId: ${summary.name}`);
-    }
-    return `a[href*="id=${summary.appId}"]`;
+  private buildDetailUrl(summary: PlayStoreAppSummary): string {
+    return `https://play.google.com/store/apps/details?id=${summary.appId}&hl=en&gl=us`;
   }
 
-  private async waitForNewTarget(
-    existingTargetIds: Set<string>,
-    appId: string,
-    timeoutMs: number = 12_000
-  ): Promise<PageTarget> {
-    const startedAt = Date.now();
-
-    while (Date.now() - startedAt < timeoutMs) {
-      const targets = await listPageTargets();
-      const created = targets.find(
-        (target) =>
-          !existingTargetIds.has(target.id) &&
-          (target.url.includes(appId) || target.title.toLowerCase().includes(appId.toLowerCase()))
-      );
-      if (created) {
-        return created;
-      }
-
-      const anyCreated = targets.find((target) => !existingTargetIds.has(target.id));
-      if (anyCreated) {
-        return anyCreated;
-      }
-
-      await sleep(150, 0.1);
-    }
-
-    throw new Error(`timed out waiting for a new detail tab for ${appId}`);
-  }
-
-  private async openAppInDetailTab(
-    searchClient: CDPClient,
-    summary: PlayStoreAppSummary
-  ): Promise<{ target: PageTarget; client: CDPClient }> {
-    const beforeTargetIds = new Set((await listPageTargets()).map((target) => target.id));
-    const selector = this.buildAppSelector(summary);
-
-    await humanScroll(searchClient, { distancePx: 700, tickCount: 5 });
-    await humanClick(searchClient, selector, { modifiers: 2 });
-
-    const detailTarget = await this.waitForNewTarget(beforeTargetIds, summary.appId ?? summary.key);
-    const detailClient = await connectToTarget(detailTarget);
-    await bringPageToFront(detailClient);
-
-    return { target: detailTarget, client: detailClient };
-  }
-
-  private async scrapeSearchResults(client: unknown): Promise<PlayStoreAppSummary[]> {
+  private async scrapeSearchResults(client: CDPClient): Promise<PlayStoreAppSummary[]> {
     return evaluateInBrowser<PlayStoreAppSummary[]>(
       client,
       `() => {
@@ -315,7 +262,7 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
   }
 
   private async scrapeDetailPage(
-    client: unknown,
+    client: CDPClient,
     summary: PlayStoreAppSummary
   ): Promise<PlayStoreAppDetail> {
     return evaluateInBrowser<PlayStoreAppDetail>(
@@ -385,11 +332,9 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
         : `starting Play Store run for query "${state.input.query}"`
     );
 
-    const target = await openNewTab(state.searchUrl);
-    const client = await connectToTarget(target);
+    const client = await createPageSession(state.searchUrl);
 
     try {
-      await bringPageToFront(client);
       await this.waitForStoreSearchResults(client);
 
       let summaries = state.summaries;
@@ -411,14 +356,11 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
           continue;
         }
 
-        let detailTarget: PageTarget | null = null;
+        // Open each detail page in a separate session instead of a new tab.
         let detailClient: CDPClient | null = null;
         try {
-          await bringPageToFront(client);
-          const detailSession = await this.openAppInDetailTab(client, summary);
-          detailTarget = detailSession.target;
-          detailClient = detailSession.client;
-          await bringPageToFront(detailClient);
+          const detailUrl = this.buildDetailUrl(summary);
+          detailClient = await createPageSession(detailUrl);
           await this.waitForStoreDetail(detailClient);
           await humanScroll(detailClient, { distancePx: 1_400 });
           await humanScroll(detailClient, { distancePx: 1_100 });
@@ -434,13 +376,8 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
           this.log(`failed to analyze ${summary.name}: ${String(error)} (screenshot: ${screenshotPath})`);
         } finally {
           if (detailClient) {
-            await detailClient.close();
+            await closePageSession(detailClient);
           }
-          if (detailTarget) {
-            await closeTarget(detailTarget);
-          }
-          await bringPageToFront(client);
-          await this.softWaitForNetworkIdle(client);
         }
       }
 
@@ -466,7 +403,7 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
       saveTaskState("playstore", cachePath, state);
       throw error;
     } finally {
-      await client.close();
+      await closePageSession(client);
     }
   }
 }

@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 import CDP = require("chrome-remote-interface");
@@ -8,107 +7,10 @@ import type {
   CDPClient,
   LocatedElement,
   NetworkIdleOptions,
-  PageTarget,
   WaitForSelectorOptions
 } from "../types";
 
-export const DEBUG_PORT = Number(process.env.CHROME_PORT ?? "9222");
-
-const STATE_DIR = path.join(os.homedir(), ".cache", "web-task-agent");
-const STATE_PATH = path.join(STATE_DIR, "state.json");
-
-interface BrowserState {
-  recentTargetIds: string[];
-}
-
-function ensureStateDir(): void {
-  fs.mkdirSync(STATE_DIR, { recursive: true });
-}
-
-function readState(): BrowserState {
-  ensureStateDir();
-  if (!fs.existsSync(STATE_PATH)) {
-    return { recentTargetIds: [] };
-  }
-
-  try {
-    const raw = fs.readFileSync(STATE_PATH, "utf8");
-    const parsed = JSON.parse(raw) as BrowserState;
-    if (!Array.isArray(parsed.recentTargetIds)) {
-      return { recentTargetIds: [] };
-    }
-    return {
-      recentTargetIds: parsed.recentTargetIds.map(String)
-    };
-  } catch {
-    return { recentTargetIds: [] };
-  }
-}
-
-function writeState(nextState: BrowserState): void {
-  ensureStateDir();
-  fs.writeFileSync(
-    STATE_PATH,
-    JSON.stringify({ recentTargetIds: nextState.recentTargetIds.slice(0, 60) }, null, 2),
-    "utf8"
-  );
-}
-
-function normalizeTarget(raw: Record<string, unknown>): PageTarget {
-  return {
-    id: String(raw.id ?? raw.targetId ?? ""),
-    title: String(raw.title ?? ""),
-    type: String(raw.type ?? ""),
-    url: String(raw.url ?? ""),
-    webSocketDebuggerUrl:
-      typeof raw.webSocketDebuggerUrl === "string" ? raw.webSocketDebuggerUrl : undefined
-  };
-}
-
-function isPageTarget(raw: Record<string, unknown>): boolean {
-  const target = normalizeTarget(raw);
-  if (target.type !== "page") {
-    return false;
-  }
-
-  return !(
-    target.url.startsWith("devtools://") ||
-    target.url.startsWith("chrome-extension://") ||
-    target.url.startsWith("chrome://")
-  );
-}
-
-function orderTargetsByState(targets: PageTarget[]): PageTarget[] {
-  const state = readState();
-
-  return [...targets].sort((left, right) => {
-    const leftIndex = state.recentTargetIds.indexOf(left.id);
-    const rightIndex = state.recentTargetIds.indexOf(right.id);
-    const leftRank = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
-    const rightRank = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
-    return leftRank - rightRank;
-  });
-}
-
-export function touchTarget(targetId: string): void {
-  if (!targetId) {
-    return;
-  }
-
-  const state = readState();
-  state.recentTargetIds = [targetId, ...state.recentTargetIds.filter((id) => id !== targetId)];
-  writeState(state);
-}
-
-export function forgetTarget(targetId: string): void {
-  if (!targetId) {
-    return;
-  }
-
-  const state = readState();
-  state.recentTargetIds = state.recentTargetIds.filter((id) => id !== targetId);
-  writeState(state);
-}
+export const DEBUG_PORT = Number(process.env.CDP_PORT ?? process.env.CHROME_PORT ?? "9222");
 
 function randomInt(min: number, max: number): number {
   const lower = Math.ceil(Math.min(min, max));
@@ -122,66 +24,27 @@ export async function sleep(ms: number, jitterRatio: number = 0.18): Promise<voi
   await new Promise((resolve) => setTimeout(resolve, actualMs));
 }
 
+/**
+ * Verify the Lightpanda CDP server is reachable.
+ */
 export async function ensureDebuggerReady(): Promise<void> {
-  try {
-    await CDP.Version({ port: DEBUG_PORT });
-  } catch {
-    throw new Error(
-      `chrome debugger not reachable on 127.0.0.1:${DEBUG_PORT}. run npm run chrome:start or npm run chrome:start:headless first`
-    );
+  const url = `http://127.0.0.1:${DEBUG_PORT}/json/version`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        return;
+      }
+    } catch {
+      // Server not ready yet; retry.
+    }
+    if (attempt < 2) {
+      await sleep(500, 0.05);
+    }
   }
-}
-
-async function listAllPageTargets(): Promise<PageTarget[]> {
-  await ensureDebuggerReady();
-  const rawTargets = (await CDP.List({ port: DEBUG_PORT })) as unknown as Array<Record<string, unknown>>;
-  return rawTargets.filter(isPageTarget).map(normalizeTarget);
-}
-
-export async function listPageTargets(): Promise<PageTarget[]> {
-  return orderTargetsByState(await listAllPageTargets());
-}
-
-export async function findTargetById(targetId: string): Promise<PageTarget | undefined> {
-  const targets = await listAllPageTargets();
-  return targets.find((target) => target.id === targetId);
-}
-
-export async function resolvePageTarget(index: number): Promise<PageTarget> {
-  if (!Number.isInteger(index) || index < 0) {
-    throw new Error("tab index must be a non-negative integer");
-  }
-
-  const targets = await listPageTargets();
-  const target = targets[index];
-  if (!target) {
-    throw new Error(`tab index ${index} not found. currently available tabs: ${targets.length}`);
-  }
-
-  touchTarget(target.id);
-  return target;
-}
-
-export async function openNewTab(url: string): Promise<PageTarget> {
-  await ensureDebuggerReady();
-  const created = normalizeTarget(
-    (await CDP.New({ port: DEBUG_PORT, url })) as unknown as Record<string, unknown>
+  throw new Error(
+    `lightpanda CDP server not reachable on 127.0.0.1:${DEBUG_PORT}. run ./scripts/start-lightpanda.sh first`
   );
-  if (created.id) {
-    touchTarget(created.id);
-  }
-
-  return (created.id ? await findTargetById(created.id) : undefined) ?? created;
-}
-
-export async function closeTarget(target: PageTarget): Promise<void> {
-  if (!target.id) {
-    throw new Error("cannot close a target without an id");
-  }
-
-  await ensureDebuggerReady();
-  await CDP.Close({ id: target.id, port: DEBUG_PORT });
-  forgetTarget(target.id);
 }
 
 async function enableCoreDomains(client: CDPClient): Promise<void> {
@@ -191,29 +54,104 @@ async function enableCoreDomains(client: CDPClient): Promise<void> {
   await client.Network.enable();
 }
 
-export async function connectToTarget(target: PageTarget): Promise<CDPClient> {
-  if (!target.webSocketDebuggerUrl) {
-    const refreshed = await findTargetById(target.id);
-    if (!refreshed?.webSocketDebuggerUrl) {
-      throw new Error("unable to attach to target because the websocket debugger URL is missing");
-    }
-    target = refreshed;
-  }
+/**
+ * Create a new CDP session by connecting directly to the Lightpanda WebSocket.
+ * Each call creates an independent page context.
+ */
+export async function createPageSession(url?: string): Promise<CDPClient> {
+  await ensureDebuggerReady();
 
-  const client = (await CDP({
-    target: target.webSocketDebuggerUrl,
-    port: DEBUG_PORT
+  const versionResp = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
+  if (!versionResp.ok) {
+    throw new Error(`failed to get json/version from lightpanda (HTTP ${versionResp.status})`);
+  }
+  const versionInfo = await versionResp.json() as { webSocketDebuggerUrl: string };
+
+  // Connect to the root browser WebSocket
+  const rootClient = (await CDP({
+    target: versionInfo.webSocketDebuggerUrl,
+    local: true
   })) as CDPClient;
 
-  await enableCoreDomains(client);
-  touchTarget(target.id);
-  return client;
+  // Create a new independent browser context and target
+  const { browserContextId } = await rootClient.Target.createBrowserContext();
+  const { targetId } = await rootClient.Target.createTarget({
+    url: "about:blank",
+    browserContextId
+  });
+
+  // Attach to the new target using a flat session
+  const { sessionId } = await rootClient.Target.attachToTarget({
+    targetId,
+    flatten: true
+  });
+
+  // Create a Proxy over the root client that automatically injects the sessionId
+  // into all domain commands, making it look like a regular per-target CDPClient.
+  const proxyClient = new Proxy(rootClient, {
+    get(target: any, prop: string) {
+      if (prop === 'close') {
+        return async () => {
+          try {
+            await target.Target.closeTarget({ targetId });
+            await target.close();
+          } catch {
+            // ignore
+          }
+        };
+      }
+      if (prop === 'send') {
+        return (method: string, params?: object) => target.send(method, params, sessionId);
+      }
+
+      // If accessing a Domain like 'Page', return a wrapped object
+      if (typeof target[prop] === 'object' && target[prop] !== null) {
+        return new Proxy(target[prop], {
+          get(domainTarget: any, domainProp: string) {
+            if (typeof domainTarget[domainProp] === 'function') {
+              // Intercept the domain method call (e.g., Page.navigate)
+              return (params?: object) => target.send(`${prop}.${domainProp}`, params, sessionId);
+            }
+            return domainTarget[domainProp];
+          }
+        });
+      }
+
+      // If accessing an event binding, we need to bind event listeners specifying the sessionId
+      // actually CRI handles events automatically if flatten:true is used during CDP() creation.
+      // But we attached manually. CRI emits `${method}.${sessionId}` events.
+      if (prop === 'on') {
+        return (event: string, handler: Function) => target.on(`${event}.${sessionId}`, handler);
+      }
+      if (prop === 'once') {
+        return (event: string, handler: Function) => target.once(`${event}.${sessionId}`, handler);
+      }
+      if (prop === 'removeListener' || prop === 'off') {
+        return (event: string, handler: Function) => target.removeListener(`${event}.${sessionId}`, handler);
+      }
+
+      return target[prop];
+    }
+  }) as CDPClient;
+
+  await enableCoreDomains(proxyClient);
+
+  if (url) {
+    await proxyClient.Page.navigate({ url });
+    await waitForLoadEvent(proxyClient, 20_000);
+  }
+
+  return proxyClient;
 }
 
-export async function bringPageToFront(client: CDPClient): Promise<void> {
-  await client.Page.enable();
-  if (typeof client.Page.bringToFront === "function") {
-    await client.Page.bringToFront();
+/**
+ * Disconnect a CDP session.
+ */
+export async function closePageSession(client: CDPClient): Promise<void> {
+  try {
+    await client.close();
+  } catch {
+    // Ignore errors when closing (already disconnected, etc.)
   }
 }
 

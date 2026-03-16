@@ -3,14 +3,13 @@ import path from "node:path";
 
 import { createOrResumeState, createRunId, ensureDir, saveTaskState } from "../lib/cache";
 import {
-  bringPageToFront,
   captureScreenshot,
-  connectToTarget,
+  closePageSession,
+  createPageSession,
   evaluateInBrowser,
   getCurrentUrl,
   locateElement,
   navigateTo,
-  openNewTab,
   sleep,
   waitForLoadEvent,
   waitForLocationChange,
@@ -21,6 +20,7 @@ import { humanClick, humanScroll, scrollElementIntoView } from "../lib/humanizer
 import { LlmService } from "../lib/llm";
 import { BaseTask } from "./BaseTask";
 import type {
+  CDPClient,
   GitHubPageSnapshot,
   GitHubRepo,
   GitHubScannerOptions,
@@ -91,13 +91,13 @@ function buildInitialState(options: GitHubScannerOptions): GitHubScannerState {
 export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTaskResult> {
   private readonly llm = new LlmService();
 
-  private async waitForResults(client: unknown): Promise<void> {
+  private async waitForResults(client: CDPClient): Promise<void> {
     await waitForLoadEvent(client, 20_000);
     await waitForSelector(client, "main", { timeoutMs: 20_000 });
     await waitForNetworkIdle(client, { timeoutMs: 20_000, idleTimeMs: 900 });
   }
 
-  private async scrapePage(client: unknown, pageNumber: number): Promise<GitHubPageSnapshot> {
+  private async scrapePage(client: CDPClient, pageNumber: number): Promise<GitHubPageSnapshot> {
     return evaluateInBrowser<GitHubPageSnapshot>(
       client,
       `(page) => {
@@ -236,7 +236,7 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
     );
   }
 
-  private async scrapeWithRetry(client: unknown, pageNumber: number): Promise<GitHubPageSnapshot> {
+  private async scrapeWithRetry(client: CDPClient, pageNumber: number): Promise<GitHubPageSnapshot> {
     let lastError: unknown = undefined;
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -260,7 +260,7 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
-  private async goToNextPage(client: unknown, expectedNextUrl: string | null): Promise<boolean> {
+  private async goToNextPage(client: CDPClient, expectedNextUrl: string | null): Promise<boolean> {
     if (!expectedNextUrl) {
       return false;
     }
@@ -361,12 +361,9 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
     );
 
     const startUrl = state.completedPages > 0 ? state.nextPageUrl ?? state.lastPageUrl ?? state.input.url : state.input.url;
-    const target = await openNewTab(startUrl);
-    const client = await connectToTarget(target);
+    const client = await createPageSession(startUrl);
 
     try {
-      await bringPageToFront(client);
-
       let currentPage = state.completedPages + 1;
       let currentUrl = startUrl;
 
@@ -424,7 +421,7 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
       saveTaskState("github", cachePath, state);
       throw error;
     } finally {
-      await client.close();
+      await closePageSession(client);
     }
   }
 }

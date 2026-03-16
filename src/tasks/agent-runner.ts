@@ -3,13 +3,11 @@ import path from "node:path";
 
 import { createOrResumeState, createRunId, ensureDir, saveTaskState, writeJsonAtomic } from "../lib/cache";
 import {
-  bringPageToFront,
   captureScreenshot,
-  closeTarget,
-  connectToTarget,
+  closePageSession,
+  createPageSession,
   ensureDebuggerReady,
   evaluateInBrowser,
-  openNewTab,
   sleep,
   waitForAnySelector,
   waitForLoadEvent,
@@ -29,8 +27,7 @@ import type {
   AgentSearchResult,
   AgentStepKind,
   AgentResearchSummary,
-  CDPClient,
-  PageTarget
+  CDPClient
 } from "../types";
 
 interface AgentTaskResult {
@@ -78,22 +75,6 @@ function randomInt(min: number, max: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
-}
-
-function decodeHtmlEntities(value: string): string {
-  return value
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/gi, "'")
-    .replace(/&#(\d+);/g, (_match, code) => String.fromCharCode(Number(code)));
-}
-
-function stripHtml(value: string): string {
-  return decodeHtmlEntities(value).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function pageContentLength(page: AgentPageDigest): number {
@@ -381,14 +362,14 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
   }
 
   private buildSearchUrl(query: string): string {
-    return `https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=en-US&cc=us`;
+    return `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
   }
 
   private async waitForSearchResults(client: CDPClient): Promise<void> {
     await waitForLoadEvent(client, 20_000);
 
     try {
-      await waitForAnySelector(client, ["#b_results .b_algo h2 a", "#b_results li.b_algo"], {
+      await waitForAnySelector(client, [".result__a", ".results .result", "a.result__url"], {
         timeoutMs: 20_000
       });
       await this.softWaitForNetworkIdle(client);
@@ -407,8 +388,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       );
 
       throw new Error(
-        `${
-          error instanceof Error ? error.message : String(error)
+        `${error instanceof Error ? error.message : String(error)
         } | loaded page: ${pageContext.title} | ${pageContext.url} | ${pageContext.bodyStart}`
       );
     }
@@ -432,17 +412,31 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
         const results = [];
         const seen = new Set();
-        const cards = Array.from(document.querySelectorAll("#b_results li.b_algo"));
+
+        // DuckDuckGo HTML lite uses .result class with .result__a for the title link.
+        const cards = Array.from(document.querySelectorAll(".result, .results_links"));
 
         for (const card of cards) {
-          const anchor = card.querySelector("h2 a");
+          const anchor = card.querySelector(".result__a, a.result__a");
           if (!anchor) {
             continue;
           }
 
-          const href = anchor.getAttribute("href") || "";
+          let href = anchor.getAttribute("href") || "";
           if (!href) {
             continue;
+          }
+
+          // DuckDuckGo sometimes wraps URLs in a redirect; extract the actual URL.
+          if (href.includes("uddg=")) {
+            try {
+              const uddg = new URL(href, window.location.origin).searchParams.get("uddg");
+              if (uddg) {
+                href = uddg;
+              }
+            } catch {
+              // Use href as-is.
+            }
           }
 
           let url = null;
@@ -461,8 +455,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
           const title = normalize(anchor.textContent) || url;
           const snippet =
-            normalize(card.querySelector(".b_caption p")?.textContent) ||
-            normalize(card.querySelector(".b_snippet")?.textContent) ||
+            normalize(card.querySelector(".result__snippet")?.textContent) ||
+            normalize(card.querySelector(".result__body")?.textContent) ||
             "";
 
           results.push({
@@ -528,10 +522,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         index === segments - 1
           ? remainingMs
           : clamp(
-              Math.round(remainingMs / stagesLeft + randomBetween(-500, 900)),
-              1_500,
-              maxPauseMs
-            );
+            Math.round(remainingMs / stagesLeft + randomBetween(-500, 900)),
+            1_500,
+            maxPauseMs
+          );
 
       await sleep(pauseMs, 0.08);
       remainingMs -= pauseMs;
@@ -575,10 +569,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         index === segments - 1
           ? remainingMs
           : clamp(
-              Math.round(remainingMs / stagesLeft + randomBetween(-1_000, 1_400)),
-              2_500,
-              maxPauseMs
-            );
+            Math.round(remainingMs / stagesLeft + randomBetween(-1_000, 1_400)),
+            2_500,
+            maxPauseMs
+          );
 
       await sleep(pauseMs, 0.08);
       remainingMs -= pauseMs;
@@ -609,15 +603,11 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     const enriched: AgentSearchResult[] = [];
 
     for (const result of results) {
-      let target: PageTarget | null = null;
       let client: CDPClient | null = null;
 
       try {
         this.log(`opening article: ${result.title}`);
-        target = await openNewTab(result.url);
-        client = await connectToTarget(target);
-        await bringPageToFront(client);
-        await waitForLoadEvent(client, 18_000);
+        client = await createPageSession(result.url);
         await this.softWaitForNetworkIdle(client);
         result.page = await this.scrapePageDigest(client);
         Object.assign(result, await this.readOpenedPage(client, result, result.page));
@@ -628,10 +618,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         this.log(`failed article: ${result.title} (${result.skipReason})`);
       } finally {
         if (client) {
-          await client.close();
-        }
-        if (target) {
-          await closeTarget(target);
+          await closePageSession(client);
         }
       }
 
@@ -642,17 +629,14 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     return enriched;
   }
 
-  private async collectSearchResultsFromBrowser(
+  private async collectSearchResults(
     query: string,
     maxResultsPerQuery: number
   ): Promise<AgentSearchResult[]> {
-    let target: PageTarget | null = null;
     let client: CDPClient | null = null;
 
     try {
-      target = await openNewTab(this.buildSearchUrl(query));
-      client = await connectToTarget(target);
-      await bringPageToFront(client);
+      client = await createPageSession(this.buildSearchUrl(query));
       await this.waitForSearchResults(client);
       await this.scanSearchResultsPage(client, query);
       return await this.scrapeSearchResults(client, maxResultsPerQuery);
@@ -662,96 +646,31 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         try {
           await captureScreenshot(client, screenshotPath);
         } catch {
-          // Ignore screenshot failures on already-closed targets.
+          // Ignore screenshot failures.
         }
       }
 
       throw error;
     } finally {
       if (client) {
-        await client.close();
-      }
-      if (target) {
-        await closeTarget(target);
+        await closePageSession(client);
       }
     }
-  }
-
-  private async fetchSearchResultsFromBingRss(
-    query: string,
-    maxResultsPerQuery: number
-  ): Promise<AgentSearchResult[]> {
-    const rssUrl = `https://www.bing.com/search?format=rss&q=${encodeURIComponent(query)}`;
-    const response = await fetch(rssUrl, {
-      headers: {
-        Accept: "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Bing RSS fallback returned HTTP ${response.status}`);
-    }
-
-    const xml = await response.text();
-    const itemPattern =
-      /<item>\s*<title>([\s\S]*?)<\/title>\s*<link>([\s\S]*?)<\/link>\s*<description>([\s\S]*?)<\/description>[\s\S]*?<\/item>/gi;
-    const results: AgentSearchResult[] = [];
-    const seen = new Set<string>();
-
-    let match: RegExpExecArray | null;
-    while ((match = itemPattern.exec(xml)) !== null && results.length < maxResultsPerQuery) {
-      const title = stripHtml(match[1] ?? "");
-      const url = decodeHtmlEntities((match[2] ?? "").trim());
-      const snippet = stripHtml(match[3] ?? "");
-
-      if (!url || seen.has(url)) {
-        continue;
-      }
-
-      let site = "";
-      try {
-        site = new URL(url).hostname.replace(/^www\./, "");
-      } catch {
-        site = "";
-      }
-
-      results.push({
-        title: title || url,
-        url,
-        snippet,
-        site
-      });
-      seen.add(url);
-    }
-
-    return results;
   }
 
   private async runResearchQuery(query: string, maxResultsPerQuery: number): Promise<AgentResearchResult> {
-    let rawResults: AgentSearchResult[] = [];
-    let browserSearchError: string | null = null;
+    let rawResults: AgentSearchResult[];
 
     try {
-      rawResults = await this.collectSearchResultsFromBrowser(query, maxResultsPerQuery);
+      rawResults = await this.collectSearchResults(query, maxResultsPerQuery);
     } catch (error) {
-      browserSearchError = error instanceof Error ? error.message : String(error);
-      this.log(`search page blocked or empty for "${query}", trying RSS fallback`);
-    }
-
-    if (rawResults.length === 0) {
-      try {
-        rawResults = await this.fetchSearchResultsFromBingRss(query, maxResultsPerQuery);
-      } catch (error) {
-        const fallbackError = error instanceof Error ? error.message : String(error);
-        return {
-          query,
-          searchedAt: nowIso(),
-          results: [],
-          error: browserSearchError
-            ? `${browserSearchError} | RSS fallback failed: ${fallbackError}`
-            : fallbackError
-        };
-      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        query,
+        searchedAt: nowIso(),
+        results: [],
+        error: errorMessage
+      };
     }
 
     if (rawResults.length === 0) {
@@ -759,7 +678,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         query,
         searchedAt: nowIso(),
         results: [],
-        error: browserSearchError ?? "no search results were collected"
+        error: "no search results were collected"
       };
     }
 
@@ -830,7 +749,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     );
 
     await ensureDebuggerReady();
-    this.log("attached to Chrome debugger session");
+    this.log("attached to Lightpanda CDP server");
 
     const memory = loadAgentMemory(this.options.memoryPath ?? state.input.memoryPath ?? undefined);
     if (memory && state.input.memoryPath !== memory.path) {

@@ -12,8 +12,9 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
     "start": "npm run build && node dist/cli.js",
-    "chrome:start": "./scripts/start-chrome.sh",
-    "chrome:start:headless": "./scripts/start-chrome.sh --headless"
+    "lightpanda:start": "./scripts/start-lightpanda.sh start",
+    "lightpanda:stop": "./scripts/start-lightpanda.sh stop",
+    "lightpanda:update": "./scripts/start-lightpanda.sh update"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

@@ -25,7 +25,7 @@ async function main(): Promise<void> {
 
   program
     .name("web-task-agent")
-    .description("Intelligent browser task automation using a real Chrome profile over CDP")
+    .description("Intelligent browser task automation using Lightpanda headless browser over CDP")
     .showHelpAfterError();
 
   program
