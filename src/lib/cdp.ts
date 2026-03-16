@@ -127,7 +127,7 @@ export async function ensureDebuggerReady(): Promise<void> {
     await CDP.Version({ port: DEBUG_PORT });
   } catch {
     throw new Error(
-      `chrome debugger not reachable on 127.0.0.1:${DEBUG_PORT}. run ./scripts/start-chrome.sh first`
+      `chrome debugger not reachable on 127.0.0.1:${DEBUG_PORT}. run npm run chrome:start or npm run chrome:start:headless first`
     );
   }
 }

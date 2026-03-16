@@ -36,7 +36,9 @@ ANTHROPIC_TIMEOUT_MS=90000
 
 ## Start Chrome First
 
-All real runs are meant to use a real visible Chrome window. Start Chrome first, keep it open, then run the task in a second terminal.
+You can start Chrome in visible mode or headless mode. Both use the same CDP automation path, so the tasks themselves do not change.
+
+Visible mode:
 
 ```bash
 cd /home/othmane/Downloads/automation/web-task-agent
@@ -44,7 +46,19 @@ npm run chrome:start
 curl -s http://127.0.0.1:9222/json/version
 ```
 
+Headless mode:
+
+```bash
+cd /home/othmane/Downloads/automation/web-task-agent
+npm run chrome:start:headless
+curl -s http://127.0.0.1:9222/json/version
+```
+
 If the `curl` command returns browser JSON, the debugger is ready.
+
+You can also use `CHROME_HEADLESS=1 npm run chrome:start`.
+
+When a headless search results page gets challenged by the provider, the agent falls back to a normal RSS search feed for link discovery, then still opens and reads the article pages in Chrome.
 
 ## GitHub Example
 
@@ -83,7 +97,7 @@ npm run start -- agent run "Research cheerful campaign ideas for our product, dr
 Expected end-of-run output shape:
 
 ```text
-[timestamp] attached to visible Chrome debugger session
+[timestamp] attached to Chrome debugger session
 [timestamp] researching: cheerful marketing campaign examples
 [timestamp] scanning results for "..." for about 6s
 [timestamp] opening article: ...

@@ -80,6 +80,22 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#(\d+);/g, (_match, code) => String.fromCharCode(Number(code)));
+}
+
+function stripHtml(value: string): string {
+  return decodeHtmlEntities(value).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function pageContentLength(page: AgentPageDigest): number {
   return [
     page.title,
@@ -365,15 +381,37 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
   }
 
   private buildSearchUrl(query: string): string {
-    return `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    return `https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=en-US&cc=us`;
   }
 
   private async waitForSearchResults(client: CDPClient): Promise<void> {
     await waitForLoadEvent(client, 20_000);
-    await waitForAnySelector(client, ["a.result__a", ".result__title a", "h2 a"], {
-      timeoutMs: 20_000
-    });
-    await this.softWaitForNetworkIdle(client);
+
+    try {
+      await waitForAnySelector(client, ["#b_results .b_algo h2 a", "#b_results li.b_algo"], {
+        timeoutMs: 20_000
+      });
+      await this.softWaitForNetworkIdle(client);
+    } catch (error) {
+      const pageContext = await evaluateInBrowser<{
+        title: string;
+        url: string;
+        bodyStart: string;
+      }>(
+        client,
+        `() => ({
+          title: document.title || "",
+          url: window.location.href,
+          bodyStart: (document.body?.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 240)
+        })`
+      );
+
+      throw new Error(
+        `${
+          error instanceof Error ? error.message : String(error)
+        } | loaded page: ${pageContext.title} | ${pageContext.url} | ${pageContext.bodyStart}`
+      );
+    }
   }
 
   private async scrapeSearchResults(
@@ -384,26 +422,6 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       client,
       `(inputMaxResults) => {
         const normalize = (value) => (value || "").replace(/\\s+/g, " ").trim();
-        const toTargetUrl = (href) => {
-          if (!href) {
-            return null;
-          }
-
-          try {
-            const url = new URL(href, window.location.origin);
-            const redirected = url.searchParams.get("uddg");
-            if (redirected) {
-              return decodeURIComponent(redirected);
-            }
-            if (url.protocol === "http:" || url.protocol === "https:") {
-              return url.toString();
-            }
-          } catch {
-            return null;
-          }
-
-          return null;
-        };
         const siteOf = (rawUrl) => {
           try {
             return new URL(rawUrl).hostname.replace(/^www\\./, "");
@@ -412,25 +430,39 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           }
         };
 
-        const anchors = Array.from(document.querySelectorAll("a.result__a, .result__title a, h2 a"));
         const results = [];
         const seen = new Set();
+        const cards = Array.from(document.querySelectorAll("#b_results li.b_algo"));
 
-        for (const anchor of anchors) {
-          const url = toTargetUrl(anchor.getAttribute("href"));
+        for (const card of cards) {
+          const anchor = card.querySelector("h2 a");
+          if (!anchor) {
+            continue;
+          }
+
+          const href = anchor.getAttribute("href") || "";
+          if (!href) {
+            continue;
+          }
+
+          let url = null;
+          try {
+            const parsed = new URL(href, window.location.origin);
+            if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+              url = parsed.toString();
+            }
+          } catch {
+            url = null;
+          }
+
           if (!url || seen.has(url)) {
             continue;
           }
 
-          const card =
-            anchor.closest(".result") ||
-            anchor.closest(".results_links") ||
-            anchor.closest(".web-result") ||
-            anchor.parentElement;
           const title = normalize(anchor.textContent) || url;
           const snippet =
-            normalize(card?.querySelector(".result__snippet")?.textContent) ||
-            normalize(card?.querySelector(".result__body")?.textContent) ||
+            normalize(card.querySelector(".b_caption p")?.textContent) ||
+            normalize(card.querySelector(".b_snippet")?.textContent) ||
             "";
 
           results.push({
@@ -610,7 +642,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     return enriched;
   }
 
-  private async runResearchQuery(query: string, maxResultsPerQuery: number): Promise<AgentResearchResult> {
+  private async collectSearchResultsFromBrowser(
+    query: string,
+    maxResultsPerQuery: number
+  ): Promise<AgentSearchResult[]> {
     let target: PageTarget | null = null;
     let client: CDPClient | null = null;
 
@@ -620,18 +655,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       await bringPageToFront(client);
       await this.waitForSearchResults(client);
       await this.scanSearchResultsPage(client, query);
-      const rawResults = await this.scrapeSearchResults(client, maxResultsPerQuery);
-      const enriched = await this.visitResultPages(
-        rawResults.slice(0, Math.min(MAX_ARTICLES_PER_QUERY, rawResults.length))
-      );
-      const byUrl = new Map(enriched.map((entry) => [entry.url, entry]));
-      const merged = rawResults.map((entry) => byUrl.get(entry.url) ?? entry);
-
-      return {
-        query,
-        searchedAt: nowIso(),
-        results: merged
-      };
+      return await this.scrapeSearchResults(client, maxResultsPerQuery);
     } catch (error) {
       if (client) {
         const screenshotPath = path.join("/tmp", `agent-research-${Date.now()}.png`);
@@ -642,12 +666,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         }
       }
 
-      return {
-        query,
-        searchedAt: nowIso(),
-        results: [],
-        error: error instanceof Error ? error.message : String(error)
-      };
+      throw error;
     } finally {
       if (client) {
         await client.close();
@@ -656,6 +675,105 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         await closeTarget(target);
       }
     }
+  }
+
+  private async fetchSearchResultsFromBingRss(
+    query: string,
+    maxResultsPerQuery: number
+  ): Promise<AgentSearchResult[]> {
+    const rssUrl = `https://www.bing.com/search?format=rss&q=${encodeURIComponent(query)}`;
+    const response = await fetch(rssUrl, {
+      headers: {
+        Accept: "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Bing RSS fallback returned HTTP ${response.status}`);
+    }
+
+    const xml = await response.text();
+    const itemPattern =
+      /<item>\s*<title>([\s\S]*?)<\/title>\s*<link>([\s\S]*?)<\/link>\s*<description>([\s\S]*?)<\/description>[\s\S]*?<\/item>/gi;
+    const results: AgentSearchResult[] = [];
+    const seen = new Set<string>();
+
+    let match: RegExpExecArray | null;
+    while ((match = itemPattern.exec(xml)) !== null && results.length < maxResultsPerQuery) {
+      const title = stripHtml(match[1] ?? "");
+      const url = decodeHtmlEntities((match[2] ?? "").trim());
+      const snippet = stripHtml(match[3] ?? "");
+
+      if (!url || seen.has(url)) {
+        continue;
+      }
+
+      let site = "";
+      try {
+        site = new URL(url).hostname.replace(/^www\./, "");
+      } catch {
+        site = "";
+      }
+
+      results.push({
+        title: title || url,
+        url,
+        snippet,
+        site
+      });
+      seen.add(url);
+    }
+
+    return results;
+  }
+
+  private async runResearchQuery(query: string, maxResultsPerQuery: number): Promise<AgentResearchResult> {
+    let rawResults: AgentSearchResult[] = [];
+    let browserSearchError: string | null = null;
+
+    try {
+      rawResults = await this.collectSearchResultsFromBrowser(query, maxResultsPerQuery);
+    } catch (error) {
+      browserSearchError = error instanceof Error ? error.message : String(error);
+      this.log(`search page blocked or empty for "${query}", trying RSS fallback`);
+    }
+
+    if (rawResults.length === 0) {
+      try {
+        rawResults = await this.fetchSearchResultsFromBingRss(query, maxResultsPerQuery);
+      } catch (error) {
+        const fallbackError = error instanceof Error ? error.message : String(error);
+        return {
+          query,
+          searchedAt: nowIso(),
+          results: [],
+          error: browserSearchError
+            ? `${browserSearchError} | RSS fallback failed: ${fallbackError}`
+            : fallbackError
+        };
+      }
+    }
+
+    if (rawResults.length === 0) {
+      return {
+        query,
+        searchedAt: nowIso(),
+        results: [],
+        error: browserSearchError ?? "no search results were collected"
+      };
+    }
+
+    const enriched = await this.visitResultPages(
+      rawResults.slice(0, Math.min(MAX_ARTICLES_PER_QUERY, rawResults.length))
+    );
+    const byUrl = new Map(enriched.map((entry) => [entry.url, entry]));
+    const merged = rawResults.map((entry) => byUrl.get(entry.url) ?? entry);
+
+    return {
+      query,
+      searchedAt: nowIso(),
+      results: merged
+    };
   }
 
   private saveState(cachePath: string, state: AgentRunState): void {
@@ -712,7 +830,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     );
 
     await ensureDebuggerReady();
-    this.log("attached to visible Chrome debugger session");
+    this.log("attached to Chrome debugger session");
 
     const memory = loadAgentMemory(this.options.memoryPath ?? state.input.memoryPath ?? undefined);
     if (memory && state.input.memoryPath !== memory.path) {
