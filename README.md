@@ -35,7 +35,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Evidence graph linking sources, claims, entities, and outputs
 - [x] Workflow templates for real business research jobs
 - [x] Scheduler, queue, or worker mode
-- [ ] API and dashboard for managing runs
+- [x] API and dashboard for managing runs
 
 ## Deep Analysis Of The Current Codebase
 
@@ -305,8 +305,8 @@ This is the execution checklist. Items already present in the repo are marked `[
 
 ### Phase 8: Add Interfaces For Real Use
 
-- [ ] Add a local HTTP API for submitting and monitoring jobs
-- [ ] Add a minimal dashboard for job status, logs, evidence, and reports
+- [x] Add a local HTTP API for submitting and monitoring jobs
+- [x] Add a minimal dashboard for job status, logs, evidence, and reports
 - [ ] Add live streaming logs for long-running runs
 - [ ] Add job pause, resume, cancel, and rerun
 - [ ] Add workflow presets and saved configurations

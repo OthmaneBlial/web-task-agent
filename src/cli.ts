@@ -5,6 +5,7 @@ import path from "node:path";
 import { Command } from "commander";
 
 import { enqueueQueuedAgentJob, listQueuedJobs } from "./lib/job-queue";
+import { createManagementServer } from "./server/management-server";
 import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
 import { PlayStoreAnalyzerTask } from "./tasks/playstore-analyzer";
@@ -458,6 +459,32 @@ async function main(): Promise<void> {
       console.log(`Worker ID: ${result.workerId}`);
       console.log(`Recovered queued jobs: ${result.recoveredJobs}`);
       console.log(`Processed queued jobs: ${result.processedJobs}`);
+    });
+
+  program
+    .command("server")
+    .description("Run the local management API and HTML dashboard")
+    .command("run")
+    .option("--host <host>", "Host to bind", "127.0.0.1")
+    .option(
+      "--port <number>",
+      "Port to bind",
+      (value) => parsePositiveInteger(value, "port"),
+      4317
+    )
+    .action(async (options) => {
+      const server = createManagementServer();
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(Number(options.port), String(options.host), () => resolve());
+      });
+
+      console.log(`Management server running.`);
+      console.log(`URL: http://${String(options.host)}:${Number(options.port)}`);
+
+      await new Promise<void>(() => {
+        // Keep the process alive until it is interrupted.
+      });
     });
 
   await program.parseAsync(process.argv);

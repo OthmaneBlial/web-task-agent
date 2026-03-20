@@ -1076,6 +1076,171 @@ export function listRecoverableJobs(options?: {
   }));
 }
 
+export interface StoredJobSummary {
+  jobId: string;
+  taskType: JobTaskType;
+  workflowName: string | null;
+  title: string;
+  instruction: string | null;
+  status: JobLifecycleStatus;
+  cachePath: string | null;
+  reportPath: string | null;
+  artifactDir: string | null;
+  errorMessage: string | null;
+  startedAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  input: Record<string, unknown>;
+  budget: Record<string, unknown>;
+  output: Record<string, unknown>;
+}
+
+export interface StoredJobStepRecord {
+  stepKey: string;
+  position: number;
+  title: string;
+  kind: string;
+  status: JobStepStatus;
+  attemptCount: number;
+  startedAt: string | null;
+  updatedAt: string;
+  completedAt: string | null;
+  durationMs: number | null;
+  errorMessage: string | null;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+}
+
+export interface StoredJobArtifactRecord {
+  artifactKey: string;
+  artifactType: string;
+  path: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoredJobDetail {
+  job: StoredJobSummary;
+  steps: StoredJobStepRecord[];
+  artifacts: StoredJobArtifactRecord[];
+  evidenceGraph: {
+    nodes: number;
+    edges: number;
+  };
+}
+
+function mapJobSummary(row: Record<string, unknown>): StoredJobSummary {
+  return {
+    jobId: String(row.id ?? ""),
+    taskType: String(row.task_type ?? "agent") as JobTaskType,
+    workflowName: row.workflow_name ? String(row.workflow_name) : null,
+    title: String(row.title ?? ""),
+    instruction: row.instruction ? String(row.instruction) : null,
+    status: String(row.status ?? "running") as JobLifecycleStatus,
+    cachePath: row.cache_path ? String(row.cache_path) : null,
+    reportPath: row.report_path ? String(row.report_path) : null,
+    artifactDir: row.artifact_dir ? String(row.artifact_dir) : null,
+    errorMessage: row.error_message ? String(row.error_message) : null,
+    startedAt: String(row.started_at ?? ""),
+    updatedAt: String(row.updated_at ?? ""),
+    completedAt: row.completed_at ? String(row.completed_at) : null,
+    input: parseJsonValue<Record<string, unknown>>(row.input_json, {}),
+    budget: parseJsonValue<Record<string, unknown>>(row.budget_json, {}),
+    output: parseJsonValue<Record<string, unknown>>(row.output_json, {})
+  };
+}
+
+export function listStoredJobs(options?: {
+  databasePath?: string;
+  status?: JobLifecycleStatus;
+  taskType?: JobTaskType;
+  limit?: number;
+}): StoredJobSummary[] {
+  const { db } = getDatabase(options?.databasePath);
+  const rows = db.prepare(`
+    SELECT *
+    FROM jobs
+    WHERE (? IS NULL OR status = ?)
+      AND (? IS NULL OR task_type = ?)
+    ORDER BY updated_at DESC
+    LIMIT ?
+  `).all(
+    options?.status ?? null,
+    options?.status ?? null,
+    options?.taskType ?? null,
+    options?.taskType ?? null,
+    Math.max(1, Math.min(200, options?.limit ?? 50))
+  ) as Array<Record<string, unknown>>;
+
+  return rows.map(mapJobSummary);
+}
+
+export function getStoredJobDetail(input: {
+  databasePath?: string;
+  jobId: string;
+}): StoredJobDetail | null {
+  const { db } = getDatabase(input.databasePath);
+  const jobRow = db.prepare(`
+    SELECT *
+    FROM jobs
+    WHERE id = ?
+  `).get(input.jobId) as Record<string, unknown> | undefined;
+
+  if (!jobRow) {
+    return null;
+  }
+
+  const steps = db.prepare(`
+    SELECT *
+    FROM job_steps
+    WHERE job_id = ?
+    ORDER BY position ASC
+  `).all(input.jobId) as Array<Record<string, unknown>>;
+  const artifacts = db.prepare(`
+    SELECT *
+    FROM job_artifacts
+    WHERE job_id = ?
+    ORDER BY artifact_key ASC
+  `).all(input.jobId) as Array<Record<string, unknown>>;
+  const graphRow = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM evidence_nodes WHERE job_id = ?) AS nodes,
+      (SELECT COUNT(*) FROM evidence_edges WHERE job_id = ?) AS edges
+  `).get(input.jobId, input.jobId) as Record<string, unknown> | undefined;
+
+  return {
+    job: mapJobSummary(jobRow),
+    steps: steps.map((row) => ({
+      stepKey: String(row.step_key ?? ""),
+      position: Number(row.position ?? 0),
+      title: String(row.title ?? ""),
+      kind: String(row.kind ?? ""),
+      status: String(row.status ?? "pending") as JobStepStatus,
+      attemptCount: Number(row.attempt_count ?? 0),
+      startedAt: row.started_at ? String(row.started_at) : null,
+      updatedAt: String(row.updated_at ?? ""),
+      completedAt: row.completed_at ? String(row.completed_at) : null,
+      durationMs: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
+      errorMessage: row.error_message ? String(row.error_message) : null,
+      input: parseJsonValue<Record<string, unknown>>(row.input_json, {}),
+      output: parseJsonValue<Record<string, unknown>>(row.output_json, {})
+    })),
+    artifacts: artifacts.map((row) => ({
+      artifactKey: String(row.artifact_key ?? ""),
+      artifactType: String(row.artifact_type ?? ""),
+      path: String(row.path ?? ""),
+      metadata: parseJsonValue<Record<string, unknown>>(row.metadata_json, {}),
+      createdAt: String(row.created_at ?? ""),
+      updatedAt: String(row.updated_at ?? "")
+    })),
+    evidenceGraph: {
+      nodes: Number(graphRow?.nodes ?? 0),
+      edges: Number(graphRow?.edges ?? 0)
+    }
+  };
+}
+
 export class JobStore {
   readonly databasePath: string;
   private readonly db: DatabaseSync;
