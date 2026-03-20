@@ -7,7 +7,7 @@ import type {
 } from "../../types";
 import { countCapturedResearchDocuments, nowIso } from "./shared";
 
-const AGENT_PIPELINE_VERSION = 1;
+const AGENT_PIPELINE_VERSION = 2;
 
 export function normalizeQueryKey(query: string): string {
   return query.trim().toLowerCase();
@@ -22,7 +22,10 @@ function buildEmptyWorkItem(query: string): AgentPipelineWorkItem {
     status: "pending",
     searchedAt: null,
     searchUrl: null,
+    searchPagesVisited: 0,
     results: [],
+    fetchCursor: 0,
+    fetchBatchesCompleted: 0,
     rawPath: null,
     sourceCount: 0,
     documentCount: 0,
@@ -40,11 +43,19 @@ function buildCompletedWorkItem(result: AgentResearchResult): AgentPipelineWorkI
     status: "completed",
     searchedAt: result.searchedAt,
     results: result.results,
+    fetchCursor: result.results.length,
     sourceCount: result.results.length,
     documentCount: countCapturedResearchDocuments([result]),
     error: result.error ?? null,
     completedAt: nowIso()
   };
+}
+
+function firstPendingFetchIndex(results: AgentSearchResult[]): number {
+  const firstPendingIndex = results.findIndex(
+    (result) => !result.page && !result.reviewStatus
+  );
+  return firstPendingIndex === -1 ? results.length : firstPendingIndex;
 }
 
 export function createPipelineState(): AgentPipelineState {
@@ -65,7 +76,13 @@ export function ensurePipelineState(input: {
     existingItems.set(item.queryKey, {
       ...buildEmptyWorkItem(item.query),
       ...item,
-      queryKey: normalizeQueryKey(item.query)
+      queryKey: normalizeQueryKey(item.query),
+      searchPagesVisited: item.searchPagesVisited ?? 0,
+      fetchCursor:
+        typeof item.fetchCursor === "number"
+          ? item.fetchCursor
+          : firstPendingFetchIndex(item.results ?? []),
+      fetchBatchesCompleted: item.fetchBatchesCompleted ?? 0
     });
   }
 
@@ -152,15 +169,19 @@ export function applySearchSuccess(
   input: {
     searchedAt: string;
     searchUrl: string;
+    pagesVisited?: number;
     results: AgentSearchResult[];
   }
 ): AgentPipelineWorkItem {
+  const fetchCursor = firstPendingFetchIndex(input.results);
   return {
     ...item,
     searchedAt: input.searchedAt,
     searchUrl: input.searchUrl,
+    searchPagesVisited: input.pagesVisited ?? item.searchPagesVisited,
     results: input.results,
-    nextStage: input.results.length > 0 ? "fetch" : "extract",
+    fetchCursor,
+    nextStage: input.results.length > 0 && fetchCursor < input.results.length ? "fetch" : "extract",
     status: "pending",
     error: input.results.length > 0 ? null : "no search results were collected",
     updatedAt: nowIso()
@@ -180,6 +201,7 @@ export function applySearchFailure(
     searchedAt: input.searchedAt,
     searchUrl: input.searchUrl,
     results: [],
+    fetchCursor: 0,
     nextStage: "extract",
     status: "pending",
     error: input.error,
@@ -189,12 +211,21 @@ export function applySearchFailure(
 
 export function applyFetchSuccess(
   item: AgentPipelineWorkItem,
-  results: AgentSearchResult[]
+  input: {
+    results: AgentSearchResult[];
+    fetchedCount: number;
+  }
 ): AgentPipelineWorkItem {
+  const fetchCursor = firstPendingFetchIndex(input.results);
+  const fetchBatchesCompleted =
+    item.fetchBatchesCompleted + (input.fetchedCount > 0 ? 1 : 0);
+
   return {
     ...item,
-    results,
-    nextStage: "extract",
+    results: input.results,
+    fetchCursor,
+    fetchBatchesCompleted,
+    nextStage: fetchCursor < input.results.length ? "fetch" : "extract",
     status: "pending",
     error: null,
     updatedAt: nowIso()
@@ -207,6 +238,7 @@ export function applyFetchFailure(
 ): AgentPipelineWorkItem {
   return {
     ...item,
+    fetchCursor: firstPendingFetchIndex(item.results),
     nextStage: "extract",
     status: "pending",
     error: `fetch stage failed: ${error}`,
@@ -242,6 +274,7 @@ export function applyExtractSuccess(
     sourceCount: input.sourceCount,
     documentCount: input.documentCount,
     extractionCount: input.extractionCount,
+    fetchCursor: item.results.length,
     updatedAt: timestamp,
     completedAt: timestamp
   };

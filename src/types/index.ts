@@ -406,6 +406,7 @@ export interface AgentRunOptions {
   memoryPath?: string;
   maxQueries?: number;
   maxResultsPerQuery?: number;
+  fetchBatchSize?: number;
   maxRuntimeHours?: number;
   leaseTtlMinutes?: number;
 }
@@ -421,7 +422,10 @@ export interface AgentPipelineWorkItem {
   status: AgentPipelineWorkStatus;
   searchedAt: string | null;
   searchUrl: string | null;
+  searchPagesVisited: number;
   results: AgentSearchResult[];
+  fetchCursor: number;
+  fetchBatchesCompleted: number;
   rawPath: string | null;
   sourceCount: number;
   documentCount: number;
@@ -447,6 +451,7 @@ export interface AgentRunState {
     memoryPath: string | null;
     maxQueries: number;
     maxResultsPerQuery: number;
+    fetchBatchSize: number;
     maxRuntimeHours: number;
   };
   runtime: {

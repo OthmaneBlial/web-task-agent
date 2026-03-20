@@ -1,5 +1,6 @@
 import type { AgentSearchResult } from "../../types";
 import {
+  DEFAULT_FETCH_BATCH_SIZE,
   MAX_ARTICLES_PER_QUERY,
 } from "./shared";
 import type { AgentFetcher } from "./fetcher";
@@ -37,14 +38,42 @@ export class AgentFetchStage {
     return this.fetcher.fetchResults(results);
   }
 
+  async fetchResultBatch(
+    rawResults: AgentSearchResult[],
+    startIndex: number,
+    batchSize: number = DEFAULT_FETCH_BATCH_SIZE
+  ): Promise<{
+    results: AgentSearchResult[];
+    startIndex: number;
+    fetchedCount: number;
+    remainingCount: number;
+  }> {
+    const safeStartIndex = Math.max(0, Math.min(startIndex, rawResults.length));
+    const safeBatchSize = Math.max(1, batchSize);
+    const slice = rawResults.slice(safeStartIndex, safeStartIndex + safeBatchSize);
+    const enriched = await this.fetchResults(slice);
+    const byUrl = new Map(enriched.map((entry) => [entry.url, entry]));
+    const results = rawResults.map((entry) => byUrl.get(entry.url) ?? entry);
+    const fetchedCount = slice.length;
+
+    return {
+      results,
+      startIndex: safeStartIndex,
+      fetchedCount,
+      remainingCount: Math.max(0, rawResults.length - safeStartIndex - fetchedCount)
+    };
+  }
+
   async fetchTopResults(
     rawResults: AgentSearchResult[],
     maxArticlesPerQuery: number = MAX_ARTICLES_PER_QUERY
   ): Promise<AgentSearchResult[]> {
-    const enriched = await this.fetchResults(
-      rawResults.slice(0, Math.min(maxArticlesPerQuery, rawResults.length))
-    );
-    const byUrl = new Map(enriched.map((entry) => [entry.url, entry]));
-    return rawResults.map((entry) => byUrl.get(entry.url) ?? entry);
+    return (
+      await this.fetchResultBatch(
+        rawResults,
+        0,
+        Math.min(maxArticlesPerQuery, rawResults.length)
+      )
+    ).results;
   }
 }

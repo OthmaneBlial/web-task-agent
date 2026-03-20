@@ -15,6 +15,10 @@ export const MAX_ARTICLES_PER_QUERY = 3;
 export const DEFAULT_AGENT_MAX_RUNTIME_HOURS = 6;
 export const DEFAULT_JOB_LEASE_TTL_SECONDS = 15 * 60;
 export const DEFAULT_JOB_HEARTBEAT_INTERVAL_SECONDS = 60;
+export const MAX_AGENT_QUERIES = 25;
+export const MAX_AGENT_RESULTS_PER_QUERY = 100;
+export const DEFAULT_FETCH_BATCH_SIZE = 5;
+export const MAX_FETCH_BATCH_SIZE = 20;
 
 const AVERAGE_ARTICLE_READ_MS = Math.round((ARTICLE_READ_MIN_MS + ARTICLE_READ_MAX_MS) / 2);
 const AVERAGE_QUERY_SCAN_MS = Math.round((QUERY_SCAN_MIN_MS + QUERY_SCAN_MAX_MS) / 2);
@@ -107,7 +111,7 @@ export function estimateArticleReadMs(page: AgentPageDigest): number {
 
 export function computeExecutionEstimateMinutes(plan: AgentPlan, maxResultsPerQuery: number): number {
   const queries = plan.researchQueries.length;
-  const visitedArticlesPerQuery = Math.min(MAX_ARTICLES_PER_QUERY, maxResultsPerQuery);
+  const visitedArticlesPerQuery = Math.max(1, maxResultsPerQuery);
   const researchMs =
     queries * AVERAGE_QUERY_SCAN_MS +
     queries * visitedArticlesPerQuery * AVERAGE_ARTICLE_READ_MS +

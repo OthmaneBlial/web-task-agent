@@ -55,8 +55,12 @@ import {
 import {
   addHoursToIso,
   DEFAULT_AGENT_MAX_RUNTIME_HOURS,
+  DEFAULT_FETCH_BATCH_SIZE,
   DEFAULT_JOB_HEARTBEAT_INTERVAL_SECONDS,
   DEFAULT_JOB_LEASE_TTL_SECONDS,
+  MAX_AGENT_QUERIES,
+  MAX_AGENT_RESULTS_PER_QUERY,
+  MAX_FETCH_BATCH_SIZE,
   computeExecutionEstimateMinutes,
   countCapturedResearchDocuments,
   countCapturedResearchSources,
@@ -110,6 +114,14 @@ function resolveLeaseTtlSeconds(options: AgentRunOptions, state?: AgentRunState)
   );
 }
 
+function resolveFetchBatchSize(options: AgentRunOptions, state?: AgentRunState): number {
+  return clampWholeNumber(
+    options.fetchBatchSize ?? state?.input.fetchBatchSize ?? DEFAULT_FETCH_BATCH_SIZE,
+    1,
+    MAX_FETCH_BATCH_SIZE
+  );
+}
+
 function resolveHeartbeatIntervalSeconds(leaseTtlSeconds: number, state?: AgentRunState): number {
   return clampWholeNumber(
     state?.runtime.heartbeatIntervalSeconds ??
@@ -126,7 +138,14 @@ function nextLeaseOwnerId(runId: string): string {
 function normalizeRuntimeState(state: AgentRunState, options: AgentRunOptions): void {
   const maxRuntimeHours = resolveMaxRuntimeHours(options, state);
   const leaseTtlSeconds = resolveLeaseTtlSeconds(options, state);
+  const fetchBatchSize = resolveFetchBatchSize(options, state);
 
+  state.input.maxQueries = Math.max(0, Math.min(MAX_AGENT_QUERIES, state.input.maxQueries ?? options.maxQueries ?? 3));
+  state.input.maxResultsPerQuery = Math.max(
+    1,
+    Math.min(MAX_AGENT_RESULTS_PER_QUERY, state.input.maxResultsPerQuery ?? options.maxResultsPerQuery ?? 5)
+  );
+  state.input.fetchBatchSize = fetchBatchSize;
   state.input.maxRuntimeHours = maxRuntimeHours;
   state.runtime = {
     leaseOwnerId: null,
@@ -147,6 +166,7 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
   const artifactDir = path.dirname(reportPath);
   const maxRuntimeHours = resolveMaxRuntimeHours(options);
   const leaseTtlSeconds = resolveLeaseTtlSeconds(options);
+  const fetchBatchSize = resolveFetchBatchSize(options);
 
   return {
     task: "agent",
@@ -157,8 +177,9 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
     input: {
       instruction: options.instruction,
       memoryPath: options.memoryPath ? path.resolve(options.memoryPath) : null,
-      maxQueries: Math.max(0, Math.min(5, options.maxQueries ?? 3)),
-      maxResultsPerQuery: Math.max(1, Math.min(10, options.maxResultsPerQuery ?? 5)),
+      maxQueries: Math.max(0, Math.min(MAX_AGENT_QUERIES, options.maxQueries ?? 3)),
+      maxResultsPerQuery: Math.max(1, Math.min(MAX_AGENT_RESULTS_PER_QUERY, options.maxResultsPerQuery ?? 5)),
+      fetchBatchSize,
       maxRuntimeHours
     },
     runtime: {
@@ -320,6 +341,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       budget: {
         maxQueries: state.input.maxQueries,
         maxResultsPerQuery: state.input.maxResultsPerQuery,
+        fetchBatchSize: state.input.fetchBatchSize,
         maxRuntimeHours: state.input.maxRuntimeHours,
         leaseTtlSeconds: state.runtime.leaseTtlSeconds
       },
@@ -433,7 +455,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       kind: "fetch",
       position: 3,
       input: {
-        maxArticlesPerQuery: state.input.maxResultsPerQuery
+        maxArticlesPerQuery: state.input.maxResultsPerQuery,
+        fetchBatchSize: state.input.fetchBatchSize
       }
     };
     const extractStep = {
@@ -517,6 +540,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         budget: {
           maxQueries: state.input.maxQueries,
           maxResultsPerQuery: state.input.maxResultsPerQuery,
+          fetchBatchSize: state.input.fetchBatchSize,
           maxRuntimeHours: state.input.maxRuntimeHours,
           leaseTtlSeconds: state.runtime.leaseTtlSeconds
         },
@@ -656,6 +680,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                         lastQuery: result.query,
                         searchedAt: result.searchedAt,
                         searchUrl: result.searchUrl,
+                        pagesVisited: result.pagesVisited,
                         resultCount: result.results.length
                       })
                     }
@@ -682,15 +707,33 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                 this.saveState(cachePath, state);
 
                 try {
-                  const fetchedResults = await jobStore.runStep(
+                  const fetchedBatch = await jobStore.runStep(
                     fetchStep,
-                    async () => fetchStage.fetchTopResults(workItem.results),
+                    async () =>
+                      fetchStage.fetchResultBatch(
+                        workItem.results,
+                        workItem.fetchCursor,
+                        state.input.fetchBatchSize
+                      ),
                     {
-                      output: (result) => summarizeFetchedResults(result)
+                      output: (result) => ({
+                        startIndex: result.startIndex,
+                        fetchedCount: result.fetchedCount,
+                        remainingCount: result.remainingCount,
+                        ...summarizeFetchedResults(
+                          result.results.slice(
+                            result.startIndex,
+                            result.startIndex + result.fetchedCount
+                          )
+                        )
+                      })
                     }
                   );
 
-                  workItem = applyFetchSuccess(workItem, fetchedResults);
+                  workItem = applyFetchSuccess(workItem, {
+                    results: fetchedBatch.results,
+                    fetchedCount: fetchedBatch.fetchedCount
+                  });
                 } catch (error) {
                   const errorMessage = error instanceof Error ? error.message : String(error);
                   workItem = applyFetchFailure(workItem, errorMessage);
@@ -698,6 +741,11 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
                 state.pipeline = upsertWorkItem(state.pipeline, workItem);
                 this.saveState(cachePath, state);
+                jobStore.syncJob({
+                  status: "running",
+                  updatedAt: state.updatedAt,
+                  output: buildJobOutput()
+                });
                 continue;
               }
 

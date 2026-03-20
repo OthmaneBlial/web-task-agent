@@ -115,8 +115,8 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
   private async scrapeSearchResults(
     client: CDPClient,
     maxResults: number
-  ): Promise<AgentSearchResult[]> {
-    return evaluateInBrowser<AgentSearchResult[]>(
+  ): Promise<{ results: AgentSearchResult[]; nextPageUrl: string | null }> {
+    return evaluateInBrowser<{ results: AgentSearchResult[]; nextPageUrl: string | null }>(
       client,
       `(inputMaxResults) => {
         const normalize = (value) => (value || "").replace(/\\s+/g, " ").trim();
@@ -187,7 +187,33 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
           }
         }
 
-        return results;
+        const nextPageAnchor =
+          document.querySelector("a.result--more__btn, a.nav-link") ||
+          Array.from(document.querySelectorAll("a")).find((anchor) => {
+            const text = normalize(anchor.textContent).toLowerCase();
+            return (
+              text === "next" ||
+              text.includes("next page") ||
+              text.includes("more results") ||
+              String(anchor.getAttribute("class") || "").includes("result--more__btn")
+            );
+          });
+        let nextPageUrl = null;
+        if (nextPageAnchor) {
+          const href = nextPageAnchor.getAttribute("href") || "";
+          if (href) {
+            try {
+              nextPageUrl = new URL(href, window.location.href).toString();
+            } catch {
+              nextPageUrl = null;
+            }
+          }
+        }
+
+        return {
+          results,
+          nextPageUrl
+        };
       }`,
       [maxResults]
     );
@@ -195,36 +221,64 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
 
   async search(query: string, maxResultsPerQuery: number): Promise<AgentSearchStageResult> {
     const searchUrl = this.buildSearchUrl(query);
-    let client: CDPClient | null = null;
+    const pagesTarget = Math.max(1, Math.ceil(maxResultsPerQuery / 10));
+    const seenUrls = new Set<string>();
+    const aggregated: AgentSearchResult[] = [];
+    let nextPageUrl: string | null = searchUrl;
+    let pagesVisited = 0;
 
-    try {
-      client = await createPageSession(searchUrl);
-      await this.waitForSearchResults(client);
-      await this.scanSearchResultsPage(client, query);
+    while (nextPageUrl && aggregated.length < maxResultsPerQuery && pagesVisited < pagesTarget) {
+      let client: CDPClient | null = null;
 
-      return {
-        query,
-        searchedAt: nowIso(),
-        searchUrl,
-        searchProvider: this.id,
-        results: await this.scrapeSearchResults(client, maxResultsPerQuery)
-      };
-    } catch (error) {
-      if (client) {
-        const screenshotPath = path.join("/tmp", `agent-research-${Date.now()}.png`);
-        try {
-          await captureScreenshot(client, screenshotPath);
-        } catch {
-          // Ignore screenshot failures.
+      try {
+        client = await createPageSession(nextPageUrl);
+        await this.waitForSearchResults(client);
+        await this.scanSearchResultsPage(client, query);
+
+        const page = await this.scrapeSearchResults(
+          client,
+          Math.max(1, maxResultsPerQuery - aggregated.length)
+        );
+        for (const result of page.results) {
+          if (seenUrls.has(result.url)) {
+            continue;
+          }
+          seenUrls.add(result.url);
+          aggregated.push(result);
+          if (aggregated.length >= maxResultsPerQuery) {
+            break;
+          }
+        }
+
+        pagesVisited += 1;
+        nextPageUrl = page.nextPageUrl;
+      } catch (error) {
+        if (client) {
+          const screenshotPath = path.join("/tmp", `agent-research-${Date.now()}.png`);
+          try {
+            await captureScreenshot(client, screenshotPath);
+          } catch {
+            // Ignore screenshot failures.
+          }
+        }
+
+        throw error;
+      } finally {
+        if (client) {
+          await closePageSession(client);
         }
       }
-
-      throw error;
-    } finally {
-      if (client) {
-        await closePageSession(client);
-      }
     }
+
+    return {
+      query,
+      searchedAt: nowIso(),
+      searchUrl,
+      searchProvider: this.id,
+      pagesVisited,
+      exhausted: !nextPageUrl || aggregated.length >= maxResultsPerQuery,
+      results: aggregated.slice(0, maxResultsPerQuery)
+    };
   }
 }
 

@@ -29,7 +29,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Fetcher interface with a browser-based page fetcher implementation
 - [x] Extractor interface with a heuristic default extractor implementation
 - [x] Multi-hour job execution with automatic recovery
-- [ ] Hundreds-of-pages research per run
+- [x] Hundreds-of-pages research per run
 - [ ] Durable database-backed source storage
 - [ ] Source deduplication and canonicalization across runs
 - [ ] Evidence graph linking sources, claims, entities, and outputs
@@ -268,7 +268,7 @@ This is the execution checklist. Items already present in the repo are marked `[
 ### Phase 4: Increase Research Depth Safely
 
 - [ ] Add configurable budgets for pages, time, domains, and parallelism
-- [ ] Allow jobs to search and review far more than the current few-result limit
+- [x] Allow jobs to search and review far more than the current few-result limit
 - [ ] Add queue-based processing for large source lists
 - [ ] Add per-domain backoff and failure tracking
 - [ ] Add domain allowlists and blocklists

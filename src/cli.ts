@@ -110,6 +110,12 @@ async function main(): Promise<void> {
       5
     )
     .option(
+      "--fetch-batch-size <number>",
+      "How many result pages to fetch before checkpointing progress",
+      (value) => parsePositiveInteger(value, "fetch-batch-size"),
+      5
+    )
+    .option(
       "--max-runtime-hours <number>",
       "Soft runtime budget for a long-running job execution window",
       (value) => parsePositiveInteger(value, "max-runtime-hours"),
@@ -130,6 +136,7 @@ async function main(): Promise<void> {
         memoryPath: options.memory ? path.resolve(String(options.memory)) : undefined,
         maxQueries: Number(options.maxQueries),
         maxResultsPerQuery: Number(options.maxResults),
+        fetchBatchSize: Number(options.fetchBatchSize),
         maxRuntimeHours: Number(options.maxRuntimeHours),
         leaseTtlMinutes: Number(options.leaseTtlMinutes)
       });

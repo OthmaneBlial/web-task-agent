@@ -5,6 +5,8 @@ export interface AgentSearchStageResult {
   searchedAt: string;
   searchUrl: string;
   searchProvider: string;
+  pagesVisited: number;
+  exhausted: boolean;
   results: AgentSearchResult[];
 }
 
