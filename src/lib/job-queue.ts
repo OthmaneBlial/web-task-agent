@@ -60,6 +60,37 @@ function hashValue(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function parseQueuedPayload(
+  value: unknown,
+  options?: {
+    forceResume?: boolean;
+  }
+): QueuedAgentJobPayload {
+  const payload = parseJsonValue<QueuedAgentJobPayload>(value, {
+    taskType: "agent",
+    mode: "agent",
+    label: "",
+    options: {
+      instruction: "",
+      resume: false
+    }
+  });
+  const payloadOptions = payload.options ?? {
+    instruction: "",
+    resume: false
+  };
+
+  return {
+    taskType: "agent",
+    mode: payload.mode === "workflow" ? "workflow" : "agent",
+    label: payload.label,
+    options: {
+      ...payloadOptions,
+      resume: options?.forceResume ? true : Boolean(payloadOptions.resume)
+    }
+  };
+}
+
 function addSecondsToIso(input: string, seconds: number): string {
   return new Date(Date.parse(input) + seconds * 1000).toISOString();
 }
@@ -106,6 +137,8 @@ function getQueueDatabase(customPath?: string): { db: DatabaseSync; databasePath
 }
 
 function mapQueuedJob(row: Record<string, unknown>): QueuedJobRecord {
+  const attempts = Number(row.attempts ?? 0);
+
   return {
     queueId: String(row.id ?? ""),
     taskType: String(row.task_type ?? ""),
@@ -113,18 +146,12 @@ function mapQueuedJob(row: Record<string, unknown>): QueuedJobRecord {
     label: String(row.label ?? ""),
     status: String(row.status ?? "queued") as QueuedJobStatus,
     priority: Number(row.priority ?? 100),
-    attempts: Number(row.attempts ?? 0),
+    attempts,
     maxAttempts: Number(row.max_attempts ?? 3),
     runAfter: String(row.run_after ?? ""),
     leaseExpiresAt: row.lease_expires_at ? String(row.lease_expires_at) : null,
-    payload: parseJsonValue<QueuedAgentJobPayload>(row.payload_json, {
-      taskType: "agent",
-      mode: "agent",
-      label: "",
-      options: {
-        instruction: "",
-        resume: false
-      }
+    payload: parseQueuedPayload(row.payload_json, {
+      forceResume: attempts > 1
     }),
     lastError: row.last_error ? String(row.last_error) : null,
     createdAt: String(row.created_at ?? ""),
@@ -162,6 +189,7 @@ export function enqueueQueuedAgentJob(input: {
       resume: Boolean(input.payload.options.resume)
     }
   };
+  const normalizedPayload = parseQueuedPayload(payload);
 
   db.prepare(`
     INSERT INTO queued_jobs (
@@ -170,13 +198,13 @@ export function enqueueQueuedAgentJob(input: {
     ) VALUES (?, ?, ?, ?, 'queued', ?, 0, ?, ?, ?, '{}', ?, ?)
   `).run(
     queueId,
-    payload.taskType,
-    payload.mode,
-    payload.label,
+    normalizedPayload.taskType,
+    normalizedPayload.mode,
+    normalizedPayload.label,
     input.priority ?? 100,
     Math.max(1, Math.min(10, input.maxAttempts ?? 3)),
     addSecondsToIso(timestamp, Math.max(0, input.delaySeconds ?? 0)),
-    serializeJson(payload),
+    serializeJson(normalizedPayload),
     timestamp,
     timestamp
   );
@@ -223,25 +251,50 @@ export function recoverStaleQueuedJobs(options?: {
 }): number {
   const { db } = getQueueDatabase(options?.databasePath);
   const timestamp = nowIso();
-  const result = db.prepare(`
+  const staleRows = db.prepare(`
+    SELECT id, payload_json
+    FROM queued_jobs
+    WHERE status = 'running'
+      AND lease_expires_at IS NOT NULL
+      AND lease_expires_at <= ?
+  `).all(timestamp) as Array<Record<string, unknown>>;
+
+  if (staleRows.length === 0) {
+    return 0;
+  }
+
+  const updateStatement = db.prepare(`
     UPDATE queued_jobs
     SET
       status = 'queued',
+      payload_json = ?,
       leased_by = NULL,
       leased_at = NULL,
       lease_expires_at = NULL,
       run_after = ?,
       updated_at = ?
-    WHERE status = 'running'
+    WHERE id = ?
+      AND status = 'running'
       AND lease_expires_at IS NOT NULL
       AND lease_expires_at <= ?
-  `).run(
-    timestamp,
-    timestamp,
-    timestamp
-  );
+  `);
 
-  return Number(result.changes ?? 0);
+  let recoveredCount = 0;
+  for (const row of staleRows) {
+    const payload = parseQueuedPayload(row.payload_json, {
+      forceResume: true
+    });
+    const result = updateStatement.run(
+      serializeJson(payload),
+      timestamp,
+      timestamp,
+      String(row.id ?? ""),
+      timestamp
+    );
+    recoveredCount += Number(result.changes ?? 0);
+  }
+
+  return recoveredCount;
 }
 
 export function claimNextQueuedJob(input: {
@@ -371,19 +424,9 @@ export function failQueuedJob(input: {
   const attempts = Number(row.attempts ?? 0);
   const maxAttempts = Number(row.max_attempts ?? 3);
   const shouldRetry = attempts < maxAttempts;
-  const payload = parseJsonValue<QueuedAgentJobPayload>(row.payload_json, {
-    taskType: "agent",
-    mode: "agent",
-    label: "",
-    options: {
-      instruction: "",
-      resume: true
-    }
+  const payload = parseQueuedPayload(row.payload_json, {
+    forceResume: true
   });
-  payload.options = {
-    ...payload.options,
-    resume: true
-  };
 
   db.prepare(`
     UPDATE queued_jobs

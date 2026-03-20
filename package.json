@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
     "start": "npm run build && node dist/cli.js",
+    "test": "npm run build && node --test dist/tests/*.test.js",
     "lightpanda:start": "./scripts/start-lightpanda.sh start",
     "lightpanda:stop": "./scripts/start-lightpanda.sh stop",
     "lightpanda:update": "./scripts/start-lightpanda.sh update"

@@ -10,7 +10,7 @@ This repository is now a practical research system, not just a small browser aut
 ## What It Does Now
 
 - Runs research jobs that plan, search, fetch, extract, synthesize, and write reports.
-- Persists jobs, steps, artifacts, sources, documents, snapshots, extractions, and evidence links in SQLite.
+- Persists jobs, steps, sources, documents, snapshots, extractions, evidence links, and artifact metadata in SQLite.
 - Recovers interrupted runs with leases, heartbeats, resumable cache state, and stage-level resume.
 - Reuses canonicalized sources and stored page snapshots across runs.
 - Supports built-in workflows for `android-opportunity` and `article-research`.
@@ -60,7 +60,7 @@ The project currently has these main layers:
 - Browser automation with Lightpanda over CDP.
 - Task orchestration for `github`, `playstore`, and long-form `agent` research.
 - Durable storage in `.data/web-task-agent.sqlite`.
-- Artifact output in `reports/`.
+- Artifact files in `reports/` and `.cache/`, with their metadata registered in SQLite.
 - Resumable local state in `.cache/`.
 - Queue and worker execution for long-running jobs.
 - Local management API and dashboard.

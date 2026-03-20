@@ -10,7 +10,7 @@ The project already has a working CLI, Lightpanda/CDP integration, resumable cac
 
 ## [x] Durable Job Execution
 
-Jobs now have leases, heartbeats, stale-run recovery, step tracking, and stage-level resume, so long jobs can survive interruptions instead of restarting from zero.
+Jobs now have leases, heartbeats, stale-run recovery, step tracking, and stage-level resume, including resumed execution after queued stale-run recovery, so long jobs can survive interruptions instead of restarting from zero.
 
 ## [x] Deep Research Pipeline
 
@@ -18,7 +18,7 @@ The research flow is split into search, fetch, extract, and synthesize stages, a
 
 ## [x] Durable Storage And Reuse
 
-Sources, documents, snapshots, extractions, and artifacts are stored in SQLite, and canonicalized sources can be reused across runs to avoid unnecessary refetching.
+Sources, documents, snapshots, extractions, and artifact metadata are stored in SQLite, and canonicalized sources can be reused across runs to avoid unnecessary refetching.
 
 ## [x] Evidence Analysis Layer
 
