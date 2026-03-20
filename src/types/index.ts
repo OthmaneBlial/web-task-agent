@@ -372,6 +372,32 @@ export interface AgentRunOptions {
   maxResultsPerQuery?: number;
 }
 
+export type AgentPipelineStage = "search" | "fetch" | "extract" | "completed";
+
+export type AgentPipelineWorkStatus = "pending" | "running" | "completed" | "failed";
+
+export interface AgentPipelineWorkItem {
+  query: string;
+  queryKey: string;
+  nextStage: AgentPipelineStage;
+  status: AgentPipelineWorkStatus;
+  searchedAt: string | null;
+  searchUrl: string | null;
+  results: AgentSearchResult[];
+  rawPath: string | null;
+  sourceCount: number;
+  documentCount: number;
+  extractionCount: number;
+  error: string | null;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+export interface AgentPipelineState {
+  version: number;
+  workItems: AgentPipelineWorkItem[];
+}
+
 export interface AgentRunState {
   task: "agent";
   runId: string;
@@ -387,10 +413,12 @@ export interface AgentRunState {
   reportPath: string;
   artifactDir: string;
   plan: AgentPlan | null;
+  pipeline: AgentPipelineState;
   research: AgentResearchResult[];
   researchSummary: AgentResearchSummary | null;
   outputs: {
     planPath: string | null;
+    pipelineManifestPath: string | null;
     researchSummaryPath: string | null;
     postDraftPath: string | null;
     commentsDraftPath: string | null;

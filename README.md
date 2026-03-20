@@ -24,6 +24,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Source quality and freshness scoring for evidence ranking
 - [x] Cross-source contradiction detection for conflicting evidence signals
 - [x] Explicit search, fetch, extract, and synthesize stage modules for the agent pipeline
+- [x] Stage-level resume with a per-query pipeline manifest for agent research
 - [ ] Multi-hour job execution with automatic recovery
 - [ ] Hundreds-of-pages research per run
 - [ ] Durable database-backed source storage
@@ -240,7 +241,7 @@ This is the execution checklist. Items already present in the repo are marked `[
 - [x] Add a normalized `Job` model with id, status, timestamps, budget, and workflow type
 - [x] Add `RunStep` records for each stage: plan, search, fetch, extract, analyze, write
 - [x] Record retry counts, failure reasons, and durations per step
-- [ ] Make resume operate at the step level instead of only task-level snapshots
+- [x] Make resume operate at the step level instead of only task-level snapshots
 - [ ] Add stable artifact manifests so downstream tools can inspect outputs
 
 ### Phase 2: Add Durable Storage

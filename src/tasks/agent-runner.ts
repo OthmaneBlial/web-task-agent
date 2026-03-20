@@ -28,6 +28,21 @@ import {
   AgentFetchStage,
   summarizeFetchedResults
 } from "./agent/fetch-stage";
+import {
+  applyExtractSuccess,
+  applyFetchFailure,
+  applyFetchSuccess,
+  applySearchFailure,
+  applySearchSuccess,
+  buildResearchResultFromWorkItem,
+  createPipelineState,
+  ensurePipelineState,
+  getPendingWorkItems,
+  markWorkItemStageRunning,
+  summarizePipelineQueue,
+  upsertResearchResult,
+  upsertWorkItem
+} from "./agent/pipeline-state";
 import { AgentSearchStage } from "./agent/search-stage";
 import {
   AgentSynthesisStage,
@@ -87,10 +102,12 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
     reportPath,
     artifactDir,
     plan: null,
+    pipeline: createPipelineState(),
     research: [],
     researchSummary: null,
     outputs: {
       planPath: null,
+      pipelineManifestPath: path.join(artifactDir, "pipeline-manifest.json"),
       researchSummaryPath: null,
       postDraftPath: null,
       commentsDraftPath: null
@@ -106,8 +123,23 @@ function hasStep(plan: AgentPlan | null, kind: AgentStepKind): boolean {
 export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> {
   private readonly llm = new LlmService();
 
+  private writePipelineManifest(state: AgentRunState): void {
+    if (!state.outputs.pipelineManifestPath) {
+      return;
+    }
+
+    writeJsonAtomic(state.outputs.pipelineManifestPath, {
+      runId: state.runId,
+      status: state.status,
+      updatedAt: state.updatedAt,
+      summary: summarizePipelineQueue(state.pipeline),
+      workItems: state.pipeline.workItems
+    });
+  }
+
   private saveState(cachePath: string, state: AgentRunState): void {
     state.updatedAt = nowIso();
+    this.writePipelineManifest(state);
     saveTaskState("agent", cachePath, state);
   }
 
@@ -149,6 +181,17 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       });
     }
 
+    if (state.outputs.pipelineManifestPath && fs.existsSync(state.outputs.pipelineManifestPath)) {
+      jobStore.registerArtifact(
+        "pipeline_manifest",
+        "json_pipeline_manifest",
+        state.outputs.pipelineManifestPath,
+        {
+          kind: "pipeline_manifest"
+        }
+      );
+    }
+
     if (state.outputs.researchSummaryPath && fs.existsSync(state.outputs.researchSummaryPath)) {
       jobStore.registerArtifact("research_summary", "markdown_summary", state.outputs.researchSummaryPath, {
         kind: "research_summary"
@@ -184,6 +227,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     });
 
     ensureDir(state.artifactDir);
+    state.pipeline = state.pipeline ?? createPipelineState();
+    if (!state.outputs.pipelineManifestPath) {
+      state.outputs.pipelineManifestPath = path.join(state.artifactDir, "pipeline-manifest.json");
+    }
 
     const jobStore = new JobStore({
       jobId: state.runId,
@@ -247,15 +294,16 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       const allResults = state.research.flatMap((entry) => entry.results);
       const fetchSummary = summarizeFetchedResults(allResults);
       const evidenceCounts = jobStore.getAgentEvidenceBundle().counts;
+      const queueSummary = summarizePipelineQueue(state.pipeline);
 
       return {
-        searchedQueries: state.research.length,
+        searchedQueries: state.pipeline.workItems.filter((item) => Boolean(item.searchedAt)).length,
         searchedSources: countCapturedResearchSources(state.research),
-        searchErrors: state.research.filter((entry) => Boolean(entry.error)).length,
+        searchErrors: state.pipeline.workItems.filter((item) => Boolean(item.error) && item.searchedAt).length,
         fetchedResults: fetchSummary.visitedResults,
         fetchedDocuments: fetchSummary.documentsCaptured,
         fetchErrors: fetchSummary.errorResults,
-        extractedQueries: state.research.length,
+        extractedQueries: queueSummary.completedQueries,
         extractedSources: countCapturedResearchSources(state.research),
         extractedDocuments: countCapturedResearchDocuments(state.research),
         extractedExtractions: evidenceCounts.extractions
@@ -265,7 +313,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     const buildJobOutput = (): Record<string, unknown> => ({
       estimatedMinutes: state.plan?.estimatedMinutes ?? null,
       ...summarizeResearch(),
-      pipeline: summarizePipeline()
+      pipeline: {
+        ...summarizePipeline(),
+        queue: summarizePipelineQueue(state.pipeline)
+      }
     });
 
     let evidenceBundle: AgentEvidenceBundle | null = null;
@@ -417,6 +468,14 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         throw new Error("agent plan is missing after planning");
       }
 
+      state.pipeline = ensurePipelineState({
+        pipeline: state.pipeline,
+        planQueries: state.plan.researchQueries,
+        research: state.research
+      });
+      this.saveState(cachePath, state);
+      this.syncArtifacts(jobStore, state);
+
       const executionEstimate = computeExecutionEstimateMinutes(
         state.plan,
         state.input.maxResultsPerQuery
@@ -444,102 +503,110 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           output: buildJobOutput()
         });
 
-        const doneQueries = new Set(state.research.map((entry) => entry.query.toLowerCase()));
-        const pendingQueries = state.plan.researchQueries.filter(
-          (query) => !doneQueries.has(query.toLowerCase())
-        );
-
         extractStage.persistExistingResearch(state.research);
 
-        if (pendingQueries.length > 0) {
-          for (const query of pendingQueries) {
-            this.log(`researching: ${query}`);
+        const pendingWorkItems = getPendingWorkItems(state.pipeline);
 
-            let researchResult: AgentResearchResult;
+        if (pendingWorkItems.length > 0) {
+          for (const seedWorkItem of pendingWorkItems) {
+            let workItem = seedWorkItem;
+            this.log(`researching: ${workItem.query}`);
 
-            try {
-              const searchResult = await jobStore.runStep(
-                searchStep,
-                async () => searchStage.search(query, state.input.maxResultsPerQuery),
-                {
-                  output: (result) => ({
-                    lastQuery: result.query,
-                    searchedAt: result.searchedAt,
-                    searchUrl: result.searchUrl,
-                    resultCount: result.results.length
-                  })
+            while (workItem.nextStage !== "completed") {
+              if (workItem.nextStage === "search") {
+                workItem = markWorkItemStageRunning(workItem, "search");
+                state.pipeline = upsertWorkItem(state.pipeline, workItem);
+                this.saveState(cachePath, state);
+
+                try {
+                  const searchResult = await jobStore.runStep(
+                    searchStep,
+                    async () => searchStage.search(workItem.query, state.input.maxResultsPerQuery),
+                    {
+                      output: (result) => ({
+                        lastQuery: result.query,
+                        searchedAt: result.searchedAt,
+                        searchUrl: result.searchUrl,
+                        resultCount: result.results.length
+                      })
+                    }
+                  );
+
+                  workItem = applySearchSuccess(workItem, searchResult);
+                } catch (error) {
+                  const errorMessage = error instanceof Error ? error.message : String(error);
+                  workItem = applySearchFailure(workItem, {
+                    searchedAt: nowIso(),
+                    searchUrl: searchStage.buildSearchUrl(workItem.query),
+                    error: errorMessage
+                  });
                 }
-              );
 
-              if (searchResult.results.length === 0) {
-                researchResult = {
-                  query,
-                  searchedAt: searchResult.searchedAt,
-                  results: [],
-                  error: "no search results were collected"
-                };
-              } else {
+                state.pipeline = upsertWorkItem(state.pipeline, workItem);
+                this.saveState(cachePath, state);
+                continue;
+              }
+
+              if (workItem.nextStage === "fetch") {
+                workItem = markWorkItemStageRunning(workItem, "fetch");
+                state.pipeline = upsertWorkItem(state.pipeline, workItem);
+                this.saveState(cachePath, state);
+
                 try {
                   const fetchedResults = await jobStore.runStep(
                     fetchStep,
-                    async () => fetchStage.fetchTopResults(searchResult.results),
+                    async () => fetchStage.fetchTopResults(workItem.results),
                     {
                       output: (result) => summarizeFetchedResults(result)
                     }
                   );
 
-                  researchResult = {
-                    query,
-                    searchedAt: searchResult.searchedAt,
-                    results: fetchedResults
-                  };
+                  workItem = applyFetchSuccess(workItem, fetchedResults);
                 } catch (error) {
                   const errorMessage = error instanceof Error ? error.message : String(error);
-                  researchResult = {
-                    query,
-                    searchedAt: searchResult.searchedAt,
-                    results: searchResult.results,
-                    error: `fetch stage failed: ${errorMessage}`
-                  };
+                  workItem = applyFetchFailure(workItem, errorMessage);
                 }
+
+                state.pipeline = upsertWorkItem(state.pipeline, workItem);
+                this.saveState(cachePath, state);
+                continue;
               }
-            } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              researchResult = {
-                query,
-                searchedAt: nowIso(),
-                results: [],
-                error: errorMessage
-              };
+
+              workItem = markWorkItemStageRunning(workItem, "extract");
+              state.pipeline = upsertWorkItem(state.pipeline, workItem);
+              this.saveState(cachePath, state);
+
+              const researchResult = buildResearchResultFromWorkItem(workItem);
+              const persisted = await jobStore.runStep(
+                extractStep,
+                async () => extractStage.persistQueryResult(researchResult),
+                {
+                  output: (result) => ({
+                    lastQuery: result.query,
+                    rawPath: result.rawPath,
+                    sourceCount: result.sourceCount,
+                    documentCount: result.documentCount,
+                    extractionCount: result.extractionCount
+                  })
+                }
+              );
+
+              workItem = applyExtractSuccess(workItem, persisted);
+              state.pipeline = upsertWorkItem(state.pipeline, workItem);
+              state.research = upsertResearchResult(state.research, researchResult);
+              appendNote(
+                state,
+                researchResult.error
+                  ? `Research query failed: ${workItem.query} (${researchResult.error})`
+                  : `Research query captured ${persisted.sourceCount} sources and ${persisted.documentCount} documents: ${workItem.query}`
+              );
+              this.saveState(cachePath, state);
+              jobStore.syncJob({
+                status: "running",
+                updatedAt: state.updatedAt,
+                output: buildJobOutput()
+              });
             }
-
-            const persisted = await jobStore.runStep(
-              extractStep,
-              async () => extractStage.persistQueryResult(researchResult),
-              {
-                output: (result) => ({
-                  lastQuery: result.query,
-                  rawPath: result.rawPath,
-                  sourceCount: result.sourceCount,
-                  documentCount: result.documentCount,
-                  extractionCount: result.extractionCount
-                })
-              }
-            );
-
-            state.research.push(researchResult);
-            appendNote(
-              state,
-              researchResult.error
-                ? `Research query failed: ${query} (${researchResult.error})`
-                : `Research query captured ${persisted.sourceCount} sources and ${persisted.documentCount} documents: ${query}`
-            );
-            this.saveState(cachePath, state);
-            jobStore.syncJob({
-              status: "running",
-              updatedAt: state.updatedAt,
-              output: buildJobOutput()
-            });
           }
 
           const pipelineSummary = summarizePipeline();
@@ -587,6 +654,11 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         this.saveState(cachePath, state);
       } else {
         updateStepStatus(state.plan, "research", "skipped");
+        state.pipeline = ensurePipelineState({
+          pipeline: state.pipeline,
+          planQueries: [],
+          research: state.research
+        });
         jobStore.markSkipped(searchStep, {
           reason: "no research queries planned"
         });
