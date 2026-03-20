@@ -54,6 +54,14 @@ function renderEvidenceSection(evidence: AgentEvidenceBundle): string {
     lines.push("");
   }
 
+  if (evidence.clusters.length > 0) {
+    lines.push("### Trending Signals", "");
+    for (const cluster of evidence.clusters.slice(0, 5)) {
+      lines.push(`- ${cluster.label} (${(cluster.trendScore * 100).toFixed(0)}% trend)`);
+    }
+    lines.push("");
+  }
+
   return lines.join("\n").trim();
 }
 
@@ -66,7 +74,7 @@ function renderClusterSection(evidence: AgentEvidenceBundle): string {
 
   for (const cluster of evidence.clusters.slice(0, 12)) {
     const supportMeta =
-      `${cluster.kind} | ${cluster.sourceCount} sources | ${cluster.evidenceCount} evidence items | confidence ${(cluster.averageConfidence * 100).toFixed(0)}% | score ${(cluster.overallScore * 100).toFixed(0)}%`;
+      `${cluster.kind} | ${cluster.sourceCount} sources | ${cluster.evidenceCount} evidence items | confidence ${(cluster.averageConfidence * 100).toFixed(0)}% | trend ${(cluster.trendScore * 100).toFixed(0)}% | score ${(cluster.overallScore * 100).toFixed(0)}%`;
     lines.push(`- [${cluster.id}] ${cluster.label}`);
     lines.push(`  Support: ${supportMeta}`);
     if (cluster.supportingValues.length > 0) {
@@ -279,7 +287,7 @@ export function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundl
       lines.push(`- [${source.title}](${source.url})`);
       lines.push(`  Query: ${source.query}`);
       lines.push(
-        `  Site: ${source.site || "unknown"} | quality ${(source.sourceQualityScore * 100).toFixed(0)}% | freshness ${(source.freshnessScore * 100).toFixed(0)}% | score ${(source.overallScore * 100).toFixed(0)}%`
+        `  Site: ${source.site || "unknown"} | type ${source.contentType} | quality ${(source.sourceQualityScore * 100).toFixed(0)}% | freshness ${(source.freshnessScore * 100).toFixed(0)}% | trend ${(source.trendScore * 100).toFixed(0)}% | score ${(source.overallScore * 100).toFixed(0)}%`
       );
       if (source.reviewStatus) {
         const reviewMeta =

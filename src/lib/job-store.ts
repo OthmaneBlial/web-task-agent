@@ -10,6 +10,7 @@ import type {
   AgentEvidenceExtraction,
   AgentExtractionCandidate,
   AgentEvidenceQuery,
+  AgentResearchContentType,
   AgentEvidenceSource,
   AgentResearchResult,
   AgentSearchResult,
@@ -23,7 +24,10 @@ import type {
   RecoverableJobRecord
 } from "../types";
 import { buildHeuristicExtractionCandidates } from "./extraction-heuristics";
-import { addSecondsToIso } from "../tasks/agent/shared";
+import {
+  addSecondsToIso,
+  classifyResearchContentType
+} from "../tasks/agent/shared";
 
 const DEFAULT_DATABASE_PATH = path.join(process.cwd(), ".data", "web-task-agent.sqlite");
 
@@ -713,6 +717,104 @@ function scoreSourceQuality(input: {
   };
 }
 
+function normalizeContentType(
+  value: unknown,
+  fallback: AgentResearchContentType = "general"
+): AgentResearchContentType {
+  return value === "documentation" ||
+    value === "forum" ||
+    value === "review" ||
+    value === "general"
+    ? value
+    : fallback;
+}
+
+function contentTypeTrendWeight(contentType: AgentResearchContentType): number {
+  switch (contentType) {
+    case "forum":
+      return 1;
+    case "review":
+      return 0.92;
+    case "documentation":
+      return 0.72;
+    default:
+      return 0.64;
+  }
+}
+
+function extractionKindTrendWeight(kind: AgentExtractionCandidate["kind"]): number {
+  switch (kind) {
+    case "complaint":
+      return 1;
+    case "feature_request":
+      return 0.95;
+    case "claim":
+      return 0.8;
+    case "theme":
+      return 0.7;
+    case "entity":
+      return 0.55;
+    default:
+      return 0.6;
+  }
+}
+
+function scoreSourceTrend(input: {
+  freshnessScore: number;
+  sourceQualityScore: number;
+  contentType: AgentResearchContentType;
+  reviewStatus?: AgentEvidenceSource["reviewStatus"];
+  extractionKinds: AgentExtractionCandidate["kind"][];
+}): number {
+  const kindWeights =
+    input.extractionKinds.length > 0
+      ? input.extractionKinds.map((kind) => extractionKindTrendWeight(kind))
+      : [0.45];
+  const actionability = Math.max(...kindWeights);
+  const density = Math.min(1, input.extractionKinds.length / 4);
+  const reviewScore =
+    input.reviewStatus === "read"
+      ? 1
+      : input.reviewStatus === "skipped"
+        ? 0.4
+        : input.reviewStatus === "error"
+          ? 0.15
+          : 0.6;
+
+  return clampUnit(
+    input.freshnessScore * 0.4 +
+      input.sourceQualityScore * 0.15 +
+      density * 0.15 +
+      actionability * 0.18 +
+      contentTypeTrendWeight(input.contentType) * 0.07 +
+      reviewScore * 0.05
+  );
+}
+
+function scoreClusterTrend(input: {
+  kind: AgentExtractionCandidate["kind"];
+  freshnessScore: number;
+  sourceCount: number;
+  evidenceCount: number;
+  queryCount: number;
+  averageConfidence: number;
+  sourceTrendScore: number;
+}): number {
+  const supportScore = Math.min(1, input.sourceCount / 4);
+  const evidenceDensity = Math.min(1, input.evidenceCount / 6);
+  const queryBreadth = Math.min(1, input.queryCount / 3);
+
+  return clampUnit(
+    input.freshnessScore * 0.3 +
+      supportScore * 0.24 +
+      evidenceDensity * 0.11 +
+      queryBreadth * 0.12 +
+      input.averageConfidence * 0.1 +
+      input.sourceTrendScore * 0.05 +
+      extractionKindTrendWeight(input.kind) * 0.08
+  );
+}
+
 function ensureParentDir(filePath: string): void {
   const dirPath = path.dirname(filePath);
   fs.mkdirSync(dirPath, { recursive: true });
@@ -720,6 +822,25 @@ function ensureParentDir(filePath: string): void {
 
 export function resolveJobDatabasePath(customPath?: string): string {
   return path.resolve(customPath ?? process.env.WEB_TASK_AGENT_DB_PATH ?? DEFAULT_DATABASE_PATH);
+}
+
+export function closeSharedJobDatabase(customPath?: string): void {
+  const resolvedPath = customPath ? resolveJobDatabasePath(customPath) : null;
+  if (!sharedDatabase) {
+    return;
+  }
+  if (resolvedPath && sharedDatabasePath && sharedDatabasePath !== resolvedPath) {
+    return;
+  }
+
+  try {
+    sharedDatabase.close();
+  } catch {
+    // Ignore close failures during shutdown and test cleanup.
+  } finally {
+    sharedDatabase = null;
+    sharedDatabasePath = null;
+  }
 }
 
 function ensureTableColumns(
@@ -1047,6 +1168,10 @@ function initializeSchema(database: DatabaseSync): void {
 
 function getDatabase(customPath?: string): { db: DatabaseSync; databasePath: string } {
   const databasePath = resolveJobDatabasePath(customPath);
+
+  if (sharedDatabase && sharedDatabasePath && sharedDatabasePath !== databasePath) {
+    closeSharedJobDatabase(sharedDatabasePath);
+  }
 
   if (!sharedDatabase || sharedDatabasePath !== databasePath) {
     ensureParentDir(databasePath);
@@ -2008,6 +2133,14 @@ export class JobStore {
         qualitySignals: Array.isArray(metadata.qualitySignals)
           ? metadata.qualitySignals.filter((value): value is string => typeof value === "string")
           : result.qualitySignals,
+        rankingScore:
+          typeof metadata.rankingScore === "number"
+            ? Number(metadata.rankingScore)
+            : result.rankingScore,
+        rankingSignals: Array.isArray(metadata.rankingSignals)
+          ? metadata.rankingSignals.filter((value): value is string => typeof value === "string")
+          : result.rankingSignals,
+        contentType: normalizeContentType(metadata.contentType, result.contentType ?? "general"),
         skipReason:
           (typeof metadata.skipReason === "string" ? metadata.skipReason : undefined) ??
           "reused stored snapshot"
@@ -2340,7 +2473,10 @@ export class JobStore {
           policyAction: result.policyAction ?? null,
           policyReason: result.policyReason ?? null,
           qualityScore: result.qualityScore ?? null,
-          qualitySignals: result.qualitySignals ?? []
+          qualitySignals: result.qualitySignals ?? [],
+          rankingScore: result.rankingScore ?? null,
+          rankingSignals: result.rankingSignals ?? [],
+          contentType: result.contentType ?? null
         }),
         research.searchedAt,
         timestamp
@@ -2390,7 +2526,10 @@ export class JobStore {
           policyAction: result.policyAction ?? null,
           policyReason: result.policyReason ?? null,
           qualityScore: result.qualityScore ?? null,
-          qualitySignals: result.qualitySignals ?? []
+          qualitySignals: result.qualitySignals ?? [],
+          rankingScore: result.rankingScore ?? null,
+          rankingSignals: result.rankingSignals ?? [],
+          contentType: result.contentType ?? null
         }),
         research.searchedAt,
         timestamp
@@ -2446,7 +2585,10 @@ export class JobStore {
             policyAction: result.policyAction ?? null,
             policyReason: result.policyReason ?? null,
             qualityScore: result.qualityScore ?? null,
-            qualitySignals: result.qualitySignals ?? []
+            qualitySignals: result.qualitySignals ?? [],
+            rankingScore: result.rankingScore ?? null,
+            rankingSignals: result.rankingSignals ?? [],
+            contentType: result.contentType ?? null
           }),
           result.page.capturedAt,
           timestamp
@@ -2514,7 +2656,10 @@ export class JobStore {
             policyAction: result.policyAction ?? null,
             policyReason: result.policyReason ?? null,
             qualityScore: result.qualityScore ?? null,
-            qualitySignals: result.qualitySignals ?? []
+            qualitySignals: result.qualitySignals ?? [],
+            rankingScore: result.rankingScore ?? null,
+            rankingSignals: result.rankingSignals ?? [],
+            contentType: result.contentType ?? null
           }),
           result.page.capturedAt,
           timestamp
@@ -2689,6 +2834,7 @@ export class JobStore {
         js.review_status AS review_status,
         js.dwell_seconds AS dwell_seconds,
         js.skip_reason AS skip_reason,
+        js.metadata_json AS source_metadata_json,
         d.id AS document_id,
         d.captured_at AS captured_at,
         d.title AS page_title,
@@ -2765,6 +2911,7 @@ export class JobStore {
         row.document_id === null || row.document_id === undefined ? null : String(row.document_id);
       const headings = parseJsonValue<string[]>(row.headings_json, []);
       const paragraphs = parseJsonValue<string[]>(row.paragraphs_json, []);
+      const sourceMetadata = parseJsonValue<Record<string, unknown>>(row.source_metadata_json, {});
       const extractions = extractionsByKey.get(`${sourceId}:${documentId ?? "none"}`) ?? [];
       const capturedAt =
         row.captured_at === null || row.captured_at === undefined ? undefined : String(row.captured_at);
@@ -2779,7 +2926,34 @@ export class JobStore {
         paragraphs,
         hasDocument: Boolean(documentId)
       });
+      const inferredContentType = classifyResearchContentType({
+        title: String(row.title ?? ""),
+        url: String(row.url ?? ""),
+        snippet: String(row.snippet ?? ""),
+        site: String(row.site ?? ""),
+        page: documentId
+          ? {
+            title: row.page_title ? String(row.page_title) : String(row.title ?? ""),
+            url: String(row.url ?? ""),
+            description: row.description ? String(row.description) : "",
+            h1: null,
+            headings,
+            paragraphs,
+            capturedAt: capturedAt ?? String(row.searched_at ?? nowIso())
+          }
+          : undefined
+      });
+      const contentType = normalizeContentType(sourceMetadata.contentType, inferredContentType);
       const freshnessScore = scoreFreshness(capturedAt ?? String(row.searched_at ?? ""));
+      const trendScore = scoreSourceTrend({
+        freshnessScore,
+        sourceQualityScore: quality.score,
+        contentType,
+        reviewStatus: row.review_status
+          ? String(row.review_status) as AgentEvidenceSource["reviewStatus"]
+          : undefined,
+        extractionKinds: extractions.map((extraction) => extraction.kind)
+      });
       const overallScore = clampUnit(quality.score * 0.65 + freshnessScore * 0.35);
 
       return {
@@ -2801,9 +2975,11 @@ export class JobStore {
         description: row.description ? String(row.description) : undefined,
         headings,
         paragraphs,
+        contentType,
         qualitySignals: quality.signals,
         sourceQualityScore: quality.score,
         freshnessScore,
+        trendScore,
         overallScore,
         extractions
       };
@@ -2895,9 +3071,25 @@ export class JobStore {
         const freshnessScore =
           cluster.items.reduce((total, item) => total + item.source.freshnessScore, 0) /
           Math.max(1, cluster.items.length);
+        const sourceTrendScore =
+          cluster.items.reduce((total, item) => total + item.source.trendScore, 0) /
+          Math.max(1, cluster.items.length);
         const supportScore = Math.min(1, cluster.items.length / 3);
+        const trendScore = scoreClusterTrend({
+          kind: cluster.kind,
+          freshnessScore,
+          sourceCount: sourceIds.length,
+          evidenceCount: evidenceIds.length,
+          queryCount: queries.length,
+          averageConfidence,
+          sourceTrendScore
+        });
         const overallScore = clampUnit(
-          qualityScore * 0.4 + freshnessScore * 0.2 + averageConfidence * 0.2 + supportScore * 0.2
+          qualityScore * 0.34 +
+            freshnessScore * 0.16 +
+            averageConfidence * 0.17 +
+            supportScore * 0.18 +
+            trendScore * 0.15
         );
 
         return {
@@ -2909,6 +3101,7 @@ export class JobStore {
           averageConfidence: clampUnit(averageConfidence),
           qualityScore: clampUnit(qualityScore),
           freshnessScore: clampUnit(freshnessScore),
+          trendScore,
           overallScore,
           sourceIds,
           evidenceIds,
@@ -2917,6 +3110,9 @@ export class JobStore {
         };
       })
       .sort((left, right) => {
+        if (right.trendScore !== left.trendScore) {
+          return right.trendScore - left.trendScore;
+        }
         if (right.overallScore !== left.overallScore) {
           return right.overallScore - left.overallScore;
         }
@@ -2934,6 +3130,9 @@ export class JobStore {
         clusters
           .filter((cluster) => cluster.kind === kind)
           .sort((left, right) => {
+            if (right.trendScore !== left.trendScore) {
+              return right.trendScore - left.trendScore;
+            }
             if (right.sourceCount !== left.sourceCount) {
               return right.sourceCount - left.sourceCount;
             }
@@ -3048,6 +3247,9 @@ export class JobStore {
       },
       queries,
       sources: [...sources].sort((left, right) => {
+        if (right.trendScore !== left.trendScore) {
+          return right.trendScore - left.trendScore;
+        }
         if (right.overallScore !== left.overallScore) {
           return right.overallScore - left.overallScore;
         }

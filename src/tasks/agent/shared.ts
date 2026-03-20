@@ -1,6 +1,7 @@
 import type {
   AgentPageDigest,
   AgentPlan,
+  AgentResearchContentType,
   AgentSearchResult,
   AgentResearchResult
 } from "../../types";
@@ -96,6 +97,88 @@ function pathnameOf(rawUrl: string): string {
   } catch {
     return "";
   }
+}
+
+function titleSnippetHaystack(result: Pick<AgentSearchResult, "title" | "snippet">): string {
+  return [result.title, result.snippet].join(" ").toLowerCase();
+}
+
+function pageHaystack(page?: AgentPageDigest): string {
+  if (!page) {
+    return "";
+  }
+
+  return [
+    page.title,
+    page.description,
+    page.h1 ?? "",
+    ...page.headings,
+    ...page.paragraphs
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+export function classifyResearchContentType(
+  result: Pick<AgentSearchResult, "title" | "url" | "snippet" | "site" | "page">
+): AgentResearchContentType {
+  const hostname = hostnameOf(result.url) || result.site.toLowerCase();
+  const pathname = pathnameOf(result.url);
+  const haystack = `${titleSnippetHaystack(result)} ${pageHaystack(result.page)}`;
+
+  if (
+    hostname.startsWith("docs.") ||
+    hostname.startsWith("developer.") ||
+    pathname.includes("/docs/") ||
+    pathname.includes("/guide") ||
+    pathname.includes("/guides/") ||
+    pathname.includes("/reference") ||
+    pathname.includes("/api/") ||
+    pathname.includes("/sdk") ||
+    pathname.includes("/manual") ||
+    haystack.includes("developer guide") ||
+    haystack.includes("api reference")
+  ) {
+    return "documentation";
+  }
+
+  if (
+    hostname.includes("reddit.com") ||
+    hostname.includes("discourse") ||
+    hostname.includes("forum.") ||
+    hostname.includes("community.") ||
+    hostname.includes("news.ycombinator.com") ||
+    hostname.includes("stackoverflow.com") ||
+    pathname.includes("/forum/") ||
+    pathname.includes("/community/") ||
+    pathname.includes("/discussion") ||
+    pathname.includes("/discussions/") ||
+    pathname.includes("/issues/") ||
+    pathname.includes("/comments/") ||
+    haystack.includes("community thread") ||
+    haystack.includes("discussion thread")
+  ) {
+    return "forum";
+  }
+
+  if (
+    hostname.includes("g2.com") ||
+    hostname.includes("capterra.com") ||
+    hostname.includes("trustpilot.com") ||
+    hostname.includes("play.google.com") ||
+    hostname.includes("apps.apple.com") ||
+    pathname.includes("/review") ||
+    pathname.includes("/reviews/") ||
+    pathname.includes("/ratings") ||
+    haystack.includes("pros and cons") ||
+    haystack.includes("what users say") ||
+    haystack.includes("user review") ||
+    haystack.includes("customer review")
+  ) {
+    return "review";
+  }
+
+  return "general";
 }
 
 export function looksLikeErrorPage(page: AgentPageDigest): boolean {
@@ -213,6 +296,132 @@ export function evaluateDomainPolicy(result: AgentSearchResult): AgentDomainPoli
     reason: "general web page",
     signals
   };
+}
+
+export function scoreSearchResultPriority(
+  result: AgentSearchResult,
+  rankHint: number = 0
+): {
+  score: number;
+  signals: string[];
+  contentType: AgentResearchContentType;
+  policy: AgentDomainPolicyDecision;
+} {
+  const policy = evaluateDomainPolicy(result);
+  const hostname = hostnameOf(result.url);
+  const pathname = pathnameOf(result.url);
+  const contentType = result.contentType ?? classifyResearchContentType(result);
+  const scoreSignals = [`content type: ${contentType}`];
+  let score = 0.4;
+
+  if (policy.action === "allow") {
+    score += 0.12;
+    scoreSignals.push("policy allow");
+  } else if (policy.action === "deprioritize") {
+    score -= 0.14;
+    scoreSignals.push("policy deprioritize");
+  } else {
+    score -= 0.42;
+    scoreSignals.push("policy skip");
+  }
+
+  if (contentType === "documentation") {
+    score += 0.2;
+    scoreSignals.push("documentation source");
+  } else if (contentType === "forum") {
+    score += 0.13;
+    scoreSignals.push("community discussion");
+  } else if (contentType === "review") {
+    score += 0.11;
+    scoreSignals.push("review signal");
+  }
+
+  if (
+    hostname?.endsWith(".gov") ||
+    hostname?.endsWith(".edu") ||
+    hostname === "github.com"
+  ) {
+    score += 0.08;
+    scoreSignals.push("high-trust host");
+  }
+
+  if ((result.snippet ?? "").length >= 100) {
+    score += 0.06;
+    scoreSignals.push("strong snippet");
+  } else if ((result.snippet ?? "").length >= 50) {
+    score += 0.03;
+    scoreSignals.push("usable snippet");
+  }
+
+  if ((result.title ?? "").length >= 24) {
+    score += 0.02;
+    scoreSignals.push("descriptive title");
+  }
+
+  if (pathname.includes("/pricing") || pathname.includes("/careers") || pathname.includes("/press")) {
+    score -= 0.16;
+    scoreSignals.push("low-research-intent path");
+  }
+
+  if (
+    pathname.includes("/tag/") ||
+    pathname.includes("/category/") ||
+    pathname.includes("/archive") ||
+    pathname.includes("/search")
+  ) {
+    score -= 0.14;
+    scoreSignals.push("index-like result");
+  }
+
+  if (typeof result.qualityScore === "number") {
+    score += (result.qualityScore - 0.5) * 0.24;
+    scoreSignals.push("quality-informed score");
+  }
+
+  if (result.reviewStatus === "read") {
+    score += 0.06;
+    scoreSignals.push("already reviewed");
+  } else if (result.reviewStatus === "skipped") {
+    score -= 0.1;
+    scoreSignals.push("previously skipped");
+  } else if (result.reviewStatus === "error") {
+    score -= 0.18;
+    scoreSignals.push("previous fetch error");
+  }
+
+  score += Math.max(0, 0.09 - rankHint * 0.01);
+  scoreSignals.push(`search rank bias ${rankHint + 1}`);
+
+  return {
+    score: clamp(score, 0, 1),
+    signals: Array.from(new Set([...policy.signals, ...scoreSignals])),
+    contentType,
+    policy
+  };
+}
+
+export function rankSearchResults(results: AgentSearchResult[]): AgentSearchResult[] {
+  return results
+    .map((result, index) => {
+      const priority = scoreSearchResultPriority(result, index);
+      return {
+        ...result,
+        contentType: priority.contentType,
+        policyAction: result.policyAction ?? priority.policy.action,
+        policyReason: result.policyReason ?? priority.policy.reason,
+        rankingScore: Number(priority.score.toFixed(2)),
+        rankingSignals: priority.signals
+      };
+    })
+    .sort((left, right) => {
+      const rightScore = right.rankingScore ?? 0;
+      const leftScore = left.rankingScore ?? 0;
+
+      if (rightScore !== leftScore) {
+        return rightScore - leftScore;
+      }
+      return left.title.localeCompare(right.title);
+    });
 }
 
 export function isReadablePage(page: AgentPageDigest): boolean {

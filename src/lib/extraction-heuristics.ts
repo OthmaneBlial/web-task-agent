@@ -2,6 +2,7 @@ import type {
   AgentExtractionCandidate,
   AgentSearchResult
 } from "../types";
+import { classifyResearchContentType } from "../tasks/agent/shared";
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -36,7 +37,7 @@ function normalizeExtractionValue(value: string): string {
   return normalizeText(value).toLowerCase();
 }
 
-function selectUniqueExtractions(
+export function selectUniqueExtractions(
   candidates: AgentExtractionCandidate[],
   limitPerKind: number = 8
 ): AgentExtractionCandidate[] {
@@ -69,7 +70,8 @@ function selectUniqueExtractions(
 }
 
 function extractCandidateEntities(text: string): string[] {
-  const matches = text.match(/\b(?:[A-Z][a-z0-9]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z0-9]+|[A-Z]{2,})){0,3}\b/g) ?? [];
+  const matches =
+    text.match(/\b(?:[A-Z][a-z0-9]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z0-9]+|[A-Z]{2,})){0,3}\b/g) ?? [];
   const blocked = new Set([
     "The",
     "This",
@@ -93,11 +95,7 @@ function extractCandidateEntities(text: string): string[] {
 }
 
 function extractThemePhrases(result: AgentSearchResult): string[] {
-  const candidates = [
-    result.page?.h1 ?? "",
-    result.title,
-    ...(result.page?.headings ?? [])
-  ];
+  const candidates = [result.page?.h1 ?? "", result.title, ...(result.page?.headings ?? [])];
 
   return candidates
     .map((value) => normalizeText(value))
@@ -110,6 +108,74 @@ function extractSentencesByTerms(sentences: string[], terms: string[]): string[]
     const lower = sentence.toLowerCase();
     return terms.some((term) => lower.includes(term));
   });
+}
+
+function sentencePool(result: AgentSearchResult): string[] {
+  return splitSentences(
+    [result.snippet, result.page?.description ?? "", ...(result.page?.paragraphs ?? [])]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
+function titleText(result: AgentSearchResult): string {
+  return normalizeText(
+    [result.title, result.page?.title ?? "", result.page?.h1 ?? ""].filter(Boolean).join(" ")
+  );
+}
+
+function pushEntitiesAndThemes(
+  candidates: AgentExtractionCandidate[],
+  result: AgentSearchResult,
+  methodPrefix: string,
+  themeConfidence: number
+): void {
+  const titleValue = titleText(result);
+
+  for (const entity of extractCandidateEntities(titleValue)) {
+    candidates.push({
+      kind: "entity",
+      value: entity,
+      evidenceText: titleValue,
+      confidence: 0.72,
+      method: `${methodPrefix}_entity`,
+      metadata: {
+        source: "title"
+      }
+    });
+  }
+
+  for (const theme of extractThemePhrases(result)) {
+    candidates.push({
+      kind: "theme",
+      value: theme,
+      evidenceText: theme,
+      confidence: themeConfidence,
+      method: `${methodPrefix}_theme`,
+      metadata: {
+        source: "headings"
+      }
+    });
+  }
+}
+
+function pushSentenceCandidates(
+  candidates: AgentExtractionCandidate[],
+  kind: AgentExtractionCandidate["kind"],
+  sentences: string[],
+  terms: string[],
+  confidence: number,
+  method: string
+): void {
+  for (const sentence of extractSentencesByTerms(sentences, terms)) {
+    candidates.push({
+      kind,
+      value: sentence,
+      evidenceText: sentence,
+      confidence,
+      method
+    });
+  }
 }
 
 export function shouldExtractFromResult(result: AgentSearchResult): boolean {
@@ -146,120 +212,265 @@ export function buildHeuristicExtractionCandidates(
   }
 
   const combinedText = buildDigestText(result);
-  const sentences = splitSentences(
-    [
-      result.snippet,
-      result.page?.description ?? "",
-      ...(result.page?.paragraphs ?? [])
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
-  const claimSentences = splitSentences(
-    [
-      result.snippet,
-      result.page?.description ?? "",
-      ...(result.page?.paragraphs ?? [])
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
-  const titleText = normalizeText(
-    [
-      result.title,
-      result.page?.title ?? "",
-      result.page?.h1 ?? ""
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
+  const sentences = sentencePool(result);
+  const claimSentences = sentences.length > 0 ? sentences : splitSentences(combinedText);
   const candidates: AgentExtractionCandidate[] = [];
 
-  for (const entity of extractCandidateEntities(titleText)) {
-    candidates.push({
-      kind: "entity",
-      value: entity,
-      evidenceText: titleText,
-      confidence: 0.72,
-      method: "heuristic_capitalized_phrase",
-      metadata: {
-        source: "title"
-      }
-    });
-  }
-
-  for (const theme of extractThemePhrases(result)) {
-    candidates.push({
-      kind: "theme",
-      value: theme,
-      evidenceText: theme,
-      confidence: 0.68,
-      method: "heuristic_heading_theme",
-      metadata: {
-        source: "headings"
-      }
-    });
-  }
-
-  for (const complaint of extractSentencesByTerms(sentences, [
-    "problem",
-    "issue",
-    "pain",
-    "difficult",
-    "hard",
-    "slow",
-    "broken",
-    "lack",
-    "missing",
-    "frustrat",
-    "complain",
-    "error",
-    "challenge",
-    "expensive"
-  ])) {
-    candidates.push({
-      kind: "complaint",
-      value: complaint,
-      evidenceText: complaint,
-      confidence: 0.77,
-      method: "heuristic_negative_sentence"
-    });
-  }
-
-  for (const request of extractSentencesByTerms(sentences, [
-    "should",
-    "could",
-    "wish",
-    "needs to",
-    "need to",
-    "needs more",
-    "want",
-    "would like",
-    "missing",
-    "feature request",
-    "roadmap"
-  ])) {
-    candidates.push({
-      kind: "feature_request",
-      value: request,
-      evidenceText: request,
-      confidence: 0.79,
-      method: "heuristic_request_sentence"
-    });
-  }
-
-  for (const claim of extractSentencesByTerms(
-    claimSentences.length > 0 ? claimSentences : splitSentences(combinedText),
-    [" is ", " are ", " can ", " helps ", " lets ", " uses ", " supports ", " enables ", " offers "]
-  )) {
-    candidates.push({
-      kind: "claim",
-      value: claim,
-      evidenceText: claim,
-      confidence: 0.66,
-      method: "heuristic_claim_sentence"
-    });
-  }
+  pushEntitiesAndThemes(candidates, result, "heuristic_heading", 0.68);
+  pushSentenceCandidates(
+    candidates,
+    "complaint",
+    sentences,
+    [
+      "problem",
+      "issue",
+      "pain",
+      "difficult",
+      "hard",
+      "slow",
+      "broken",
+      "lack",
+      "missing",
+      "frustrat",
+      "complain",
+      "error",
+      "challenge",
+      "expensive"
+    ],
+    0.77,
+    "heuristic_negative_sentence"
+  );
+  pushSentenceCandidates(
+    candidates,
+    "feature_request",
+    sentences,
+    [
+      "should",
+      "could",
+      "wish",
+      "needs to",
+      "need to",
+      "needs more",
+      "want",
+      "would like",
+      "missing",
+      "feature request",
+      "roadmap"
+    ],
+    0.79,
+    "heuristic_request_sentence"
+  );
+  pushSentenceCandidates(
+    candidates,
+    "claim",
+    claimSentences,
+    [" is ", " are ", " can ", " helps ", " lets ", " uses ", " supports ", " enables ", " offers "],
+    0.66,
+    "heuristic_claim_sentence"
+  );
 
   return selectUniqueExtractions(candidates);
+}
+
+export function buildDocumentationExtractionCandidates(
+  result: AgentSearchResult
+): AgentExtractionCandidate[] {
+  if (!shouldExtractFromResult(result)) {
+    return [];
+  }
+
+  const sentences = sentencePool(result);
+  const claimSentences = sentences.length > 0 ? sentences : splitSentences(buildDigestText(result));
+  const candidates: AgentExtractionCandidate[] = [];
+
+  pushEntitiesAndThemes(candidates, result, "docs", 0.74);
+  pushSentenceCandidates(
+    candidates,
+    "claim",
+    claimSentences,
+    [
+      "supports",
+      "support",
+      "allows",
+      "lets",
+      "can",
+      "configure",
+      "integrate",
+      "automate",
+      "workflow",
+      "api",
+      "sdk",
+      "export",
+      "import"
+    ],
+    0.78,
+    "docs_capability_sentence"
+  );
+  pushSentenceCandidates(
+    candidates,
+    "complaint",
+    sentences,
+    [
+      "limitation",
+      "manual",
+      "slow",
+      "missing",
+      "cannot",
+      "can't",
+      "does not support",
+      "hard"
+    ],
+    0.74,
+    "docs_gap_sentence"
+  );
+  pushSentenceCandidates(
+    candidates,
+    "feature_request",
+    sentences,
+    ["should", "could", "needs", "missing", "roadmap", "would help"],
+    0.76,
+    "docs_request_sentence"
+  );
+
+  return selectUniqueExtractions(candidates);
+}
+
+export function buildForumExtractionCandidates(
+  result: AgentSearchResult
+): AgentExtractionCandidate[] {
+  if (!shouldExtractFromResult(result)) {
+    return [];
+  }
+
+  const sentences = sentencePool(result);
+  const candidates: AgentExtractionCandidate[] = [];
+
+  pushEntitiesAndThemes(candidates, result, "forum", 0.7);
+  pushSentenceCandidates(
+    candidates,
+    "complaint",
+    sentences,
+    [
+      "issue",
+      "problem",
+      "pain",
+      "frustrat",
+      "broken",
+      "slow",
+      "missing",
+      "hard",
+      "can't",
+      "cannot",
+      "error",
+      "annoying"
+    ],
+    0.84,
+    "forum_pain_sentence"
+  );
+  pushSentenceCandidates(
+    candidates,
+    "feature_request",
+    sentences,
+    [
+      "wish",
+      "should",
+      "could",
+      "want",
+      "need",
+      "please add",
+      "roadmap",
+      "feature request"
+    ],
+    0.86,
+    "forum_request_sentence"
+  );
+  pushSentenceCandidates(
+    candidates,
+    "claim",
+    sentences,
+    ["we use", "i use", "works", "working", "helps", "useful", "switched", "adopted"],
+    0.71,
+    "forum_usage_sentence"
+  );
+
+  return selectUniqueExtractions(candidates);
+}
+
+export function buildReviewExtractionCandidates(
+  result: AgentSearchResult
+): AgentExtractionCandidate[] {
+  if (!shouldExtractFromResult(result)) {
+    return [];
+  }
+
+  const sentences = sentencePool(result);
+  const candidates: AgentExtractionCandidate[] = [];
+
+  pushEntitiesAndThemes(candidates, result, "review", 0.69);
+  pushSentenceCandidates(
+    candidates,
+    "complaint",
+    sentences,
+    [
+      "difficult",
+      "slow",
+      "expensive",
+      "confusing",
+      "missing",
+      "limitation",
+      "issue",
+      "problem",
+      "support is slow",
+      "bug"
+    ],
+    0.83,
+    "review_pain_sentence"
+  );
+  pushSentenceCandidates(
+    candidates,
+    "feature_request",
+    sentences,
+    ["wish", "should", "could", "needs", "want", "missing", "would like"],
+    0.82,
+    "review_request_sentence"
+  );
+  pushSentenceCandidates(
+    candidates,
+    "claim",
+    sentences,
+    ["helps", "easy to", "useful", "best for", "good for", "works for", "saves"],
+    0.74,
+    "review_value_sentence"
+  );
+
+  return selectUniqueExtractions(candidates);
+}
+
+export function buildContentAwareExtractionCandidates(
+  result: AgentSearchResult
+): AgentExtractionCandidate[] {
+  const contentType = result.contentType ?? classifyResearchContentType(result);
+
+  if (contentType === "documentation") {
+    return selectUniqueExtractions([
+      ...buildDocumentationExtractionCandidates(result),
+      ...buildHeuristicExtractionCandidates(result)
+    ]);
+  }
+
+  if (contentType === "forum") {
+    return selectUniqueExtractions([
+      ...buildForumExtractionCandidates(result),
+      ...buildHeuristicExtractionCandidates(result)
+    ]);
+  }
+
+  if (contentType === "review") {
+    return selectUniqueExtractions([
+      ...buildReviewExtractionCandidates(result),
+      ...buildHeuristicExtractionCandidates(result)
+    ]);
+  }
+
+  return buildHeuristicExtractionCandidates(result);
 }

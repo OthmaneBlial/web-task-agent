@@ -249,6 +249,12 @@ export interface AgentPageDigest {
   capturedAt: string;
 }
 
+export type AgentResearchContentType =
+  | "documentation"
+  | "forum"
+  | "review"
+  | "general";
+
 export interface AgentSearchResult {
   title: string;
   url: string;
@@ -262,6 +268,9 @@ export interface AgentSearchResult {
   policyReason?: string;
   qualityScore?: number;
   qualitySignals?: string[];
+  rankingScore?: number;
+  rankingSignals?: string[];
+  contentType?: AgentResearchContentType;
 }
 
 export interface AgentResearchResult {
@@ -345,9 +354,11 @@ export interface AgentEvidenceSource {
   description?: string;
   headings: string[];
   paragraphs: string[];
+  contentType: AgentResearchContentType;
   qualitySignals: string[];
   sourceQualityScore: number;
   freshnessScore: number;
+  trendScore: number;
   overallScore: number;
   extractions: AgentEvidenceExtraction[];
 }
@@ -369,6 +380,7 @@ export interface AgentEvidenceCluster {
   averageConfidence: number;
   qualityScore: number;
   freshnessScore: number;
+  trendScore: number;
   overallScore: number;
   sourceIds: string[];
   evidenceIds: string[];

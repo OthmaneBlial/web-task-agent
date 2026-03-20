@@ -13,6 +13,7 @@ import type {
 import {
   assessDocumentQuality,
   clamp,
+  classifyResearchContentType,
   evaluateDomainPolicy,
   estimateArticleReadMs,
   QUICK_SKIP_MAX_MS,
@@ -126,6 +127,7 @@ export class BrowserPageFetcher implements AgentFetcher {
     const enriched: AgentSearchResult[] = [];
 
     for (const result of results) {
+      result.contentType = result.contentType ?? classifyResearchContentType(result);
       const policy = evaluateDomainPolicy(result);
       result.policyAction = policy.action;
       result.policyReason = policy.reason;

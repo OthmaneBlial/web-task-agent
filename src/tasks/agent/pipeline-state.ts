@@ -5,7 +5,11 @@ import type {
   AgentResearchResult,
   AgentSearchResult
 } from "../../types";
-import { countCapturedResearchDocuments, nowIso } from "./shared";
+import {
+  countCapturedResearchDocuments,
+  nowIso,
+  rankSearchResults
+} from "./shared";
 
 const AGENT_PIPELINE_VERSION = 2;
 
@@ -173,17 +177,18 @@ export function applySearchSuccess(
     results: AgentSearchResult[];
   }
 ): AgentPipelineWorkItem {
-  const fetchCursor = firstPendingFetchIndex(input.results);
+  const rankedResults = rankSearchResults(input.results);
+  const fetchCursor = firstPendingFetchIndex(rankedResults);
   return {
     ...item,
     searchedAt: input.searchedAt,
     searchUrl: input.searchUrl,
     searchPagesVisited: input.pagesVisited ?? item.searchPagesVisited,
-    results: input.results,
+    results: rankedResults,
     fetchCursor,
-    nextStage: input.results.length > 0 && fetchCursor < input.results.length ? "fetch" : "extract",
+    nextStage: rankedResults.length > 0 && fetchCursor < rankedResults.length ? "fetch" : "extract",
     status: "pending",
-    error: input.results.length > 0 ? null : "no search results were collected",
+    error: rankedResults.length > 0 ? null : "no search results were collected",
     updatedAt: nowIso()
   };
 }

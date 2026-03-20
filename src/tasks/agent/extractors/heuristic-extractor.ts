@@ -1,4 +1,7 @@
-import { buildHeuristicExtractionCandidates } from "../../../lib/extraction-heuristics";
+import {
+  buildContentAwareExtractionCandidates,
+  buildHeuristicExtractionCandidates
+} from "../../../lib/extraction-heuristics";
 import type {
   AgentExtractionCandidate,
   AgentSearchResult
@@ -14,6 +17,15 @@ export class HeuristicAgentExtractor implements AgentExtractor {
   }
 }
 
+export class SourceAwareAgentExtractor implements AgentExtractor {
+  readonly id = "source_aware_agent_extractor";
+  readonly label = "Source-Aware Agent Extractor";
+
+  extractFromResult(result: AgentSearchResult): AgentExtractionCandidate[] {
+    return buildContentAwareExtractionCandidates(result);
+  }
+}
+
 export function createDefaultAgentExtractor(): AgentExtractor {
-  return new HeuristicAgentExtractor();
+  return new SourceAwareAgentExtractor();
 }

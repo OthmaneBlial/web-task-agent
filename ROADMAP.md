@@ -1,8 +1,8 @@
 # Roadmap
 
-Current progress: the core platform is built. The project can now run long research jobs, store and reuse evidence, queue work for workers, expose a local dashboard, control jobs in flight, and stream live logs. The next phase is about research quality, output polish, and hardening.
+Current progress: the core platform is built. The project can now run long research jobs, store and reuse evidence, queue work for workers, expose a local dashboard, control jobs in flight, stream live logs, and apply a hardened research pipeline before synthesis. The next phase is about workflow output polish and production hardening.
 
-Recommended next focus: improve research quality first, then polish workflow outputs and expand test coverage.
+Recommended next focus: polish workflow outputs next, then expand tests and production hardening.
 
 ## [x] Browser And Task Foundation
 
@@ -40,9 +40,9 @@ There is now a local HTTP management surface for jobs, queue state, recoverable 
 
 The API, CLI, and dashboard now support pause, resume, cancel, retry, and rerun controls, and selected jobs expose live event logs through stored run events and an SSE stream.
 
-## [ ] Research Quality Hardening
+## [x] Research Quality Hardening
 
-The research-quality phase now has a first pass of document quality filters and domain policies, but it still needs source-specific extractors, better ranking, and trend scoring so the evidence gets cleaner before synthesis.
+The research pipeline now applies domain policies, document quality filters, search-result ranking, source-specific extractors for docs/forums/reviews, and trend-aware source and cluster scoring before synthesis.
 
 ## [ ] Workflow Output Polish
 

@@ -16,6 +16,7 @@ This repository is now a practical research system, not just a small browser aut
 - Supports built-in workflows for `android-opportunity` and `article-research`.
 - Supports queued execution with worker mode.
 - Exposes a local HTTP API and HTML dashboard for jobs, queue state, controls, and live logs.
+- Applies research-quality hardening with domain policies, search-result ranking, source-specific extractors, and trend-aware evidence scoring.
 
 ## Main Commands
 
@@ -113,7 +114,7 @@ WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 ## Current Limitations
 
 - Queue and job controls are now implemented, but only agent jobs support graceful pause, cancel, resume, and rerun.
-- Research quality now has basic domain policies and document quality filters, but it still relies on generic heuristics in several places and needs stronger source-specific extractors.
+- Research quality is stronger now, but extraction, ranking, and trend scoring are still heuristic rather than model-verified or domain-trained.
 - Automated tests now cover queue recovery, control helpers, and management API endpoints, but broader fixture coverage is still thin compared with the size of the system.
 
 ## Roadmap
