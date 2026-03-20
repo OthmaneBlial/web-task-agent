@@ -244,6 +244,27 @@ function renderEvidenceSection(evidence: AgentEvidenceBundle): string {
   return lines.join("\n").trim();
 }
 
+function renderSummaryReferenceCatalog(summary: AgentResearchSummary): string {
+  const referencedEvidence = summary.referencedEvidence ?? [];
+  if (referencedEvidence.length === 0) {
+    return "";
+  }
+
+  const lines = ["### Evidence References", ""];
+
+  for (const reference of referencedEvidence) {
+    const confidence =
+      typeof reference.confidence === "number" ? ` | confidence ${(reference.confidence * 100).toFixed(0)}%` : "";
+    lines.push(
+      `- [${reference.id}] ${reference.kind} | ${reference.sourceTitle} | ${reference.value}${confidence}`
+    );
+    lines.push(`  Query: ${reference.query} | URL: ${reference.sourceUrl}`);
+  }
+
+  lines.push("");
+  return lines.join("\n").trim();
+}
+
 function renderResearchSummary(summary: AgentResearchSummary, evidence?: AgentEvidenceBundle | null): string {
   const lines = [
     "## Research Summary",
@@ -252,24 +273,44 @@ function renderResearchSummary(summary: AgentResearchSummary, evidence?: AgentEv
     ""
   ];
 
-  if (summary.keyFindings.length > 0) {
+  const keyFindingDetails =
+    (summary.keyFindingDetails ?? []).length > 0
+      ? (summary.keyFindingDetails ?? [])
+      : summary.keyFindings.map((text) => ({ text, evidenceIds: [] }));
+  const contentAngleDetails =
+    (summary.contentAngleDetails ?? []).length > 0
+      ? (summary.contentAngleDetails ?? [])
+      : summary.contentAngles.map((text) => ({ text, evidenceIds: [] }));
+
+  if (keyFindingDetails.length > 0) {
     lines.push("### Key Findings", "");
-    for (const finding of summary.keyFindings) {
-      lines.push(`- ${finding}`);
+    for (const finding of keyFindingDetails) {
+      lines.push(`- ${finding.text}`);
+      if (finding.evidenceIds.length > 0) {
+        lines.push(`  Evidence: ${finding.evidenceIds.join(", ")}`);
+      }
     }
     lines.push("");
   }
 
-  if (summary.contentAngles.length > 0) {
+  if (contentAngleDetails.length > 0) {
     lines.push("### Content Angles", "");
-    for (const angle of summary.contentAngles) {
-      lines.push(`- ${angle}`);
+    for (const angle of contentAngleDetails) {
+      lines.push(`- ${angle.text}`);
+      if (angle.evidenceIds.length > 0) {
+        lines.push(`  Evidence: ${angle.evidenceIds.join(", ")}`);
+      }
     }
     lines.push("");
   }
 
   if (evidence && evidence.counts.sources > 0) {
     lines.push(renderEvidenceSection(evidence), "");
+  }
+
+  const referenceCatalog = renderSummaryReferenceCatalog(summary);
+  if (referenceCatalog) {
+    lines.push(referenceCatalog, "");
   }
 
   return lines.join("\n").trim();
@@ -1134,7 +1175,12 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       evidenceBundle = evidenceBundle ?? jobStore.getAgentEvidenceBundle();
 
       if (evidenceBundle.counts.sources > 0) {
-        if (!state.researchSummary) {
+        const summaryNeedsEvidenceRefs =
+          !state.researchSummary ||
+          ((state.researchSummary.referencedEvidence ?? []).length === 0 &&
+            evidenceBundle.counts.extractions > 0);
+
+        if (summaryNeedsEvidenceRefs) {
           state.status = "running";
           const summary = await jobStore.runStep(
             summaryStep,
@@ -1147,7 +1193,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                 keyFindings: result.keyFindings.length,
                 contentAngles: result.contentAngles.length,
                 evidenceSources: evidenceBundle!.counts.sources,
-                evidenceExtractions: evidenceBundle!.counts.extractions
+                evidenceExtractions: evidenceBundle!.counts.extractions,
+                referencedEvidence: result.referencedEvidence.length
               })
             }
           );
@@ -1166,15 +1213,18 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             contentAngles: summary.contentAngles.length,
             evidenceSources: evidenceBundle.counts.sources,
             evidenceExtractions: evidenceBundle.counts.extractions,
+            referencedEvidence: summary.referencedEvidence.length,
             researchSummaryPath: state.outputs.researchSummaryPath
           });
         } else {
+          const existingSummary = state.researchSummary!;
           jobStore.completeStep(summaryStep, {
             reused: true,
-            keyFindings: state.researchSummary.keyFindings.length,
-            contentAngles: state.researchSummary.contentAngles.length,
+            keyFindings: existingSummary.keyFindings.length,
+            contentAngles: existingSummary.contentAngles.length,
             evidenceSources: evidenceBundle.counts.sources,
             evidenceExtractions: evidenceBundle.counts.extractions,
+            referencedEvidence: (existingSummary.referencedEvidence ?? []).length,
             researchSummaryPath: state.outputs.researchSummaryPath
           });
         }

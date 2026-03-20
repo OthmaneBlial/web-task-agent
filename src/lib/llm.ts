@@ -3,9 +3,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   AgentEvidenceBundle,
   AgentCommentsDraft,
+  AgentReferencedEvidence,
   AgentPlan,
   AgentPlanStep,
   AgentPostDraft,
+  AgentResearchReferenceItem,
   AgentResearchResult,
   AgentResearchSummary,
   GitHubRepo,
@@ -36,6 +38,18 @@ interface AgentResearchSummaryResponse {
   executiveSummary?: string;
   keyFindings?: string[];
   contentAngles?: string[];
+}
+
+interface AgentEvidenceSummaryResponse {
+  executiveSummary?: string;
+  keyFindings?: Array<{
+    text?: string;
+    evidenceIds?: string[];
+  }>;
+  contentAngles?: Array<{
+    text?: string;
+    evidenceIds?: string[];
+  }>;
 }
 
 interface AgentPostDraftResponse {
@@ -86,6 +100,145 @@ function uniqueStrings(values: string[], limit?: number): string[] {
     seen.add(key);
     output.push(normalized);
     if (typeof limit === "number" && output.length >= limit) {
+      break;
+    }
+  }
+
+  return output;
+}
+
+function tokenizeForMatch(text: string): string[] {
+  const stopWords = new Set([
+    "the",
+    "and",
+    "for",
+    "with",
+    "that",
+    "this",
+    "from",
+    "into",
+    "have",
+    "has",
+    "had",
+    "they",
+    "them",
+    "their",
+    "about",
+    "because",
+    "would",
+    "could",
+    "should",
+    "want",
+    "users",
+    "using",
+    "more",
+    "than",
+    "into",
+    "what",
+    "when",
+    "where",
+    "which"
+  ]);
+
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !stopWords.has(token));
+}
+
+function uniqueEvidenceIds(values: string[], allowedIds: Set<string>, limit: number = 3): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const value of values) {
+    const normalized = String(value ?? "").trim();
+    if (!normalized || seen.has(normalized) || !allowedIds.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    output.push(normalized);
+    if (output.length >= limit) {
+      break;
+    }
+  }
+
+  return output;
+}
+
+function buildEvidenceReferenceLookup(
+  evidence: AgentEvidenceBundle
+): Map<string, AgentReferencedEvidence> {
+  const lookup = new Map<string, AgentReferencedEvidence>();
+
+  for (const source of evidence.sources) {
+    lookup.set(source.sourceId, {
+      id: source.sourceId,
+      sourceId: source.sourceId,
+      query: source.query,
+      sourceTitle: source.title,
+      sourceUrl: source.url,
+      kind: "source",
+      value: source.snippet || source.description || source.title
+    });
+
+    for (const extraction of source.extractions) {
+      lookup.set(extraction.id, {
+        id: extraction.id,
+        sourceId: extraction.sourceId,
+        query: source.query,
+        sourceTitle: source.title,
+        sourceUrl: source.url,
+        kind: extraction.kind,
+        value: extraction.value,
+        confidence: extraction.confidence
+      });
+    }
+  }
+
+  return lookup;
+}
+
+function suggestEvidenceIdsForText(
+  text: string,
+  referenceLookup: Map<string, AgentReferencedEvidence>,
+  limit: number = 3
+): string[] {
+  const queryTokens = new Set(tokenizeForMatch(text));
+  if (queryTokens.size === 0) {
+    return [];
+  }
+
+  const ranked = Array.from(referenceLookup.values())
+    .map((reference) => {
+      const haystackTokens = tokenizeForMatch(
+        `${reference.sourceTitle} ${reference.value} ${reference.query}`
+      );
+      let overlap = 0;
+      for (const token of haystackTokens) {
+        if (queryTokens.has(token)) {
+          overlap += 1;
+        }
+      }
+      const confidenceBoost = reference.confidence ?? (reference.kind === "source" ? 0.4 : 0.5);
+      return {
+        id: reference.id,
+        score: overlap + confidenceBoost
+      };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const item of ranked) {
+    if (seen.has(item.id)) {
+      continue;
+    }
+    seen.add(item.id);
+    output.push(item.id);
+    if (output.length >= limit) {
       break;
     }
   }
@@ -439,7 +592,10 @@ export class LlmService {
       contentAngles: uniqueStrings(
         Array.isArray(payload.contentAngles) ? payload.contentAngles.map(String) : [],
         6
-      )
+      ),
+      keyFindingDetails: [],
+      contentAngleDetails: [],
+      referencedEvidence: []
     };
   }
 
@@ -447,38 +603,105 @@ export class LlmService {
     instruction: string;
     evidence: AgentEvidenceBundle;
   }): Promise<AgentResearchSummary> {
+    const referenceLookup = buildEvidenceReferenceLookup(input.evidence);
+    const allowedIds = new Set(referenceLookup.keys());
+    const compactEvidence = {
+      counts: input.evidence.counts,
+      queries: input.evidence.queries,
+      highlights: input.evidence.highlights,
+      sources: input.evidence.sources.slice(0, 20).map((source) => ({
+        sourceId: source.sourceId,
+        query: source.query,
+        rank: source.rank,
+        title: source.title,
+        url: source.url,
+        site: source.site,
+        snippet: source.snippet,
+        description: source.description,
+        reviewStatus: source.reviewStatus ?? null,
+        headings: source.headings.slice(0, 4),
+        paragraphs: source.paragraphs.slice(0, 2),
+        extractions: source.extractions.slice(0, 10).map((extraction) => ({
+          id: extraction.id,
+          kind: extraction.kind,
+          value: extraction.value,
+          confidence: extraction.confidence
+        }))
+      }))
+    };
+
     const system = [
       "You synthesize web research from a persisted evidence bundle.",
       "Prefer repeated patterns, concrete findings, and useful angles grounded in the extracted evidence.",
-      "Treat persisted queries, sources, document snapshots, and extraction rows as the only source of truth."
+      "Treat persisted queries, sources, document snapshots, and extraction rows as the only source of truth.",
+      "You must reference evidence ids from the bundle for every finding and angle."
     ].join(" ");
 
     const prompt = [
       `Instruction: ${input.instruction}`,
       "Return strict JSON with this exact schema:",
-      '{"executiveSummary":"...","keyFindings":["..."],"contentAngles":["..."]}',
+      '{"executiveSummary":"...","keyFindings":[{"text":"...","evidenceIds":["ext_x","src_y"]}],"contentAngles":[{"text":"...","evidenceIds":["ext_x"]}]}',
       "Rules:",
       "- Use only the supplied persisted evidence bundle.",
       "- Prefer findings backed by repeated complaints, requests, themes, claims, or multiple sources.",
+      "- Every finding and every content angle must include 1 to 3 evidence ids from the bundle.",
+      "- Prefer extraction ids when possible. Use source ids when the source itself is the best evidence unit.",
+      "- Do not invent ids. Use only ids that exist in the supplied evidence bundle.",
       "- Keep findings concise and evidence-oriented.",
       "- Keep content angles lively and practical.",
       "- Do not include prose outside the JSON.",
       "",
-      JSON.stringify({ evidence: input.evidence }, null, 2)
+      JSON.stringify({ evidence: compactEvidence }, null, 2)
     ].join("\n");
 
-    const payload = await this.requestJson<AgentResearchSummaryResponse>(system, prompt, 3_000);
+    const payload = await this.requestJson<AgentEvidenceSummaryResponse>(system, prompt, 3_000);
+
+    const normalizeItems = (
+      items: AgentEvidenceSummaryResponse["keyFindings"] | AgentEvidenceSummaryResponse["contentAngles"]
+    ): AgentResearchReferenceItem[] => {
+      const normalized: AgentResearchReferenceItem[] = [];
+
+      for (const item of items ?? []) {
+        const text = String(item?.text ?? "").replace(/\s+/g, " ").trim();
+        if (!text) {
+          continue;
+        }
+
+        const explicitIds = uniqueEvidenceIds(
+          Array.isArray(item?.evidenceIds) ? item!.evidenceIds.map(String) : [],
+          allowedIds,
+          3
+        );
+        const evidenceIds =
+          explicitIds.length > 0 ? explicitIds : suggestEvidenceIdsForText(text, referenceLookup, 3);
+
+        normalized.push({
+          text,
+          evidenceIds
+        });
+      }
+
+      return normalized;
+    };
+
+    const keyFindingDetails = normalizeItems(payload.keyFindings).slice(0, 6);
+    const contentAngleDetails = normalizeItems(payload.contentAngles).slice(0, 6);
+    const referencedIds = uniqueEvidenceIds(
+      [...keyFindingDetails, ...contentAngleDetails].flatMap((item) => item.evidenceIds),
+      allowedIds,
+      24
+    );
+
     return {
       executiveSummary:
         String(payload.executiveSummary ?? "").trim() || "Evidence gathered. Review the persisted sources below.",
-      keyFindings: uniqueStrings(
-        Array.isArray(payload.keyFindings) ? payload.keyFindings.map(String) : [],
-        6
-      ),
-      contentAngles: uniqueStrings(
-        Array.isArray(payload.contentAngles) ? payload.contentAngles.map(String) : [],
-        6
-      )
+      keyFindings: uniqueStrings(keyFindingDetails.map((item) => item.text), 6),
+      contentAngles: uniqueStrings(contentAngleDetails.map((item) => item.text), 6),
+      keyFindingDetails,
+      contentAngleDetails,
+      referencedEvidence: referencedIds
+        .map((id) => referenceLookup.get(id))
+        .filter((value): value is AgentReferencedEvidence => Boolean(value))
     };
   }
 

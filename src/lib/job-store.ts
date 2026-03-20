@@ -1110,6 +1110,7 @@ export class JobStore {
 
     const extractionRows = this.db.prepare(`
       SELECT
+        e.id AS id,
         e.source_id AS source_id,
         e.document_id AS document_id,
         e.kind AS kind,
@@ -1137,6 +1138,7 @@ export class JobStore {
       const documentId =
         row.document_id === null || row.document_id === undefined ? null : String(row.document_id);
       const extraction: AgentEvidenceExtraction = {
+        id: String(row.id ?? ""),
         sourceId,
         documentId,
         kind: String(row.kind ?? "claim") as AgentEvidenceExtraction["kind"],

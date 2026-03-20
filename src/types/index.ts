@@ -225,6 +225,9 @@ export interface AgentResearchSummary {
   executiveSummary: string;
   keyFindings: string[];
   contentAngles: string[];
+  keyFindingDetails: AgentResearchReferenceItem[];
+  contentAngleDetails: AgentResearchReferenceItem[];
+  referencedEvidence: AgentReferencedEvidence[];
 }
 
 export interface AgentEvidenceQuery {
@@ -237,6 +240,7 @@ export interface AgentEvidenceQuery {
 }
 
 export interface AgentEvidenceExtraction {
+  id: string;
   sourceId: string;
   documentId: string | null;
   kind: "entity" | "theme" | "complaint" | "feature_request" | "claim";
@@ -244,6 +248,22 @@ export interface AgentEvidenceExtraction {
   evidenceText: string | null;
   confidence: number;
   method: string;
+}
+
+export interface AgentResearchReferenceItem {
+  text: string;
+  evidenceIds: string[];
+}
+
+export interface AgentReferencedEvidence {
+  id: string;
+  sourceId: string;
+  query: string;
+  sourceTitle: string;
+  sourceUrl: string;
+  kind: "source" | AgentEvidenceExtraction["kind"];
+  value: string;
+  confidence?: number;
 }
 
 export interface AgentEvidenceSource {
