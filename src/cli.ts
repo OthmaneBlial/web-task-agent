@@ -7,6 +7,11 @@ import { Command } from "commander";
 import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
 import { PlayStoreAnalyzerTask } from "./tasks/playstore-analyzer";
+import {
+  buildWorkflowRunOptions,
+  getWorkflowTemplate,
+  listWorkflowTemplates
+} from "./workflows";
 
 function parsePositiveInteger(value: string, label: string): number {
   const parsed = Number(value);
@@ -143,6 +148,98 @@ async function main(): Promise<void> {
 
       const result = await task.run();
       console.log(`Agent job update.`);
+      console.log(`Status: ${result.status}`);
+      console.log(`Estimated time: ${result.estimatedMinutes} minutes`);
+      console.log(`Job ID: ${result.jobId}`);
+      console.log(`Job DB: ${result.databasePath}`);
+      console.log(`Cache: ${result.cachePath}`);
+      console.log(`Report: ${result.reportPath}`);
+      console.log(`Artifacts: ${result.artifactDir}`);
+    });
+
+  const workflow = program
+    .command("workflow")
+    .description("Run opinionated long-form research templates");
+
+  workflow
+    .command("list")
+    .description("List the built-in workflow templates")
+    .action(() => {
+      const templates = listWorkflowTemplates();
+      console.log("Available workflows:");
+      for (const template of templates) {
+        console.log(`- ${template.id}: ${template.description}`);
+      }
+    });
+
+  workflow
+    .command("run <template>")
+    .requiredOption("--topic <text>", "Topic, niche, or seed question to research")
+    .option("--audience <text>", "Optional audience to optimize the report for")
+    .option("--context <text>", "Optional extra instructions or business context")
+    .option("--resume", "Resume the latest cached workflow run")
+    .option("--cache <path>", "Use a specific cache file")
+    .option("--report <path>", "Write the Markdown report to a specific path")
+    .option("--memory <path>", "Load product context from a Markdown or text file")
+    .option(
+      "--max-queries <number>",
+      "Override the template query budget",
+      (value) => parsePositiveInteger(value, "max-queries")
+    )
+    .option(
+      "--max-results <number>",
+      "Override the template result budget per query",
+      (value) => parsePositiveInteger(value, "max-results")
+    )
+    .option(
+      "--fetch-batch-size <number>",
+      "Override the template fetch batch size",
+      (value) => parsePositiveInteger(value, "fetch-batch-size")
+    )
+    .option(
+      "--max-runtime-hours <number>",
+      "Override the template runtime budget",
+      (value) => parsePositiveInteger(value, "max-runtime-hours")
+    )
+    .option(
+      "--lease-ttl-minutes <number>",
+      "Execution lease TTL before a stale run becomes recoverable",
+      (value) => parsePositiveInteger(value, "lease-ttl-minutes")
+    )
+    .action(async (templateId, options) => {
+      const template = getWorkflowTemplate(String(templateId));
+      if (!template) {
+        throw new Error(`Unknown workflow template: ${templateId}`);
+      }
+
+      const task = new AgentRunnerTask(
+        buildWorkflowRunOptions({
+          templateId: template.id,
+          topic: normalizeText(String(options.topic)),
+          audience: options.audience ? normalizeText(String(options.audience)) : null,
+          context: options.context ? normalizeText(String(options.context)) : null,
+          overrides: {
+            resume: Boolean(options.resume),
+            cachePath: options.cache ? path.resolve(String(options.cache)) : undefined,
+            reportPath: options.report ? path.resolve(String(options.report)) : undefined,
+            memoryPath: options.memory ? path.resolve(String(options.memory)) : undefined,
+            maxQueries:
+              options.maxQueries !== undefined ? Number(options.maxQueries) : undefined,
+            maxResultsPerQuery:
+              options.maxResults !== undefined ? Number(options.maxResults) : undefined,
+            fetchBatchSize:
+              options.fetchBatchSize !== undefined ? Number(options.fetchBatchSize) : undefined,
+            maxRuntimeHours:
+              options.maxRuntimeHours !== undefined ? Number(options.maxRuntimeHours) : undefined,
+            leaseTtlMinutes:
+              options.leaseTtlMinutes !== undefined ? Number(options.leaseTtlMinutes) : undefined
+          }
+        })
+      );
+
+      const result = await task.run();
+      console.log(`Workflow job update.`);
+      console.log(`Template: ${template.id}`);
       console.log(`Status: ${result.status}`);
       console.log(`Estimated time: ${result.estimatedMinutes} minutes`);
       console.log(`Job ID: ${result.jobId}`);

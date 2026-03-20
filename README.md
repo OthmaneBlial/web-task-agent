@@ -33,7 +33,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Durable database-backed source storage
 - [x] Source deduplication and canonicalization across runs
 - [x] Evidence graph linking sources, claims, entities, and outputs
-- [ ] Workflow templates for real business research jobs
+- [x] Workflow templates for real business research jobs
 - [ ] Scheduler, queue, or worker mode
 - [ ] API and dashboard for managing runs
 
@@ -205,19 +205,19 @@ The simplest scalable shape for this repo is:
 
 ## Proposed CLI Evolution
 
-These commands do not exist yet. They are the direction the product should move toward.
+The first workflow commands now exist, and this section shows the intended operator-facing UX.
 
 ```bash
 # Research an Android app niche deeply
 npm run start -- workflow run android-opportunity \
-  --query "ai study planner" \
-  --budget-pages 150 \
-  --budget-minutes 90
+  --topic "ai study planner" \
+  --max-results 30 \
+  --max-runtime-hours 8
 
 # Build a technical article research package
 npm run start -- workflow run article-research \
   --topic "browser automation with Lightpanda and CDP" \
-  --budget-pages 80
+  --max-results 25
 
 # Continue a stopped job
 npm run start -- job resume --id 20260320_ab12cd
@@ -293,9 +293,9 @@ This is the execution checklist. Items already present in the repo are marked `[
 
 ### Phase 7: Productize The First Two Workflows
 
-- [ ] Implement `android-opportunity` workflow template
-- [ ] Implement `article-research` workflow template
-- [ ] Define workflow inputs, outputs, budgets, and review gates
+- [x] Implement `android-opportunity` workflow template
+- [x] Implement `article-research` workflow template
+- [x] Define workflow inputs, outputs, budgets, and review gates
 - [ ] Produce a consistent final folder layout for each workflow
 - [ ] Add example reports for both workflows
 

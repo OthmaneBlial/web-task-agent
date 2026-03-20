@@ -409,6 +409,10 @@ export interface AgentRunOptions {
   fetchBatchSize?: number;
   maxRuntimeHours?: number;
   leaseTtlMinutes?: number;
+  workflowName?: string;
+  jobTitle?: string;
+  workflowTemplateId?: string | null;
+  workflowInputs?: Record<string, string | null>;
 }
 
 export type AgentPipelineStage = "search" | "fetch" | "extract" | "completed";
@@ -453,6 +457,10 @@ export interface AgentRunState {
     maxResultsPerQuery: number;
     fetchBatchSize: number;
     maxRuntimeHours: number;
+    workflowName: string | null;
+    workflowTemplateId: string | null;
+    workflowInputs: Record<string, string | null>;
+    jobTitle: string | null;
   };
   runtime: {
     leaseOwnerId: string | null;

@@ -147,6 +147,11 @@ function normalizeRuntimeState(state: AgentRunState, options: AgentRunOptions): 
   );
   state.input.fetchBatchSize = fetchBatchSize;
   state.input.maxRuntimeHours = maxRuntimeHours;
+  state.input.workflowName = state.input.workflowName ?? options.workflowName ?? "agent-runner";
+  state.input.workflowTemplateId =
+    state.input.workflowTemplateId ?? options.workflowTemplateId ?? null;
+  state.input.workflowInputs = state.input.workflowInputs ?? options.workflowInputs ?? {};
+  state.input.jobTitle = state.input.jobTitle ?? options.jobTitle ?? null;
   state.runtime = {
     leaseOwnerId: null,
     leaseTtlSeconds,
@@ -180,7 +185,11 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
       maxQueries: Math.max(0, Math.min(MAX_AGENT_QUERIES, options.maxQueries ?? 3)),
       maxResultsPerQuery: Math.max(1, Math.min(MAX_AGENT_RESULTS_PER_QUERY, options.maxResultsPerQuery ?? 5)),
       fetchBatchSize,
-      maxRuntimeHours
+      maxRuntimeHours,
+      workflowName: options.workflowName ?? "agent-runner",
+      workflowTemplateId: options.workflowTemplateId ?? null,
+      workflowInputs: options.workflowInputs ?? {},
+      jobTitle: options.jobTitle ?? null
     },
     runtime: {
       leaseOwnerId: null,
@@ -328,8 +337,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     const jobStore = new JobStore({
       jobId: state.runId,
       taskType: "agent",
-      workflowName: "agent-runner",
-      title: state.input.instruction.slice(0, 200),
+      workflowName: state.input.workflowName ?? "agent-runner",
+      title: (state.input.jobTitle ?? state.input.instruction).slice(0, 200),
       instruction: state.input.instruction,
       status: state.status === "failed" ? "planning" : state.status,
       startedAt: state.startedAt,
