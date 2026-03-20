@@ -239,6 +239,15 @@ export interface AgentEvidenceQuery {
   searchProvider: string;
 }
 
+export interface AgentExtractionCandidate {
+  kind: "entity" | "theme" | "complaint" | "feature_request" | "claim";
+  value: string;
+  evidenceText: string;
+  confidence: number;
+  method: string;
+  metadata?: unknown;
+}
+
 export interface AgentEvidenceExtraction {
   id: string;
   sourceId: string;

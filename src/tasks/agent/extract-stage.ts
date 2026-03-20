@@ -6,6 +6,7 @@ import {
 } from "../../lib/cache";
 import { JobStore } from "../../lib/job-store";
 import type { AgentResearchResult } from "../../types";
+import type { AgentExtractor } from "./extractor";
 import { slugify } from "./shared";
 import type { AgentSearchAdapter } from "./search-adapter";
 
@@ -28,7 +29,8 @@ export class AgentExtractStage {
   constructor(
     private readonly jobStore: JobStore,
     artifactDir: string,
-    private readonly searchAdapter: Pick<AgentSearchAdapter, "id" | "buildSearchUrl">
+    private readonly searchAdapter: Pick<AgentSearchAdapter, "id" | "buildSearchUrl">,
+    private readonly extractor: Pick<AgentExtractor, "id" | "extractFromResult">
   ) {
     this.researchDir = path.join(artifactDir, "research");
     ensureDir(this.researchDir);
@@ -52,7 +54,8 @@ export class AgentExtractStage {
       const metadata = this.resolvePersistMetadata(result.query, resolveMetadata?.(result.query));
       this.jobStore.persistAgentResearchResult(result, {
         searchProvider: metadata.searchProvider,
-        searchUrl: metadata.searchUrl
+        searchUrl: metadata.searchUrl,
+        getExtractionCandidates: (searchResult) => this.extractor.extractFromResult(searchResult)
       });
     }
   }
@@ -70,7 +73,8 @@ export class AgentExtractStage {
 
     const persisted = this.jobStore.persistAgentResearchResult(result, {
       searchProvider: metadata.searchProvider,
-      searchUrl: metadata.searchUrl
+      searchUrl: metadata.searchUrl,
+      getExtractionCandidates: (searchResult) => this.extractor.extractFromResult(searchResult)
     });
 
     return {

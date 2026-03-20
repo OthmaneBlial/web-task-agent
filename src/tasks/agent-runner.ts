@@ -24,6 +24,7 @@ import type {
 } from "../types";
 import { BaseTask } from "./BaseTask";
 import { AgentExtractStage } from "./agent/extract-stage";
+import { createDefaultAgentExtractor } from "./agent/extractors/heuristic-extractor";
 import {
   AgentFetchStage,
   summarizeFetchedResults
@@ -264,10 +265,12 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     const searchStage = new AgentSearchStage(searchAdapter);
     const fetcher = createDefaultAgentFetcher((message) => this.log(message));
     const fetchStage = new AgentFetchStage(fetcher);
+    const extractor = createDefaultAgentExtractor();
     const extractStage = new AgentExtractStage(
       jobStore,
       state.artifactDir,
-      searchAdapter
+      searchAdapter,
+      extractor
     );
     const synthesisStage = new AgentSynthesisStage(this.llm);
 
