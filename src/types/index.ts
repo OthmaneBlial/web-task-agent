@@ -227,6 +227,66 @@ export interface AgentResearchSummary {
   contentAngles: string[];
 }
 
+export interface AgentEvidenceQuery {
+  query: string;
+  searchedAt: string;
+  status: "completed" | "failed" | "empty";
+  resultCount: number;
+  error?: string;
+  searchProvider: string;
+}
+
+export interface AgentEvidenceExtraction {
+  sourceId: string;
+  documentId: string | null;
+  kind: "entity" | "theme" | "complaint" | "feature_request" | "claim";
+  value: string;
+  evidenceText: string | null;
+  confidence: number;
+  method: string;
+}
+
+export interface AgentEvidenceSource {
+  query: string;
+  queryStatus: AgentEvidenceQuery["status"];
+  rank: number;
+  sourceId: string;
+  documentId: string | null;
+  title: string;
+  url: string;
+  canonicalUrl: string;
+  site: string;
+  snippet: string;
+  reviewStatus?: "read" | "skipped" | "error";
+  dwellSeconds?: number;
+  skipReason?: string;
+  pageTitle?: string;
+  description?: string;
+  headings: string[];
+  paragraphs: string[];
+  extractions: AgentEvidenceExtraction[];
+}
+
+export interface AgentEvidenceHighlights {
+  entities: string[];
+  themes: string[];
+  complaints: string[];
+  featureRequests: string[];
+  claims: string[];
+}
+
+export interface AgentEvidenceBundle {
+  counts: {
+    queries: number;
+    sources: number;
+    documents: number;
+    extractions: number;
+  };
+  queries: AgentEvidenceQuery[];
+  sources: AgentEvidenceSource[];
+  highlights: AgentEvidenceHighlights;
+}
+
 export interface AgentPostDraft {
   headline: string;
   body: string;

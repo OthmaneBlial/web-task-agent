@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import type {
+  AgentEvidenceBundle,
   AgentCommentsDraft,
   AgentPlan,
   AgentPlanStep,
@@ -431,6 +432,45 @@ export class LlmService {
     return {
       executiveSummary:
         String(payload.executiveSummary ?? "").trim() || "Research gathered. Review the source notes below.",
+      keyFindings: uniqueStrings(
+        Array.isArray(payload.keyFindings) ? payload.keyFindings.map(String) : [],
+        6
+      ),
+      contentAngles: uniqueStrings(
+        Array.isArray(payload.contentAngles) ? payload.contentAngles.map(String) : [],
+        6
+      )
+    };
+  }
+
+  async synthesizeAgentEvidence(input: {
+    instruction: string;
+    evidence: AgentEvidenceBundle;
+  }): Promise<AgentResearchSummary> {
+    const system = [
+      "You synthesize web research from a persisted evidence bundle.",
+      "Prefer repeated patterns, concrete findings, and useful angles grounded in the extracted evidence.",
+      "Treat persisted queries, sources, document snapshots, and extraction rows as the only source of truth."
+    ].join(" ");
+
+    const prompt = [
+      `Instruction: ${input.instruction}`,
+      "Return strict JSON with this exact schema:",
+      '{"executiveSummary":"...","keyFindings":["..."],"contentAngles":["..."]}',
+      "Rules:",
+      "- Use only the supplied persisted evidence bundle.",
+      "- Prefer findings backed by repeated complaints, requests, themes, claims, or multiple sources.",
+      "- Keep findings concise and evidence-oriented.",
+      "- Keep content angles lively and practical.",
+      "- Do not include prose outside the JSON.",
+      "",
+      JSON.stringify({ evidence: input.evidence }, null, 2)
+    ].join("\n");
+
+    const payload = await this.requestJson<AgentResearchSummaryResponse>(system, prompt, 3_000);
+    return {
+      executiveSummary:
+        String(payload.executiveSummary ?? "").trim() || "Evidence gathered. Review the persisted sources below.",
       keyFindings: uniqueStrings(
         Array.isArray(payload.keyFindings) ? payload.keyFindings.map(String) : [],
         6

@@ -20,6 +20,7 @@ import { humanScroll } from "../lib/humanizer";
 import { BaseTask } from "./BaseTask";
 import type {
   AgentCommentsDraft,
+  AgentEvidenceBundle,
   AgentPageDigest,
   AgentPlan,
   AgentResearchResult,
@@ -205,7 +206,45 @@ function readIfExists(filePath: string | null): string | null {
   return fs.readFileSync(filePath, "utf8");
 }
 
-function renderResearchSummary(summary: AgentResearchSummary): string {
+function renderEvidenceSection(evidence: AgentEvidenceBundle): string {
+  const lines = [
+    "## Evidence Snapshot",
+    "",
+    `Queries: ${evidence.counts.queries}`,
+    `Sources: ${evidence.counts.sources}`,
+    `Documents: ${evidence.counts.documents}`,
+    `Extractions: ${evidence.counts.extractions}`,
+    ""
+  ];
+
+  if (evidence.highlights.themes.length > 0) {
+    lines.push("### Themes", "");
+    for (const item of evidence.highlights.themes.slice(0, 6)) {
+      lines.push(`- ${item}`);
+    }
+    lines.push("");
+  }
+
+  if (evidence.highlights.complaints.length > 0) {
+    lines.push("### Complaints", "");
+    for (const item of evidence.highlights.complaints.slice(0, 6)) {
+      lines.push(`- ${item}`);
+    }
+    lines.push("");
+  }
+
+  if (evidence.highlights.featureRequests.length > 0) {
+    lines.push("### Feature Requests", "");
+    for (const item of evidence.highlights.featureRequests.slice(0, 6)) {
+      lines.push(`- ${item}`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n").trim();
+}
+
+function renderResearchSummary(summary: AgentResearchSummary, evidence?: AgentEvidenceBundle | null): string {
   const lines = [
     "## Research Summary",
     "",
@@ -229,6 +268,10 @@ function renderResearchSummary(summary: AgentResearchSummary): string {
     lines.push("");
   }
 
+  if (evidence && evidence.counts.sources > 0) {
+    lines.push(renderEvidenceSection(evidence), "");
+  }
+
   return lines.join("\n").trim();
 }
 
@@ -243,7 +286,7 @@ function countCapturedResearchDocuments(research: AgentResearchResult[]): number
   );
 }
 
-function renderReport(state: AgentRunState): string {
+function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundle | null): string {
   const postDraft = readIfExists(state.outputs.postDraftPath);
   const commentsDraft = readIfExists(state.outputs.commentsDraftPath);
   const planLines =
@@ -285,7 +328,9 @@ function renderReport(state: AgentRunState): string {
   }
 
   if (state.researchSummary) {
-    lines.push(renderResearchSummary(state.researchSummary), "");
+    lines.push(renderResearchSummary(state.researchSummary, evidence), "");
+  } else if (evidence && evidence.counts.sources > 0) {
+    lines.push(renderEvidenceSection(evidence), "");
   }
 
   if (state.research.length > 0) {
@@ -329,6 +374,32 @@ function renderReport(state: AgentRunState): string {
       }
       lines.push("");
     }
+  }
+
+  if (evidence && evidence.sources.length > 0) {
+    lines.push("## Evidence-Backed Signals", "");
+
+    for (const source of evidence.sources.slice(0, 8)) {
+      lines.push(`- [${source.title}](${source.url})`);
+      lines.push(`  Query: ${source.query}`);
+      lines.push(`  Site: ${source.site || "unknown"}`);
+      if (source.reviewStatus) {
+        const reviewMeta =
+          source.reviewStatus === "read"
+            ? `read for ${source.dwellSeconds ?? 0}s`
+            : `skipped${source.skipReason ? ` (${source.skipReason})` : ""}`;
+        lines.push(`  Review: ${reviewMeta}`);
+      }
+
+      const extractionBits = source.extractions
+        .slice(0, 3)
+        .map((extraction) => `${extraction.kind}: ${extraction.value}`);
+      if (extractionBits.length > 0) {
+        lines.push(`  Evidence: ${extractionBits.join(" | ")}`);
+      }
+    }
+
+    lines.push("");
   }
 
   if (postDraft) {
@@ -824,6 +895,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       documentsCaptured: countCapturedResearchDocuments(state.research),
       researchErrors: state.research.filter((entry) => Boolean(entry.error)).length
     });
+    let evidenceBundle: AgentEvidenceBundle | null = null;
 
     const planStep = {
       stepKey: "plan_job",
@@ -1048,27 +1120,34 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           });
         }
 
+        evidenceBundle = jobStore.getAgentEvidenceBundle();
+
         updateStepStatus(state.plan, "research", "completed");
         this.saveState(cachePath, state);
       } else {
         jobStore.markSkipped(researchStep, {
           reason: "no research queries planned"
         });
+        evidenceBundle = jobStore.getAgentEvidenceBundle();
       }
 
-      if (state.research.length > 0) {
+      evidenceBundle = evidenceBundle ?? jobStore.getAgentEvidenceBundle();
+
+      if (evidenceBundle.counts.sources > 0) {
         if (!state.researchSummary) {
           state.status = "running";
           const summary = await jobStore.runStep(
             summaryStep,
-            async () => this.llm.synthesizeAgentResearch({
+            async () => this.llm.synthesizeAgentEvidence({
               instruction: state.input.instruction,
-              research: state.research
+              evidence: evidenceBundle!
             }),
             {
               output: (result) => ({
                 keyFindings: result.keyFindings.length,
-                contentAngles: result.contentAngles.length
+                contentAngles: result.contentAngles.length,
+                evidenceSources: evidenceBundle!.counts.sources,
+                evidenceExtractions: evidenceBundle!.counts.extractions
               })
             }
           );
@@ -1076,7 +1155,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           state.outputs.researchSummaryPath = path.join(state.artifactDir, "research-summary.md");
           fs.writeFileSync(
             state.outputs.researchSummaryPath,
-            `${renderResearchSummary(summary)}\n`,
+            `${renderResearchSummary(summary, evidenceBundle)}\n`,
             "utf8"
           );
           this.syncArtifacts(jobStore, state);
@@ -1085,6 +1164,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           jobStore.completeStep(summaryStep, {
             keyFindings: summary.keyFindings.length,
             contentAngles: summary.contentAngles.length,
+            evidenceSources: evidenceBundle.counts.sources,
+            evidenceExtractions: evidenceBundle.counts.extractions,
             researchSummaryPath: state.outputs.researchSummaryPath
           });
         } else {
@@ -1092,12 +1173,14 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             reused: true,
             keyFindings: state.researchSummary.keyFindings.length,
             contentAngles: state.researchSummary.contentAngles.length,
+            evidenceSources: evidenceBundle.counts.sources,
+            evidenceExtractions: evidenceBundle.counts.extractions,
             researchSummaryPath: state.outputs.researchSummaryPath
           });
         }
       } else {
         jobStore.markSkipped(summaryStep, {
-          reason: "no research was collected"
+          reason: "no persisted evidence was collected"
         });
       }
 
@@ -1205,7 +1288,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       await jobStore.runStep(
         reportStep,
         async () => {
-          fs.writeFileSync(state.reportPath, renderReport(state), "utf8");
+          const latestEvidence = jobStore.getAgentEvidenceBundle();
+          fs.writeFileSync(state.reportPath, renderReport(state, latestEvidence), "utf8");
           return {
             reportPath: state.reportPath
           };

@@ -4,6 +4,10 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import type {
+  AgentEvidenceBundle,
+  AgentEvidenceExtraction,
+  AgentEvidenceQuery,
+  AgentEvidenceSource,
   AgentResearchResult,
   AgentSearchResult,
   JobLifecycleStatus,
@@ -76,6 +80,18 @@ function serializeJson(value: unknown): string {
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function parseJsonValue<T>(value: unknown, fallback: T): T {
+  if (typeof value !== "string" || !value.trim()) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 function normalizeError(error: unknown): string {
@@ -211,6 +227,25 @@ function selectUniqueExtractions(
   }
 
   return selected;
+}
+
+function uniqueValues(values: string[], limit: number): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const value of values) {
+    const normalized = normalizeExtractionValue(value);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    output.push(normalizeText(value));
+    if (output.length >= limit) {
+      break;
+    }
+  }
+
+  return output;
 }
 
 function extractCandidateEntities(text: string): string[] {
@@ -1027,6 +1062,161 @@ export class JobStore {
       sourceCount: research.results.length,
       documentCount,
       extractionCount
+    };
+  }
+
+  getAgentEvidenceBundle(): AgentEvidenceBundle {
+    const queryRows = this.db.prepare(`
+      SELECT query, searched_at, status, result_count, error_message, search_provider
+      FROM research_queries
+      WHERE job_id = ?
+      ORDER BY searched_at ASC, query ASC
+    `).all(this.jobId) as Array<Record<string, unknown>>;
+
+    const sourceRows = this.db.prepare(`
+      SELECT
+        rq.query AS query,
+        rq.status AS query_status,
+        js.rank AS rank,
+        js.source_id AS source_id,
+        js.title AS title,
+        COALESCE(js.page_url, s.raw_url) AS url,
+        s.canonical_url AS canonical_url,
+        COALESCE(js.site, s.site, '') AS site,
+        COALESCE(js.snippet, '') AS snippet,
+        js.review_status AS review_status,
+        js.dwell_seconds AS dwell_seconds,
+        js.skip_reason AS skip_reason,
+        d.id AS document_id,
+        d.title AS page_title,
+        d.description AS description,
+        d.headings_json AS headings_json,
+        d.paragraphs_json AS paragraphs_json
+      FROM job_sources js
+      LEFT JOIN research_queries rq ON rq.id = js.query_id
+      INNER JOIN sources s ON s.id = js.source_id
+      LEFT JOIN documents d ON d.id = (
+        SELECT d2.id
+        FROM documents d2
+        WHERE d2.source_id = js.source_id
+          AND d2.job_id = js.job_id
+          AND (js.query_id IS NULL OR d2.query_id = js.query_id)
+        ORDER BY d2.captured_at DESC
+        LIMIT 1
+      )
+      WHERE js.job_id = ?
+      ORDER BY rq.searched_at ASC, js.rank ASC, js.title ASC
+    `).all(this.jobId) as Array<Record<string, unknown>>;
+
+    const extractionRows = this.db.prepare(`
+      SELECT
+        e.source_id AS source_id,
+        e.document_id AS document_id,
+        e.kind AS kind,
+        e.value AS value,
+        e.evidence_text AS evidence_text,
+        e.confidence AS confidence,
+        e.method AS method
+      FROM extractions e
+      WHERE e.job_id = ?
+      ORDER BY e.confidence DESC, e.updated_at DESC, e.value ASC
+    `).all(this.jobId) as Array<Record<string, unknown>>;
+
+    const queries: AgentEvidenceQuery[] = queryRows.map((row) => ({
+      query: String(row.query ?? ""),
+      searchedAt: String(row.searched_at ?? ""),
+      status: String(row.status ?? "empty") as AgentEvidenceQuery["status"],
+      resultCount: Number(row.result_count ?? 0),
+      error: row.error_message ? String(row.error_message) : undefined,
+      searchProvider: String(row.search_provider ?? "unknown")
+    }));
+
+    const extractionsByKey = new Map<string, AgentEvidenceExtraction[]>();
+    for (const row of extractionRows) {
+      const sourceId = String(row.source_id ?? "");
+      const documentId =
+        row.document_id === null || row.document_id === undefined ? null : String(row.document_id);
+      const extraction: AgentEvidenceExtraction = {
+        sourceId,
+        documentId,
+        kind: String(row.kind ?? "claim") as AgentEvidenceExtraction["kind"],
+        value: String(row.value ?? ""),
+        evidenceText:
+          row.evidence_text === null || row.evidence_text === undefined
+            ? null
+            : String(row.evidence_text),
+        confidence: Number(row.confidence ?? 0),
+        method: String(row.method ?? "unknown")
+      };
+      const key = `${sourceId}:${documentId ?? "none"}`;
+      const existing = extractionsByKey.get(key) ?? [];
+      existing.push(extraction);
+      extractionsByKey.set(key, existing);
+    }
+
+    const sources: AgentEvidenceSource[] = sourceRows.map((row) => {
+      const sourceId = String(row.source_id ?? "");
+      const documentId =
+        row.document_id === null || row.document_id === undefined ? null : String(row.document_id);
+      const headings = parseJsonValue<string[]>(row.headings_json, []);
+      const paragraphs = parseJsonValue<string[]>(row.paragraphs_json, []);
+      const extractions = extractionsByKey.get(`${sourceId}:${documentId ?? "none"}`) ?? [];
+
+      return {
+        query: String(row.query ?? ""),
+        queryStatus: String(row.query_status ?? "empty") as AgentEvidenceQuery["status"],
+        rank: Number(row.rank ?? 0),
+        sourceId,
+        documentId,
+        title: String(row.title ?? ""),
+        url: String(row.url ?? ""),
+        canonicalUrl: String(row.canonical_url ?? ""),
+        site: String(row.site ?? ""),
+        snippet: String(row.snippet ?? ""),
+        reviewStatus: row.review_status ? String(row.review_status) as AgentEvidenceSource["reviewStatus"] : undefined,
+        dwellSeconds: row.dwell_seconds === null || row.dwell_seconds === undefined ? undefined : Number(row.dwell_seconds),
+        skipReason: row.skip_reason ? String(row.skip_reason) : undefined,
+        pageTitle: row.page_title ? String(row.page_title) : undefined,
+        description: row.description ? String(row.description) : undefined,
+        headings,
+        paragraphs,
+        extractions
+      };
+    });
+
+    const highlights = {
+      entities: uniqueValues(
+        extractionRows.filter((row) => row.kind === "entity").map((row) => String(row.value ?? "")),
+        8
+      ),
+      themes: uniqueValues(
+        extractionRows.filter((row) => row.kind === "theme").map((row) => String(row.value ?? "")),
+        8
+      ),
+      complaints: uniqueValues(
+        extractionRows.filter((row) => row.kind === "complaint").map((row) => String(row.value ?? "")),
+        8
+      ),
+      featureRequests: uniqueValues(
+        extractionRows.filter((row) => row.kind === "feature_request").map((row) => String(row.value ?? "")),
+        8
+      ),
+      claims: uniqueValues(
+        extractionRows.filter((row) => row.kind === "claim").map((row) => String(row.value ?? "")),
+        8
+      )
+    };
+
+    return {
+      counts: {
+        queries: queries.length,
+        sources: sources.length,
+        documents: sources.filter((source) => Boolean(source.documentId)).length,
+        extractions: extractionRows.length
+      },
+      queries,
+      sources,
+      highlights
     };
   }
 
