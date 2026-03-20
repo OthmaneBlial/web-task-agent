@@ -49,12 +49,15 @@ export function buildAgentRunOptionsFromStoredJob(
   }
 
   const workflowInputs = recordOfStringsOrNull(input.workflowInputs);
+  const preserveWorkflowPaths = Boolean(job.workflowName) && mode === "rerun";
 
   return {
     instruction,
     resume: mode === "resume",
-    cachePath: mode === "resume" ? job.cachePath ?? undefined : undefined,
-    reportPath: mode === "resume" ? job.reportPath ?? undefined : undefined,
+    cachePath:
+      mode === "resume" || preserveWorkflowPaths ? job.cachePath ?? undefined : undefined,
+    reportPath:
+      mode === "resume" || preserveWorkflowPaths ? job.reportPath ?? undefined : undefined,
     memoryPath: stringOrNull(input.memoryPath) ?? undefined,
     maxQueries:
       numberOrNull(input.maxQueries) ??
@@ -77,6 +80,7 @@ export function buildAgentRunOptionsFromStoredJob(
         ? Math.max(1, Math.round(Number(budget.leaseTtlSeconds) / 60))
         : undefined,
     workflowName: stringOrNull(input.workflowName) ?? job.workflowName ?? undefined,
+    workflowPresetId: stringOrNull(input.workflowPresetId),
     workflowTemplateId: stringOrNull(input.workflowTemplateId),
     workflowInputs,
     jobTitle: stringOrNull(input.jobTitle) ?? job.title

@@ -1,9 +1,29 @@
+import path from "node:path";
+
 import type { AgentRunOptions } from "../types";
 
-export interface WorkflowTemplateDefinition {
-  id: "android-opportunity" | "article-research";
+export type WorkflowTemplateId = "android-opportunity" | "article-research";
+export type WorkflowPresetId = "fast" | "standard" | "deep";
+
+export interface WorkflowPresetDefinition {
+  id: WorkflowPresetId;
   title: string;
   description: string;
+  options: Pick<
+    AgentRunOptions,
+    "maxQueries" | "maxResultsPerQuery" | "fetchBatchSize" | "maxRuntimeHours"
+  >;
+}
+
+export interface WorkflowTemplateDefinition {
+  id: WorkflowTemplateId;
+  title: string;
+  description: string;
+  handoffTitle: string;
+  briefFilename: string;
+  examplePath: string;
+  defaultPresetId: WorkflowPresetId;
+  presets: WorkflowPresetDefinition[];
   defaultOptions: Pick<
     AgentRunOptions,
     "maxQueries" | "maxResultsPerQuery" | "fetchBatchSize" | "maxRuntimeHours"
@@ -15,10 +35,70 @@ export interface WorkflowTemplateDefinition {
   }): string;
 }
 
+function slugifyPathSegment(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return slug || "workflow";
+}
+
+function buildPresetSet(input: {
+  standard: WorkflowPresetDefinition["options"];
+  fast: WorkflowPresetDefinition["options"];
+  deep: WorkflowPresetDefinition["options"];
+}): WorkflowPresetDefinition[] {
+  return [
+    {
+      id: "fast",
+      title: "Fast",
+      description: "Smaller run for quick market checks and early direction.",
+      options: input.fast
+    },
+    {
+      id: "standard",
+      title: "Standard",
+      description: "Balanced run for normal operator use.",
+      options: input.standard
+    },
+    {
+      id: "deep",
+      title: "Deep",
+      description: "Larger run for higher-confidence research packages.",
+      options: input.deep
+    }
+  ];
+}
+
 const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
   {
     id: "android-opportunity",
     title: "Android Opportunity Research",
+    handoffTitle: "Android Opportunity Package",
+    briefFilename: "opportunity-brief.md",
+    examplePath: "examples/workflows/android-opportunity.md",
+    defaultPresetId: "standard",
+    presets: buildPresetSet({
+      fast: {
+        maxQueries: 5,
+        maxResultsPerQuery: 18,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 4
+      },
+      standard: {
+        maxQueries: 8,
+        maxResultsPerQuery: 30,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 8
+      },
+      deep: {
+        maxQueries: 12,
+        maxResultsPerQuery: 45,
+        fetchBatchSize: 6,
+        maxRuntimeHours: 12
+      }
+    }),
     description:
       "Find promising Android app opportunities by combining Play Store-style competitor research with broader web pain-point discovery.",
     defaultOptions: {
@@ -46,6 +126,30 @@ const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
   {
     id: "article-research",
     title: "Technical Article Research",
+    handoffTitle: "Technical Article Research Package",
+    briefFilename: "article-brief.md",
+    examplePath: "examples/workflows/article-research.md",
+    defaultPresetId: "standard",
+    presets: buildPresetSet({
+      fast: {
+        maxQueries: 4,
+        maxResultsPerQuery: 18,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 4
+      },
+      standard: {
+        maxQueries: 6,
+        maxResultsPerQuery: 25,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 6
+      },
+      deep: {
+        maxQueries: 10,
+        maxResultsPerQuery: 35,
+        fetchBatchSize: 6,
+        maxRuntimeHours: 10
+      }
+    }),
     description:
       "Build an evidence-backed article research package around a technical or trend topic discussed heavily on the web.",
     defaultOptions: {
@@ -82,11 +186,45 @@ export function getWorkflowTemplate(
   return WORKFLOW_TEMPLATES.find((template) => template.id === templateId);
 }
 
+export function getWorkflowPreset(
+  template: WorkflowTemplateDefinition,
+  presetId?: string | null
+): WorkflowPresetDefinition {
+  const requestedPreset = presetId ?? template.defaultPresetId;
+  const preset = template.presets.find((candidate) => candidate.id === requestedPreset);
+  if (!preset) {
+    throw new Error(`unknown workflow preset "${requestedPreset}" for template ${template.id}`);
+  }
+  return preset;
+}
+
+export function buildWorkflowCachePath(templateId: WorkflowTemplateId, topic: string): string {
+  return path.join(
+    process.cwd(),
+    ".cache",
+    "workflows",
+    templateId,
+    `${slugifyPathSegment(topic)}.json`
+  );
+}
+
+export function buildWorkflowReportPath(templateId: WorkflowTemplateId, topic: string): string {
+  return path.join(
+    process.cwd(),
+    "reports",
+    "workflows",
+    templateId,
+    slugifyPathSegment(topic),
+    "report.md"
+  );
+}
+
 export function buildWorkflowRunOptions(input: {
   templateId: string;
   topic: string;
   audience?: string | null;
   context?: string | null;
+  presetId?: string | null;
   overrides?: Partial<
     Pick<
       AgentRunOptions,
@@ -107,6 +245,7 @@ export function buildWorkflowRunOptions(input: {
   if (!template) {
     throw new Error(`unknown workflow template: ${input.templateId}`);
   }
+  const preset = getWorkflowPreset(template, input.presetId);
 
   return {
     instruction: template.buildInstruction({
@@ -115,22 +254,24 @@ export function buildWorkflowRunOptions(input: {
       context: input.context ?? null
     }),
     resume: Boolean(input.overrides?.resume),
-    cachePath: input.overrides?.cachePath,
+    cachePath: input.overrides?.cachePath ?? buildWorkflowCachePath(template.id, input.topic),
     cacheDir: input.overrides?.cacheDir,
-    reportPath: input.overrides?.reportPath,
+    reportPath: input.overrides?.reportPath ?? buildWorkflowReportPath(template.id, input.topic),
     memoryPath: input.overrides?.memoryPath,
-    maxQueries: input.overrides?.maxQueries ?? template.defaultOptions.maxQueries,
+    maxQueries: input.overrides?.maxQueries ?? preset.options.maxQueries,
     maxResultsPerQuery:
-      input.overrides?.maxResultsPerQuery ?? template.defaultOptions.maxResultsPerQuery,
-    fetchBatchSize: input.overrides?.fetchBatchSize ?? template.defaultOptions.fetchBatchSize,
-    maxRuntimeHours: input.overrides?.maxRuntimeHours ?? template.defaultOptions.maxRuntimeHours,
+      input.overrides?.maxResultsPerQuery ?? preset.options.maxResultsPerQuery,
+    fetchBatchSize: input.overrides?.fetchBatchSize ?? preset.options.fetchBatchSize,
+    maxRuntimeHours: input.overrides?.maxRuntimeHours ?? preset.options.maxRuntimeHours,
     leaseTtlMinutes: input.overrides?.leaseTtlMinutes,
     workflowName: template.id,
+    workflowPresetId: preset.id,
     workflowTemplateId: template.id,
     workflowInputs: {
       topic: input.topic,
       audience: input.audience ?? null,
-      context: input.context ?? null
+      context: input.context ?? null,
+      preset: preset.id
     },
     jobTitle: `${template.title}: ${input.topic}`
   };

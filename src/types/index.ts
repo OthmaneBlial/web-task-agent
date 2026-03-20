@@ -446,6 +446,7 @@ export interface AgentRunOptions {
   leaseTtlMinutes?: number;
   workflowName?: string;
   jobTitle?: string;
+  workflowPresetId?: string | null;
   workflowTemplateId?: string | null;
   workflowInputs?: Record<string, string | null>;
   queuedJobId?: string | null;
@@ -494,6 +495,7 @@ export interface AgentRunState {
     fetchBatchSize: number;
     maxRuntimeHours: number;
     workflowName: string | null;
+    workflowPresetId: string | null;
     workflowTemplateId: string | null;
     workflowInputs: Record<string, string | null>;
     jobTitle: string | null;
@@ -519,6 +521,9 @@ export interface AgentRunState {
     researchSummaryPath: string | null;
     postDraftPath: string | null;
     commentsDraftPath: string | null;
+    workflowBriefPath: string | null;
+    packageManifestPath: string | null;
+    packageReadmePath: string | null;
   };
   notes: string[];
 }

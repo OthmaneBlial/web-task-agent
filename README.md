@@ -14,6 +14,7 @@ This repository is now a practical research system, not just a small browser aut
 - Recovers interrupted runs with leases, heartbeats, resumable cache state, and stage-level resume.
 - Reuses canonicalized sources and stored page snapshots across runs.
 - Supports built-in workflows for `android-opportunity` and `article-research`.
+- Gives workflows stable topic-based cache/report paths, operator presets, and handoff packages.
 - Supports queued execution with worker mode.
 - Exposes a local HTTP API and HTML dashboard for jobs, queue state, controls, and live logs.
 - Applies research-quality hardening with domain policies, search-result ranking, source-specific extractors, and trend-aware evidence scoring.
@@ -32,7 +33,8 @@ npm run start -- agent run \
 # Built-in workflow templates
 npm run start -- workflow list
 npm run start -- workflow run android-opportunity \
-  --topic "ai study planner"
+  --topic "ai study planner" \
+  --preset deep
 npm run start -- workflow run article-research \
   --topic "browser automation with Lightpanda and CDP"
 
@@ -73,6 +75,34 @@ The project currently has these main layers:
 - Resumable local state in `.cache/`.
 - Queue and worker execution for long-running jobs.
 - Local management API and dashboard.
+- Workflow output packaging under `reports/workflows/<template>/<topic-slug>/`.
+
+## Workflow Packages
+
+Workflow runs now default to stable topic-based folders instead of generic one-off report directories. A typical workflow package looks like this:
+
+```text
+report.md
+handoff/
+  README.md
+  package-manifest.json
+  research-summary.md
+  workflow-brief.md
+drafts/
+  post-draft.md
+  comments-draft.md
+plan/
+  plan.json
+raw/
+  research/
+runtime/
+  pipeline-manifest.json
+```
+
+Repo examples:
+
+- [examples/workflows/android-opportunity.md](/home/othmane/Downloads/web-task-agent/examples/workflows/android-opportunity.md)
+- [examples/workflows/article-research.md](/home/othmane/Downloads/web-task-agent/examples/workflows/article-research.md)
 
 ## Monitoring Surface
 
@@ -115,7 +145,8 @@ WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 
 - Queue and job controls are now implemented, but only agent jobs support graceful pause, cancel, resume, and rerun.
 - Research quality is stronger now, but extraction, ranking, and trend scoring are still heuristic rather than model-verified or domain-trained.
-- Automated tests now cover queue recovery, control helpers, and management API endpoints, but broader fixture coverage is still thin compared with the size of the system.
+- Workflow outputs are cleaner now, but there are still only two built-in workflow templates and no golden-output fixture coverage yet.
+- Automated tests now cover queue recovery, control helpers, management API endpoints, research quality, and workflow packaging, but broader fixture coverage is still thin compared with the size of the system.
 
 ## Roadmap
 

@@ -372,7 +372,9 @@ export class AgentSynthesisStage {
     summary: AgentResearchSummary,
     evidence: AgentEvidenceBundle
   ): string {
-    const outputPath = path.join(state.artifactDir, "research-summary.md");
+    const outputPath =
+      state.outputs.researchSummaryPath ?? path.join(state.artifactDir, "handoff", "research-summary.md");
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, `${renderResearchSummary(summary, evidence)}\n`, "utf8");
     state.outputs.researchSummaryPath = outputPath;
     return outputPath;
@@ -380,6 +382,7 @@ export class AgentSynthesisStage {
 
   writeReportArtifact(state: AgentRunState, jobStore: JobStore): string {
     const evidence = jobStore.getAgentEvidenceBundle();
+    fs.mkdirSync(path.dirname(state.reportPath), { recursive: true });
     fs.writeFileSync(state.reportPath, renderReport(state, evidence), "utf8");
     return state.reportPath;
   }

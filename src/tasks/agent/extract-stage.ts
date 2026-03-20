@@ -33,7 +33,7 @@ export class AgentExtractStage {
     private readonly searchAdapter: Pick<AgentSearchAdapter, "id" | "buildSearchUrl">,
     private readonly extractor: Pick<AgentExtractor, "id" | "extractFromResult">
   ) {
-    this.researchDir = path.join(artifactDir, "research");
+    this.researchDir = path.join(artifactDir, "raw", "research");
     ensureDir(this.researchDir);
   }
 

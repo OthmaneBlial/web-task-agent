@@ -1,8 +1,8 @@
 # Roadmap
 
-Current progress: the core platform is built. The project can now run long research jobs, store and reuse evidence, queue work for workers, expose a local dashboard, control jobs in flight, stream live logs, and apply a hardened research pipeline before synthesis. The next phase is about workflow output polish and production hardening.
+Current progress: the core platform is built. The project can now run long research jobs, store and reuse evidence, queue work for workers, expose a local dashboard, control jobs in flight, stream live logs, apply a hardened research pipeline before synthesis, and generate cleaner workflow handoff packages. The next phase is production hardening.
 
-Recommended next focus: polish workflow outputs next, then expand tests and production hardening.
+Recommended next focus: expand tests and production hardening.
 
 ## [x] Browser And Task Foundation
 
@@ -44,9 +44,9 @@ The API, CLI, and dashboard now support pause, resume, cancel, retry, and rerun 
 
 The research pipeline now applies domain policies, document quality filters, search-result ranking, source-specific extractors for docs/forums/reviews, and trend-aware source and cluster scoring before synthesis.
 
-## [ ] Workflow Output Polish
+## [x] Workflow Output Polish
 
-The workflow layer still needs cleaner output folders, example reports, presets, and stronger defaults so each workflow feels like a polished product instead of a powerful internal tool.
+Workflow runs now use topic-based cache and report paths, support `fast`/`standard`/`deep` presets, write cleaner handoff packages, and include repo-side output examples for each built-in workflow.
 
 ## [ ] Tests And Production Hardening
 

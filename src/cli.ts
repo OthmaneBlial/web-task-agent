@@ -244,6 +244,8 @@ async function main(): Promise<void> {
       console.log("Available workflows:");
       for (const template of templates) {
         console.log(`- ${template.id}: ${template.description}`);
+        console.log(`  Presets: ${template.presets.map((preset) => preset.id).join(", ")}`);
+        console.log(`  Example: ${template.examplePath}`);
       }
     });
 
@@ -252,6 +254,7 @@ async function main(): Promise<void> {
     .requiredOption("--topic <text>", "Topic, niche, or seed question to research")
     .option("--audience <text>", "Optional audience to optimize the report for")
     .option("--context <text>", "Optional extra instructions or business context")
+    .option("--preset <name>", "Workflow preset: fast, standard, or deep", "standard")
     .option("--resume", "Resume the latest cached workflow run")
     .option("--cache <path>", "Use a specific cache file")
     .option("--report <path>", "Write the Markdown report to a specific path")
@@ -293,6 +296,7 @@ async function main(): Promise<void> {
           topic: normalizeText(String(options.topic)),
           audience: options.audience ? normalizeText(String(options.audience)) : null,
           context: options.context ? normalizeText(String(options.context)) : null,
+          presetId: options.preset ? normalizeText(String(options.preset)).toLowerCase() : undefined,
           overrides: {
             resume: Boolean(options.resume),
             cachePath: options.cache ? path.resolve(String(options.cache)) : undefined,
@@ -315,6 +319,7 @@ async function main(): Promise<void> {
       const result = await task.run();
       console.log(`Workflow job update.`);
       console.log(`Template: ${template.id}`);
+      console.log(`Preset: ${String(options.preset).toLowerCase()}`);
       console.log(`Status: ${result.status}`);
       console.log(`Estimated time: ${result.estimatedMinutes} minutes`);
       console.log(`Job ID: ${result.jobId}`);
@@ -329,6 +334,7 @@ async function main(): Promise<void> {
     .requiredOption("--topic <text>", "Topic, niche, or seed question to research")
     .option("--audience <text>", "Optional audience to optimize the report for")
     .option("--context <text>", "Optional extra instructions or business context")
+    .option("--preset <name>", "Workflow preset: fast, standard, or deep", "standard")
     .option("--cache <path>", "Use a specific cache file")
     .option("--report <path>", "Write the Markdown report to a specific path")
     .option("--memory <path>", "Load product context from a Markdown or text file")
@@ -374,6 +380,7 @@ async function main(): Promise<void> {
         topic: normalizeText(String(options.topic)),
         audience: options.audience ? normalizeText(String(options.audience)) : null,
         context: options.context ? normalizeText(String(options.context)) : null,
+        presetId: options.preset ? normalizeText(String(options.preset)).toLowerCase() : undefined,
         overrides: {
           resume: false,
           cachePath: options.cache ? path.resolve(String(options.cache)) : undefined,
@@ -404,6 +411,7 @@ async function main(): Promise<void> {
 
       console.log(`Queued workflow job.`);
       console.log(`Template: ${template.id}`);
+      console.log(`Preset: ${String(options.preset).toLowerCase()}`);
       console.log(`Queue ID: ${queued.queueId}`);
       console.log(`Job DB: ${queued.databasePath}`);
       console.log(`Cache: ${queued.cachePath}`);

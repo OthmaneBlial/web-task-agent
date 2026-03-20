@@ -68,6 +68,11 @@ import {
   countCapturedResearchSources,
   nowIso
 } from "./agent/shared";
+import {
+  applyAgentOutputPaths,
+  buildAgentOutputPaths,
+  writeWorkflowPackageArtifacts
+} from "../workflows/output-package";
 
 interface AgentTaskResult extends TaskJobInfo {
   cachePath: string;
@@ -84,7 +89,7 @@ class JobControlSignal extends Error {
 }
 
 function defaultReportPath(runId: string): string {
-  return path.join(process.cwd(), "reports", `agent-job-${runId}`, "report.md");
+  return path.join(process.cwd(), "reports", "agent", runId, "report.md");
 }
 
 function updateStepStatus(
@@ -156,6 +161,7 @@ function normalizeRuntimeState(state: AgentRunState, options: AgentRunOptions): 
   state.input.fetchBatchSize = fetchBatchSize;
   state.input.maxRuntimeHours = maxRuntimeHours;
   state.input.workflowName = state.input.workflowName ?? options.workflowName ?? "agent-runner";
+  state.input.workflowPresetId = state.input.workflowPresetId ?? options.workflowPresetId ?? null;
   state.input.workflowTemplateId =
     state.input.workflowTemplateId ?? options.workflowTemplateId ?? null;
   state.input.workflowInputs = state.input.workflowInputs ?? options.workflowInputs ?? {};
@@ -177,15 +183,17 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
   const runId = createRunId();
   const reportPath = path.resolve(options.reportPath ?? defaultReportPath(runId));
   const artifactDir = path.dirname(reportPath);
+  const outputPaths = buildAgentOutputPaths(artifactDir);
   const maxRuntimeHours = resolveMaxRuntimeHours(options);
   const leaseTtlSeconds = resolveLeaseTtlSeconds(options);
   const fetchBatchSize = resolveFetchBatchSize(options);
+  const timestamp = nowIso();
 
   return {
     task: "agent",
     runId,
-    startedAt: nowIso(),
-    updatedAt: nowIso(),
+    startedAt: timestamp,
+    updatedAt: timestamp,
     status: "planning",
     input: {
       instruction: options.instruction,
@@ -195,6 +203,7 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
       fetchBatchSize,
       maxRuntimeHours,
       workflowName: options.workflowName ?? "agent-runner",
+      workflowPresetId: options.workflowPresetId ?? null,
       workflowTemplateId: options.workflowTemplateId ?? null,
       workflowInputs: options.workflowInputs ?? {},
       jobTitle: options.jobTitle ?? null
@@ -206,7 +215,7 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
       heartbeatAt: null,
       recoveredAt: null,
       recoveryCount: 0,
-      executionDeadlineAt: addHoursToIso(nowIso(), maxRuntimeHours)
+      executionDeadlineAt: addHoursToIso(timestamp, maxRuntimeHours)
     },
     reportPath,
     artifactDir,
@@ -215,11 +224,14 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
     research: [],
     researchSummary: null,
     outputs: {
-      planPath: null,
-      pipelineManifestPath: path.join(artifactDir, "pipeline-manifest.json"),
-      researchSummaryPath: null,
-      postDraftPath: null,
-      commentsDraftPath: null
+      planPath: outputPaths.planPath,
+      pipelineManifestPath: outputPaths.pipelineManifestPath,
+      researchSummaryPath: outputPaths.researchSummaryPath,
+      postDraftPath: outputPaths.postDraftPath,
+      commentsDraftPath: outputPaths.commentsDraftPath,
+      workflowBriefPath: outputPaths.workflowBriefPath,
+      packageManifestPath: outputPaths.packageManifestPath,
+      packageReadmePath: outputPaths.packageReadmePath
     },
     notes: []
   };
@@ -265,8 +277,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
   ): void {
     ensureDir(state.artifactDir);
 
-    if (postDraft && !state.outputs.postDraftPath) {
-      const postPath = path.join(state.artifactDir, "post-draft.md");
+    if (postDraft && state.outputs.postDraftPath) {
       const contents = [
         `# ${postDraft.headline}`,
         "",
@@ -274,18 +285,17 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         "",
         `CTA: ${postDraft.callToAction}`
       ].join("\n");
-      fs.writeFileSync(postPath, `${contents.trim()}\n`, "utf8");
-      state.outputs.postDraftPath = postPath;
+      ensureDir(path.dirname(state.outputs.postDraftPath));
+      fs.writeFileSync(state.outputs.postDraftPath, `${contents.trim()}\n`, "utf8");
     }
 
-    if (commentsDraft && !state.outputs.commentsDraftPath) {
-      const commentsPath = path.join(state.artifactDir, "comments-draft.md");
+    if (commentsDraft && state.outputs.commentsDraftPath) {
       const lines = ["# Draft Comments", ""];
       commentsDraft.comments.forEach((comment, index) => {
         lines.push(`${index + 1}. ${comment}`);
       });
-      fs.writeFileSync(commentsPath, `${lines.join("\n").trim()}\n`, "utf8");
-      state.outputs.commentsDraftPath = commentsPath;
+      ensureDir(path.dirname(state.outputs.commentsDraftPath));
+      fs.writeFileSync(state.outputs.commentsDraftPath, `${lines.join("\n").trim()}\n`, "utf8");
     }
   }
 
@@ -345,6 +355,24 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       });
     }
 
+    if (state.outputs.workflowBriefPath && fs.existsSync(state.outputs.workflowBriefPath)) {
+      jobStore.registerArtifact("workflow_brief", "markdown_handoff", state.outputs.workflowBriefPath, {
+        kind: "workflow_brief"
+      });
+    }
+
+    if (state.outputs.packageManifestPath && fs.existsSync(state.outputs.packageManifestPath)) {
+      jobStore.registerArtifact("workflow_package_manifest", "json_manifest", state.outputs.packageManifestPath, {
+        kind: "workflow_package_manifest"
+      });
+    }
+
+    if (state.outputs.packageReadmePath && fs.existsSync(state.outputs.packageReadmePath)) {
+      jobStore.registerArtifact("workflow_package_readme", "markdown_handoff", state.outputs.packageReadmePath, {
+        kind: "workflow_package_readme"
+      });
+    }
+
     if (fs.existsSync(state.reportPath)) {
       jobStore.registerArtifact("report", "markdown_report", state.reportPath, {
         kind: "report"
@@ -364,9 +392,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     ensureDir(state.artifactDir);
     normalizeRuntimeState(state, this.options);
     state.pipeline = state.pipeline ?? createPipelineState();
-    if (!state.outputs.pipelineManifestPath) {
-      state.outputs.pipelineManifestPath = path.join(state.artifactDir, "pipeline-manifest.json");
-    }
+    applyAgentOutputPaths(state);
 
     const jobStore = new JobStore({
       jobId: state.runId,
@@ -639,8 +665,9 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             state.plan,
             state.input.maxResultsPerQuery
           );
-          state.outputs.planPath = path.join(state.artifactDir, "plan.json");
-          writeJsonAtomic(state.outputs.planPath, state.plan);
+          if (state.outputs.planPath) {
+            writeJsonAtomic(state.outputs.planPath, state.plan);
+          }
           this.syncArtifacts(jobStore, state);
           appendNote(
             state,
@@ -1148,6 +1175,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           output: (result) => result
         }
       );
+      writeWorkflowPackageArtifacts(state, jobStore.getAgentEvidenceBundle());
       updateStepStatus(state.plan, "report", "completed");
       this.syncArtifacts(jobStore, state);
       if (state.researchSummary?.referencedEvidence?.length) {
@@ -1159,6 +1187,16 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             path: state.reportPath
           }
         });
+        if (state.outputs.workflowBriefPath) {
+          jobStore.syncAgentOutputGraph({
+            outputKey: "workflow_brief",
+            label: "Workflow brief",
+            referencedEvidence: state.researchSummary.referencedEvidence,
+            metadata: {
+              path: state.outputs.workflowBriefPath
+            }
+          });
+        }
       }
 
       if (hasStep(state.plan, "review")) {
