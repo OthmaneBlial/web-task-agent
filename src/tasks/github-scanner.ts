@@ -17,6 +17,7 @@ import {
   waitForSelector
 } from "../lib/cdp";
 import { humanClick, humanScroll, scrollElementIntoView } from "../lib/humanizer";
+import { JobStore } from "../lib/job-store";
 import { LlmService } from "../lib/llm";
 import { BaseTask } from "./BaseTask";
 import type {
@@ -25,10 +26,11 @@ import type {
   GitHubRepo,
   GitHubScannerOptions,
   GitHubScannerState,
-  ScoredRepo
+  ScoredRepo,
+  TaskJobInfo
 } from "../types";
 
-interface GitHubTaskResult {
+interface GitHubTaskResult extends TaskJobInfo {
   cachePath: string;
   reportPath: string;
   reposFound: number;
@@ -354,6 +356,31 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
     state.updatedAt = new Date().toISOString();
     saveTaskState("github", cachePath, state);
 
+    const jobStore = new JobStore({
+      jobId: state.runId,
+      taskType: "github",
+      workflowName: "github-scan",
+      title: `GitHub scan: ${state.input.criteria}`.slice(0, 200),
+      instruction: state.input.criteria,
+      status: state.status === "failed" ? "running" : "running",
+      startedAt: state.startedAt,
+      updatedAt: state.updatedAt,
+      cachePath,
+      reportPath: state.reportPath,
+      artifactDir: path.dirname(state.reportPath),
+      input: state.input,
+      budget: {
+        maxPages: state.input.maxPages
+      },
+      output: {
+        completedPages: state.completedPages,
+        reposFound: state.repos.length
+      }
+    });
+    jobStore.registerArtifact("cache", "cache_state", cachePath, {
+      task: "github"
+    });
+
     this.log(
       resumed
         ? `resuming GitHub run from ${cachePath} at page ${state.completedPages + 1}`
@@ -364,52 +391,134 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
     const client = await createPageSession(startUrl);
 
     try {
-      let currentPage = state.completedPages + 1;
-      let currentUrl = startUrl;
+      await jobStore.runStep(
+        {
+          stepKey: "scrape_pages",
+          title: "Scrape GitHub search result pages",
+          kind: "scrape",
+          position: 1,
+          input: {
+            startUrl,
+            maxPages: state.input.maxPages
+          }
+        },
+        async () => {
+          let currentPage = state.completedPages + 1;
+          let currentUrl = startUrl;
 
-      while (currentUrl && currentPage <= state.input.maxPages) {
-        await navigateTo(client, currentUrl, { timeoutMs: 25_000, waitForIdle: true });
-        await this.waitForResults(client);
+          while (currentUrl && currentPage <= state.input.maxPages) {
+            await navigateTo(client, currentUrl, { timeoutMs: 25_000, waitForIdle: true });
+            await this.waitForResults(client);
 
-        const snapshot = await this.scrapeWithRetry(client, currentPage);
-        state.pages = [...state.pages.filter((page) => page.page !== snapshot.page), snapshot].sort(
-          (left, right) => left.page - right.page
-        );
-        state.repos = mergeRepos(state.repos, snapshot.repos);
-        state.completedPages = currentPage;
-        state.lastPageUrl = snapshot.url;
-        state.nextPageUrl = snapshot.nextPageUrl;
-        state.updatedAt = new Date().toISOString();
-        state.status = "running";
-        saveTaskState("github", cachePath, state);
+            const snapshot = await this.scrapeWithRetry(client, currentPage);
+            state.pages = [...state.pages.filter((page) => page.page !== snapshot.page), snapshot].sort(
+              (left, right) => left.page - right.page
+            );
+            state.repos = mergeRepos(state.repos, snapshot.repos);
+            state.completedPages = currentPage;
+            state.lastPageUrl = snapshot.url;
+            state.nextPageUrl = snapshot.nextPageUrl;
+            state.updatedAt = new Date().toISOString();
+            state.status = "running";
+            saveTaskState("github", cachePath, state);
+            jobStore.syncJob({
+              status: "running",
+              updatedAt: state.updatedAt,
+              output: {
+                completedPages: state.completedPages,
+                reposFound: state.repos.length,
+                nextPageUrl: state.nextPageUrl
+              }
+            });
 
-        this.log(
-          `scraped page ${currentPage}/${state.input.maxPages}: ${snapshot.repos.length} repos, ${state.repos.length} unique total`
-        );
+            this.log(
+              `scraped page ${currentPage}/${state.input.maxPages}: ${snapshot.repos.length} repos, ${state.repos.length} unique total`
+            );
 
-        if (!snapshot.nextPageUrl || currentPage >= state.input.maxPages) {
-          break;
+            if (!snapshot.nextPageUrl || currentPage >= state.input.maxPages) {
+              break;
+            }
+
+            const advanced = await this.goToNextPage(client, snapshot.nextPageUrl);
+            if (!advanced) {
+              break;
+            }
+
+            currentPage += 1;
+            currentUrl = snapshot.nextPageUrl;
+          }
+
+          return {
+            completedPages: state.completedPages,
+            reposFound: state.repos.length
+          };
+        },
+        {
+          output: (result) => result
         }
+      );
 
-        const advanced = await this.goToNextPage(client, snapshot.nextPageUrl);
-        if (!advanced) {
-          break;
+      const winners = await jobStore.runStep(
+        {
+          stepKey: "rank_repositories",
+          title: "Rank repositories with the model",
+          kind: "analyze",
+          position: 2,
+          input: {
+            criteria: state.input.criteria,
+            reposFound: state.repos.length
+          }
+        },
+        async () => this.llm.evaluateRepositories(state.repos, state.input.criteria),
+        {
+          output: (result) => ({
+            winnerCount: result.length,
+            topRepository: result[0]?.fullName ?? null
+          })
         }
+      );
 
-        currentPage += 1;
-        currentUrl = snapshot.nextPageUrl;
-      }
-
-      const winners = await this.llm.evaluateRepositories(state.repos, state.input.criteria);
-      const reportBody = this.renderReport(state, winners);
-      ensureDir(path.dirname(state.reportPath));
-      fs.writeFileSync(state.reportPath, reportBody, "utf8");
+      await jobStore.runStep(
+        {
+          stepKey: "write_report",
+          title: "Write markdown report",
+          kind: "report",
+          position: 3,
+          input: {
+            reportPath: state.reportPath
+          }
+        },
+        async () => {
+          const reportBody = this.renderReport(state, winners);
+          ensureDir(path.dirname(state.reportPath));
+          fs.writeFileSync(state.reportPath, reportBody, "utf8");
+          return {
+            reportPath: state.reportPath
+          };
+        },
+        {
+          output: (result) => result
+        }
+      );
+      jobStore.registerArtifact("report", "markdown_report", state.reportPath, {
+        task: "github"
+      });
 
       state.status = "completed";
       state.updatedAt = new Date().toISOString();
       saveTaskState("github", cachePath, state);
+      jobStore.setStatus("completed", {
+        output: {
+          completedPages: state.completedPages,
+          reposFound: state.repos.length,
+          winnerCount: winners.length
+        },
+        completedAt: state.updatedAt
+      });
 
       return {
+        jobId: state.runId,
+        databasePath: jobStore.databasePath,
         cachePath,
         reportPath: state.reportPath,
         reposFound: state.repos.length,
@@ -419,6 +528,14 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
       state.status = "failed";
       state.updatedAt = new Date().toISOString();
       saveTaskState("github", cachePath, state);
+      jobStore.setStatus("failed", {
+        output: {
+          completedPages: state.completedPages,
+          reposFound: state.repos.length
+        },
+        errorMessage: error instanceof Error ? error.stack ?? error.message : String(error),
+        completedAt: state.updatedAt
+      });
       throw error;
     } finally {
       await closePageSession(client);

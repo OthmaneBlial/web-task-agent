@@ -14,6 +14,7 @@ import {
   waitForSelector
 } from "../lib/cdp";
 import { humanClick, humanScroll } from "../lib/humanizer";
+import { JobStore } from "../lib/job-store";
 import { LlmService } from "../lib/llm";
 import { BaseTask } from "./BaseTask";
 import type {
@@ -22,10 +23,11 @@ import type {
   PlayStoreAnalyzerOptions,
   PlayStoreAnalyzerState,
   PlayStoreAppDetail,
-  PlayStoreAppSummary
+  PlayStoreAppSummary,
+  TaskJobInfo
 } from "../types";
 
-interface PlayStoreTaskResult {
+interface PlayStoreTaskResult extends TaskJobInfo {
   cachePath: string;
   reportPath: string;
   summariesFound: number;
@@ -326,6 +328,31 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
     state.updatedAt = new Date().toISOString();
     saveTaskState("playstore", cachePath, state);
 
+    const jobStore = new JobStore({
+      jobId: state.runId,
+      taskType: "playstore",
+      workflowName: "playstore-market-scan",
+      title: `Play Store analysis: ${state.input.query}`.slice(0, 200),
+      instruction: state.input.query,
+      status: "running",
+      startedAt: state.startedAt,
+      updatedAt: state.updatedAt,
+      cachePath,
+      reportPath: state.reportPath,
+      artifactDir: path.dirname(state.reportPath),
+      input: state.input,
+      budget: {
+        analyzeTop: state.input.analyzeTop
+      },
+      output: {
+        summariesFound: state.summaries.length,
+        analyzedApps: state.analyzedApps.length
+      }
+    });
+    jobStore.registerArtifact("cache", "cache_state", cachePath, {
+      task: "playstore"
+    });
+
     this.log(
       resumed
         ? `resuming Play Store run from ${cachePath}`
@@ -335,61 +362,167 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
     const client = await createPageSession(state.searchUrl);
 
     try {
-      await this.waitForStoreSearchResults(client);
+      await jobStore.runStep(
+        {
+          stepKey: "collect_search_results",
+          title: "Collect Play Store search results",
+          kind: "scrape",
+          position: 1,
+          input: {
+            searchUrl: state.searchUrl,
+            analyzeTop: state.input.analyzeTop
+          }
+        },
+        async () => {
+          await this.waitForStoreSearchResults(client);
 
-      let summaries = state.summaries;
-      for (let pass = 0; pass < 4 && summaries.length < state.input.analyzeTop; pass += 1) {
-        await humanScroll(client, { distancePx: 1_800 + pass * 240 });
-        await this.softWaitForNetworkIdle(client);
-        summaries = mergeSummaries(summaries, await this.scrapeSearchResults(client));
-      }
+          let summaries = state.summaries;
+          for (let pass = 0; pass < 4 && summaries.length < state.input.analyzeTop; pass += 1) {
+            await humanScroll(client, { distancePx: 1_800 + pass * 240 });
+            await this.softWaitForNetworkIdle(client);
+            summaries = mergeSummaries(summaries, await this.scrapeSearchResults(client));
+          }
 
-      state.summaries = summaries;
-      state.updatedAt = new Date().toISOString();
-      saveTaskState("playstore", cachePath, state);
-
-      const targets = state.summaries.slice(0, state.input.analyzeTop);
-      const analyzedKeys = new Set(state.analyzedApps.map((app) => app.key));
-
-      for (const summary of targets) {
-        if (analyzedKeys.has(summary.key)) {
-          continue;
-        }
-
-        // Open each detail page in a separate session instead of a new tab.
-        let detailClient: CDPClient | null = null;
-        try {
-          const detailUrl = this.buildDetailUrl(summary);
-          detailClient = await createPageSession(detailUrl);
-          await this.waitForStoreDetail(detailClient);
-          await humanScroll(detailClient, { distancePx: 1_400 });
-          await humanScroll(detailClient, { distancePx: 1_100 });
-          const detail = await this.scrapeDetailPage(detailClient, summary);
-          state.analyzedApps = mergeDetails(state.analyzedApps, detail);
+          state.summaries = summaries;
           state.updatedAt = new Date().toISOString();
           saveTaskState("playstore", cachePath, state);
-          analyzedKeys.add(summary.key);
-          this.log(`analyzed ${summary.name}`);
-        } catch (error) {
-          const screenshotPath = `/tmp/playstore-detail-failure-${Date.now()}-${summary.key}.png`;
-          await captureScreenshot(detailClient ?? client, screenshotPath);
-          this.log(`failed to analyze ${summary.name}: ${String(error)} (screenshot: ${screenshotPath})`);
-        } finally {
-          if (detailClient) {
-            await closePageSession(detailClient);
-          }
-        }
-      }
+          jobStore.syncJob({
+            status: "running",
+            updatedAt: state.updatedAt,
+            output: {
+              summariesFound: state.summaries.length,
+              analyzedApps: state.analyzedApps.length
+            }
+          });
 
-      const insights = await this.llm.generatePlayStoreInsights(state.analyzedApps, state.input.query);
-      ensureDir(path.dirname(state.reportPath));
-      fs.writeFileSync(state.reportPath, renderReport(state.input.query, state, insights), "utf8");
+          return {
+            summariesFound: state.summaries.length
+          };
+        },
+        {
+          output: (result) => result
+        }
+      );
+
+      await jobStore.runStep(
+        {
+          stepKey: "analyze_apps",
+          title: "Analyze selected Play Store apps",
+          kind: "extract",
+          position: 2,
+          input: {
+            analyzeTop: state.input.analyzeTop
+          }
+        },
+        async () => {
+          const targets = state.summaries.slice(0, state.input.analyzeTop);
+          const analyzedKeys = new Set(state.analyzedApps.map((app) => app.key));
+
+          for (const summary of targets) {
+            if (analyzedKeys.has(summary.key)) {
+              continue;
+            }
+
+            let detailClient: CDPClient | null = null;
+            try {
+              const detailUrl = this.buildDetailUrl(summary);
+              detailClient = await createPageSession(detailUrl);
+              await this.waitForStoreDetail(detailClient);
+              await humanScroll(detailClient, { distancePx: 1_400 });
+              await humanScroll(detailClient, { distancePx: 1_100 });
+              const detail = await this.scrapeDetailPage(detailClient, summary);
+              state.analyzedApps = mergeDetails(state.analyzedApps, detail);
+              state.updatedAt = new Date().toISOString();
+              saveTaskState("playstore", cachePath, state);
+              jobStore.syncJob({
+                status: "running",
+                updatedAt: state.updatedAt,
+                output: {
+                  summariesFound: state.summaries.length,
+                  analyzedApps: state.analyzedApps.length
+                }
+              });
+              analyzedKeys.add(summary.key);
+              this.log(`analyzed ${summary.name}`);
+            } catch (error) {
+              const screenshotPath = `/tmp/playstore-detail-failure-${Date.now()}-${summary.key}.png`;
+              await captureScreenshot(detailClient ?? client, screenshotPath);
+              this.log(`failed to analyze ${summary.name}: ${String(error)} (screenshot: ${screenshotPath})`);
+            } finally {
+              if (detailClient) {
+                await closePageSession(detailClient);
+              }
+            }
+          }
+
+          return {
+            analyzedApps: state.analyzedApps.length
+          };
+        },
+        {
+          output: (result) => result
+        }
+      );
+
+      const insights = await jobStore.runStep(
+        {
+          stepKey: "generate_insights",
+          title: "Generate market insights",
+          kind: "analyze",
+          position: 3,
+          input: {
+            query: state.input.query,
+            analyzedApps: state.analyzedApps.length
+          }
+        },
+        async () => this.llm.generatePlayStoreInsights(state.analyzedApps, state.input.query),
+        {
+          output: (result) => ({
+            standoutApps: result.standoutApps.length,
+            missingFeatures: result.missingFeatures.length
+          })
+        }
+      );
+
+      await jobStore.runStep(
+        {
+          stepKey: "write_report",
+          title: "Write market insight report",
+          kind: "report",
+          position: 4,
+          input: {
+            reportPath: state.reportPath
+          }
+        },
+        async () => {
+          ensureDir(path.dirname(state.reportPath));
+          fs.writeFileSync(state.reportPath, renderReport(state.input.query, state, insights), "utf8");
+          return {
+            reportPath: state.reportPath
+          };
+        },
+        {
+          output: (result) => result
+        }
+      );
+      jobStore.registerArtifact("report", "markdown_report", state.reportPath, {
+        task: "playstore"
+      });
 
       state.status = "completed";
       state.updatedAt = new Date().toISOString();
       saveTaskState("playstore", cachePath, state);
+      jobStore.setStatus("completed", {
+        output: {
+          summariesFound: state.summaries.length,
+          analyzedApps: state.analyzedApps.length
+        },
+        completedAt: state.updatedAt
+      });
 
       return {
+        jobId: state.runId,
+        databasePath: jobStore.databasePath,
         cachePath,
         reportPath: state.reportPath,
         summariesFound: state.summaries.length,
@@ -401,6 +534,14 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
       state.status = "failed";
       state.updatedAt = new Date().toISOString();
       saveTaskState("playstore", cachePath, state);
+      jobStore.setStatus("failed", {
+        output: {
+          summariesFound: state.summaries.length,
+          analyzedApps: state.analyzedApps.length
+        },
+        errorMessage: error instanceof Error ? error.stack ?? error.message : String(error),
+        completedAt: state.updatedAt
+      });
       throw error;
     } finally {
       await closePageSession(client);

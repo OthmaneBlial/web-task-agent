@@ -15,6 +15,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Google Play market analyzer in `src/tasks/playstore-analyzer.ts`
 - [x] Lightweight browser research runner in `src/tasks/agent-runner.ts`
 - [x] Markdown and JSON artifact output under `reports/`
+- [x] SQLite-backed job, step, and artifact persistence under `.data/web-task-agent.sqlite`
 - [ ] Multi-hour job execution with automatic recovery
 - [ ] Hundreds-of-pages research per run
 - [ ] Durable database-backed source storage
@@ -228,15 +229,15 @@ This is the execution checklist. Items already present in the repo are marked `[
 
 ### Phase 1: Introduce A Real Job Model
 
-- [ ] Add a normalized `Job` model with id, status, timestamps, budget, and workflow type
-- [ ] Add `RunStep` records for each stage: plan, search, fetch, extract, analyze, write
-- [ ] Record retry counts, failure reasons, and durations per step
+- [x] Add a normalized `Job` model with id, status, timestamps, budget, and workflow type
+- [x] Add `RunStep` records for each stage: plan, search, fetch, extract, analyze, write
+- [x] Record retry counts, failure reasons, and durations per step
 - [ ] Make resume operate at the step level instead of only task-level snapshots
 - [ ] Add stable artifact manifests so downstream tools can inspect outputs
 
 ### Phase 2: Add Durable Storage
 
-- [ ] Introduce SQLite first for local development simplicity
+- [x] Introduce SQLite first for local development simplicity
 - [ ] Add tables for jobs, sources, documents, extractions, and outputs
 - [ ] Store canonical URL, fetched timestamp, checksum, and source type per document
 - [ ] Persist raw HTML or text extracts so results can be re-analyzed without refetching
@@ -362,6 +363,7 @@ ANTHROPIC_API_KEY=your_key_here
 ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
 ANTHROPIC_MODEL=claude-sonnet-4-20250514
 ANTHROPIC_TIMEOUT_MS=90000
+WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 ```
 
 ## Final Notes

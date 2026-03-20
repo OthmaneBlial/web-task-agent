@@ -145,9 +145,28 @@ export interface MarketInsightReport {
   standoutApps: string[];
 }
 
-export type AgentJobStatus = "planning" | "running" | "waiting_review" | "completed" | "failed";
+export type JobTaskType = "github" | "playstore" | "agent";
 
-export type AgentStepStatus = "pending" | "running" | "completed" | "failed" | "skipped";
+export type JobLifecycleStatus = "planning" | "running" | "waiting_review" | "completed" | "failed";
+
+export type JobStepStatus = "pending" | "running" | "completed" | "failed" | "skipped";
+
+export interface JobStepDefinition {
+  stepKey: string;
+  title: string;
+  kind: string;
+  position: number;
+  input?: unknown;
+}
+
+export interface TaskJobInfo {
+  jobId: string;
+  databasePath: string;
+}
+
+export type AgentJobStatus = JobLifecycleStatus;
+
+export type AgentStepStatus = JobStepStatus;
 
 export type AgentStepKind =
   | "research"

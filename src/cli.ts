@@ -48,6 +48,8 @@ async function main(): Promise<void> {
 
       const result = await task.run();
       console.log(`GitHub scan complete.`);
+      console.log(`Job ID: ${result.jobId}`);
+      console.log(`Job DB: ${result.databasePath}`);
       console.log(`Cache: ${result.cachePath}`);
       console.log(`Report: ${result.reportPath}`);
       console.log(`Repositories found: ${result.reposFound}`);
@@ -77,6 +79,8 @@ async function main(): Promise<void> {
 
       const result = await task.run();
       console.log(`Play Store analysis complete.`);
+      console.log(`Job ID: ${result.jobId}`);
+      console.log(`Job DB: ${result.databasePath}`);
       console.log(`Cache: ${result.cachePath}`);
       console.log(`Report: ${result.reportPath}`);
       console.log(`Search results found: ${result.summariesFound}`);
@@ -120,6 +124,8 @@ async function main(): Promise<void> {
       console.log(`Agent job update.`);
       console.log(`Status: ${result.status}`);
       console.log(`Estimated time: ${result.estimatedMinutes} minutes`);
+      console.log(`Job ID: ${result.jobId}`);
+      console.log(`Job DB: ${result.databasePath}`);
       console.log(`Cache: ${result.cachePath}`);
       console.log(`Report: ${result.reportPath}`);
       console.log(`Artifacts: ${result.artifactDir}`);

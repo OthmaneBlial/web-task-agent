@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 .cache/
+.data/
 reports/
 *.log
 npm-debug.log*

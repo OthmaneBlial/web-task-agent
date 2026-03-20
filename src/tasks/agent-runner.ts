@@ -14,6 +14,7 @@ import {
   waitForNetworkIdle
 } from "../lib/cdp";
 import { loadAgentMemory } from "../lib/agent-memory";
+import { JobStore } from "../lib/job-store";
 import { LlmService } from "../lib/llm";
 import { humanScroll } from "../lib/humanizer";
 import { BaseTask } from "./BaseTask";
@@ -27,10 +28,11 @@ import type {
   AgentSearchResult,
   AgentStepKind,
   AgentResearchSummary,
-  CDPClient
+  CDPClient,
+  TaskJobInfo
 } from "../types";
 
-interface AgentTaskResult {
+interface AgentTaskResult extends TaskJobInfo {
   cachePath: string;
   reportPath: string;
   artifactDir: string;
@@ -731,6 +733,38 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     }
   }
 
+  private syncArtifacts(jobStore: JobStore, state: AgentRunState): void {
+    if (state.outputs.planPath && fs.existsSync(state.outputs.planPath)) {
+      jobStore.registerArtifact("plan", "json_plan", state.outputs.planPath, {
+        kind: "plan"
+      });
+    }
+
+    if (state.outputs.researchSummaryPath && fs.existsSync(state.outputs.researchSummaryPath)) {
+      jobStore.registerArtifact("research_summary", "markdown_summary", state.outputs.researchSummaryPath, {
+        kind: "research_summary"
+      });
+    }
+
+    if (state.outputs.postDraftPath && fs.existsSync(state.outputs.postDraftPath)) {
+      jobStore.registerArtifact("post_draft", "markdown_draft", state.outputs.postDraftPath, {
+        kind: "post_draft"
+      });
+    }
+
+    if (state.outputs.commentsDraftPath && fs.existsSync(state.outputs.commentsDraftPath)) {
+      jobStore.registerArtifact("comments_draft", "markdown_draft", state.outputs.commentsDraftPath, {
+        kind: "comments_draft"
+      });
+    }
+
+    if (fs.existsSync(state.reportPath)) {
+      jobStore.registerArtifact("report", "markdown_report", state.reportPath, {
+        kind: "report"
+      });
+    }
+  }
+
   async run(): Promise<AgentTaskResult> {
     const { state, cachePath, resumed } = createOrResumeState<AgentRunState>({
       task: "agent",
@@ -741,6 +775,96 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     });
 
     ensureDir(state.artifactDir);
+
+    const jobStore = new JobStore({
+      jobId: state.runId,
+      taskType: "agent",
+      workflowName: "agent-runner",
+      title: state.input.instruction.slice(0, 200),
+      instruction: state.input.instruction,
+      status: state.status === "failed" ? "planning" : state.status,
+      startedAt: state.startedAt,
+      updatedAt: state.updatedAt,
+      cachePath,
+      reportPath: state.reportPath,
+      artifactDir: state.artifactDir,
+      input: state.input,
+      budget: {
+        maxQueries: state.input.maxQueries,
+        maxResultsPerQuery: state.input.maxResultsPerQuery
+      },
+      output: {
+        researchQueriesCompleted: state.research.length
+      }
+    });
+    jobStore.registerArtifact("cache", "cache_state", cachePath, {
+      task: "agent"
+    });
+    this.syncArtifacts(jobStore, state);
+
+    const summarizeResearch = (): {
+      researchQueriesCompleted: number;
+      sourcesCaptured: number;
+      researchErrors: number;
+    } => ({
+      researchQueriesCompleted: state.research.length,
+      sourcesCaptured: state.research.reduce((total, entry) => total + entry.results.length, 0),
+      researchErrors: state.research.filter((entry) => Boolean(entry.error)).length
+    });
+
+    const planStep = {
+      stepKey: "plan_job",
+      title: "Plan the job",
+      kind: "plan",
+      position: 1,
+      input: {
+        instruction: state.input.instruction,
+        maxQueries: state.input.maxQueries
+      }
+    };
+    const researchStep = {
+      stepKey: "research",
+      title: "Run browser research",
+      kind: "research",
+      position: 2,
+      input: {
+        maxQueries: state.input.maxQueries,
+        maxResultsPerQuery: state.input.maxResultsPerQuery
+      }
+    };
+    const summaryStep = {
+      stepKey: "synthesize_research",
+      title: "Synthesize research findings",
+      kind: "analyze",
+      position: 3
+    };
+    const postDraftStep = {
+      stepKey: "draft_post",
+      title: "Draft post",
+      kind: "draft_post",
+      position: 4
+    };
+    const commentsDraftStep = {
+      stepKey: "draft_comments",
+      title: "Draft comments",
+      kind: "draft_comments",
+      position: 5
+    };
+    const reviewStep = {
+      stepKey: "review",
+      title: "Wait for human review",
+      kind: "review",
+      position: 6
+    };
+    const reportStep = {
+      stepKey: "write_report",
+      title: "Write final report",
+      kind: "report",
+      position: 7,
+      input: {
+        reportPath: state.reportPath
+      }
+    };
 
     this.log(
       resumed
@@ -754,6 +878,9 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     const memory = loadAgentMemory(this.options.memoryPath ?? state.input.memoryPath ?? undefined);
     if (memory && state.input.memoryPath !== memory.path) {
       state.input.memoryPath = memory.path;
+      jobStore.syncJob({
+        input: state.input
+      });
     }
 
     try {
@@ -761,37 +888,76 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         state.status = "planning";
         appendNote(state, "Planning the job.");
         this.saveState(cachePath, state);
-
-        state.plan = await this.llm.planAgentJob({
-          instruction: state.input.instruction,
-          memory: memory?.content,
-          maxQueries: state.input.maxQueries
+        jobStore.syncJob({
+          status: "planning",
+          updatedAt: state.updatedAt,
+          input: state.input
         });
-        state.plan.estimatedMinutes = computeExecutionEstimateMinutes(
-          state.plan,
-          state.input.maxResultsPerQuery
-        );
-        state.outputs.planPath = path.join(state.artifactDir, "plan.json");
-        writeJsonAtomic(state.outputs.planPath, state.plan);
-        appendNote(
-          state,
-          `Plan created with ${state.plan.steps.length} steps and a ${state.plan.estimatedMinutes} minute execution estimate.`
-        );
-        this.saveState(cachePath, state);
-      }
+        jobStore.startStep(planStep);
 
-      if (state.plan) {
-        const executionEstimate = computeExecutionEstimateMinutes(
-          state.plan,
-          state.input.maxResultsPerQuery
-        );
-        if (state.plan.estimatedMinutes !== executionEstimate) {
-          state.plan.estimatedMinutes = executionEstimate;
+        try {
+          state.plan = await this.llm.planAgentJob({
+            instruction: state.input.instruction,
+            memory: memory?.content,
+            maxQueries: state.input.maxQueries
+          });
+          state.plan.estimatedMinutes = computeExecutionEstimateMinutes(
+            state.plan,
+            state.input.maxResultsPerQuery
+          );
+          state.outputs.planPath = path.join(state.artifactDir, "plan.json");
+          writeJsonAtomic(state.outputs.planPath, state.plan);
+          this.syncArtifacts(jobStore, state);
           appendNote(
             state,
-            `Execution estimate recalculated from browsing policy: ${executionEstimate} minutes.`
+            `Plan created with ${state.plan.steps.length} steps and a ${state.plan.estimatedMinutes} minute execution estimate.`
           );
           this.saveState(cachePath, state);
+          jobStore.completeStep(planStep, {
+            estimatedMinutes: state.plan.estimatedMinutes,
+            deliverables: state.plan.deliverables.length,
+            researchQueries: state.plan.researchQueries.length,
+            planPath: state.outputs.planPath
+          });
+          jobStore.syncJob({
+            status: "planning",
+            updatedAt: state.updatedAt,
+            output: {
+              estimatedMinutes: state.plan.estimatedMinutes,
+              planSteps: state.plan.steps.length
+            }
+          });
+        } catch (error) {
+          jobStore.failStep(planStep, error);
+          throw error;
+        }
+      } else {
+        jobStore.completeStep(planStep, {
+          reused: true,
+          estimatedMinutes: state.plan.estimatedMinutes,
+          planPath: state.outputs.planPath
+        });
+        this.syncArtifacts(jobStore, state);
+      }
+
+      if (!state.plan) {
+        throw new Error("agent plan is missing after planning");
+      }
+
+      const executionEstimate = computeExecutionEstimateMinutes(
+        state.plan,
+        state.input.maxResultsPerQuery
+      );
+      if (state.plan.estimatedMinutes !== executionEstimate) {
+        state.plan.estimatedMinutes = executionEstimate;
+        appendNote(
+          state,
+          `Execution estimate recalculated from browsing policy: ${executionEstimate} minutes.`
+        );
+        this.saveState(cachePath, state);
+        if (state.outputs.planPath) {
+          writeJsonAtomic(state.outputs.planPath, state.plan);
+          this.syncArtifacts(jobStore, state);
         }
       }
 
@@ -799,6 +965,14 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         state.status = "running";
         updateStepStatus(state.plan, "research", "running");
         this.saveState(cachePath, state);
+        jobStore.syncJob({
+          status: "running",
+          updatedAt: state.updatedAt,
+          output: {
+            estimatedMinutes: state.plan.estimatedMinutes,
+            ...summarizeResearch()
+          }
+        });
 
         const doneQueries = new Set(state.research.map((entry) => entry.query.toLowerCase()));
         const pendingQueries = state.plan.researchQueries.filter(
@@ -807,85 +981,196 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         const researchDir = path.join(state.artifactDir, "research");
         ensureDir(researchDir);
 
-        for (const query of pendingQueries) {
-          this.log(`researching: ${query}`);
-          const result = await this.runResearchQuery(query, state.input.maxResultsPerQuery);
-          state.research.push(result);
-          const rawPath = path.join(researchDir, `${slugify(query)}.json`);
-          writeJsonAtomic(rawPath, result);
-          appendNote(
-            state,
-            result.error
-              ? `Research query failed: ${query} (${result.error})`
-              : `Research query captured ${result.results.length} sources: ${query}`
+        if (pendingQueries.length > 0) {
+          await jobStore.runStep(
+            researchStep,
+            async () => {
+              for (const query of pendingQueries) {
+                this.log(`researching: ${query}`);
+                const result = await this.runResearchQuery(query, state.input.maxResultsPerQuery);
+                state.research.push(result);
+                const rawPath = path.join(researchDir, `${slugify(query)}.json`);
+                writeJsonAtomic(rawPath, result);
+                jobStore.registerArtifact(`research_${slugify(query)}`, "research_json", rawPath, {
+                  query
+                });
+                appendNote(
+                  state,
+                  result.error
+                    ? `Research query failed: ${query} (${result.error})`
+                    : `Research query captured ${result.results.length} sources: ${query}`
+                );
+                this.saveState(cachePath, state);
+                jobStore.syncJob({
+                  status: "running",
+                  updatedAt: state.updatedAt,
+                  output: {
+                    estimatedMinutes: state.plan!.estimatedMinutes,
+                    ...summarizeResearch()
+                  }
+                });
+              }
+
+              return summarizeResearch();
+            },
+            {
+              output: (result) => result
+            }
           );
-          this.saveState(cachePath, state);
+        } else {
+          jobStore.completeStep(researchStep, {
+            reused: true,
+            ...summarizeResearch()
+          });
         }
 
         updateStepStatus(state.plan, "research", "completed");
         this.saveState(cachePath, state);
+      } else {
+        jobStore.markSkipped(researchStep, {
+          reason: "no research queries planned"
+        });
       }
 
-      if (state.research.length > 0 && !state.researchSummary) {
-        state.status = "running";
-        const summary = await this.llm.synthesizeAgentResearch({
-          instruction: state.input.instruction,
-          research: state.research
+      if (state.research.length > 0) {
+        if (!state.researchSummary) {
+          state.status = "running";
+          const summary = await jobStore.runStep(
+            summaryStep,
+            async () => this.llm.synthesizeAgentResearch({
+              instruction: state.input.instruction,
+              research: state.research
+            }),
+            {
+              output: (result) => ({
+                keyFindings: result.keyFindings.length,
+                contentAngles: result.contentAngles.length
+              })
+            }
+          );
+          state.researchSummary = summary;
+          state.outputs.researchSummaryPath = path.join(state.artifactDir, "research-summary.md");
+          fs.writeFileSync(
+            state.outputs.researchSummaryPath,
+            `${renderResearchSummary(summary)}\n`,
+            "utf8"
+          );
+          this.syncArtifacts(jobStore, state);
+          appendNote(state, "Research summary generated.");
+          this.saveState(cachePath, state);
+          jobStore.completeStep(summaryStep, {
+            keyFindings: summary.keyFindings.length,
+            contentAngles: summary.contentAngles.length,
+            researchSummaryPath: state.outputs.researchSummaryPath
+          });
+        } else {
+          jobStore.completeStep(summaryStep, {
+            reused: true,
+            keyFindings: state.researchSummary.keyFindings.length,
+            contentAngles: state.researchSummary.contentAngles.length,
+            researchSummaryPath: state.outputs.researchSummaryPath
+          });
+        }
+      } else {
+        jobStore.markSkipped(summaryStep, {
+          reason: "no research was collected"
         });
-        state.researchSummary = summary;
-        state.outputs.researchSummaryPath = path.join(state.artifactDir, "research-summary.md");
-        fs.writeFileSync(
-          state.outputs.researchSummaryPath,
-          `${renderResearchSummary(summary)}\n`,
-          "utf8"
-        );
-        appendNote(state, "Research summary generated.");
-        this.saveState(cachePath, state);
       }
 
       let postDraft: { headline: string; body: string; callToAction: string } | null = null;
       let commentsDraft: AgentCommentsDraft | null = null;
 
-      if (hasStep(state.plan, "draft_post") && !state.outputs.postDraftPath) {
-        state.status = "running";
-        updateStepStatus(state.plan, "draft_post", "running");
-        this.saveState(cachePath, state);
-        postDraft = await this.llm.draftAgentPost({
-          instruction: state.input.instruction,
-          plan: state.plan,
-          researchSummary: state.researchSummary,
-          memory: memory?.content
+      if (hasStep(state.plan, "draft_post")) {
+        if (!state.outputs.postDraftPath) {
+          state.status = "running";
+          updateStepStatus(state.plan, "draft_post", "running");
+          this.saveState(cachePath, state);
+          postDraft = await jobStore.runStep(
+            postDraftStep,
+            async () => this.llm.draftAgentPost({
+              instruction: state.input.instruction,
+              plan: state.plan!,
+              researchSummary: state.researchSummary,
+              memory: memory?.content
+            }),
+            {
+              output: (result) => ({
+                headline: result.headline
+              })
+            }
+          );
+          updateStepStatus(state.plan, "draft_post", "completed");
+          appendNote(state, "Draft post generated.");
+          this.saveState(cachePath, state);
+        } else {
+          jobStore.completeStep(postDraftStep, {
+            reused: true,
+            postDraftPath: state.outputs.postDraftPath
+          });
+        }
+      } else {
+        jobStore.markSkipped(postDraftStep, {
+          reason: "post draft not requested by the plan"
         });
-        updateStepStatus(state.plan, "draft_post", "completed");
-        appendNote(state, "Draft post generated.");
-        this.saveState(cachePath, state);
       }
 
-      if (hasStep(state.plan, "draft_comments") && !state.outputs.commentsDraftPath) {
-        state.status = "running";
-        updateStepStatus(state.plan, "draft_comments", "running");
-        this.saveState(cachePath, state);
-        commentsDraft = await this.llm.draftAgentComments({
-          instruction: state.input.instruction,
-          plan: state.plan,
-          researchSummary: state.researchSummary,
-          memory: memory?.content,
-          count: 5
+      if (hasStep(state.plan, "draft_comments")) {
+        if (!state.outputs.commentsDraftPath) {
+          state.status = "running";
+          updateStepStatus(state.plan, "draft_comments", "running");
+          this.saveState(cachePath, state);
+          commentsDraft = await jobStore.runStep(
+            commentsDraftStep,
+            async () => this.llm.draftAgentComments({
+              instruction: state.input.instruction,
+              plan: state.plan!,
+              researchSummary: state.researchSummary,
+              memory: memory?.content,
+              count: 5
+            }),
+            {
+              output: (result) => ({
+                commentsCount: result.comments.length
+              })
+            }
+          );
+          updateStepStatus(state.plan, "draft_comments", "completed");
+          appendNote(state, "Draft comments generated.");
+          this.saveState(cachePath, state);
+        } else {
+          jobStore.completeStep(commentsDraftStep, {
+            reused: true,
+            commentsDraftPath: state.outputs.commentsDraftPath
+          });
+        }
+      } else {
+        jobStore.markSkipped(commentsDraftStep, {
+          reason: "comment drafts not requested by the plan"
         });
-        updateStepStatus(state.plan, "draft_comments", "completed");
-        appendNote(state, "Draft comments generated.");
-        this.saveState(cachePath, state);
       }
 
       this.writeDraftFiles(state, postDraft, commentsDraft);
+      this.syncArtifacts(jobStore, state);
+      if (hasStep(state.plan, "draft_post") && state.outputs.postDraftPath) {
+        jobStore.completeStep(postDraftStep, {
+          headline: postDraft?.headline ?? null,
+          postDraftPath: state.outputs.postDraftPath
+        });
+      }
+      if (hasStep(state.plan, "draft_comments") && state.outputs.commentsDraftPath) {
+        jobStore.completeStep(commentsDraftStep, {
+          commentsCount: commentsDraft?.comments.length ?? null,
+          commentsDraftPath: state.outputs.commentsDraftPath
+        });
+      }
 
       updateStepStatus(state.plan, "report", "completed");
-      if (hasStep(state.plan, "review")) {
-        updateStepStatus(state.plan, "review", "pending");
-      }
 
       const hasDrafts = Boolean(state.outputs.postDraftPath || state.outputs.commentsDraftPath);
       state.status = state.plan.approvalRequired || hasDrafts ? "waiting_review" : "completed";
+      if (hasStep(state.plan, "review")) {
+        updateStepStatus(state.plan, "review", state.status === "waiting_review" ? "pending" : "completed");
+      }
       appendNote(
         state,
         state.status === "waiting_review"
@@ -893,10 +1178,51 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           : "Job completed."
       );
 
-      fs.writeFileSync(state.reportPath, renderReport(state), "utf8");
+      await jobStore.runStep(
+        reportStep,
+        async () => {
+          fs.writeFileSync(state.reportPath, renderReport(state), "utf8");
+          return {
+            reportPath: state.reportPath
+          };
+        },
+        {
+          output: (result) => result
+        }
+      );
+      this.syncArtifacts(jobStore, state);
+
+      if (hasStep(state.plan, "review")) {
+        if (state.status === "waiting_review") {
+          jobStore.markPending(reviewStep, {
+            reason: "waiting for human review"
+          });
+        } else {
+          jobStore.completeStep(reviewStep, {
+            reason: "review step completed during the same run"
+          });
+        }
+      } else {
+        jobStore.markSkipped(reviewStep, {
+          reason: "no review step in the plan"
+        });
+      }
+
       this.saveState(cachePath, state);
+      jobStore.setStatus(state.status, {
+        output: {
+          estimatedMinutes: state.plan.estimatedMinutes,
+          ...summarizeResearch(),
+          hasPostDraft: Boolean(state.outputs.postDraftPath),
+          hasCommentsDraft: Boolean(state.outputs.commentsDraftPath),
+          reportPath: state.reportPath
+        },
+        completedAt: state.status === "completed" ? state.updatedAt : null
+      });
 
       return {
+        jobId: state.runId,
+        databasePath: jobStore.databasePath,
         cachePath,
         reportPath: state.reportPath,
         artifactDir: state.artifactDir,
@@ -911,6 +1237,16 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         `Run failed: ${error instanceof Error ? error.message : String(error)}`
       );
       this.saveState(cachePath, state);
+      jobStore.setStatus("failed", {
+        output: {
+          estimatedMinutes: state.plan?.estimatedMinutes ?? null,
+          ...summarizeResearch(),
+          hasPostDraft: Boolean(state.outputs.postDraftPath),
+          hasCommentsDraft: Boolean(state.outputs.commentsDraftPath)
+        },
+        errorMessage: error instanceof Error ? error.stack ?? error.message : String(error),
+        completedAt: state.updatedAt
+      });
       throw error;
     }
   }
