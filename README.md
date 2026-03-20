@@ -23,6 +23,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Cross-source clustering of repeated evidence signals
 - [x] Source quality and freshness scoring for evidence ranking
 - [x] Cross-source contradiction detection for conflicting evidence signals
+- [x] Explicit search, fetch, extract, and synthesize stage modules for the agent pipeline
 - [ ] Multi-hour job execution with automatic recovery
 - [ ] Hundreds-of-pages research per run
 - [ ] Durable database-backed source storage
@@ -48,7 +49,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [ ] The `agent run` flow is still a small research loop, not a deep research engine.
 - [ ] Research breadth is capped by `--max-queries` and `--max-results`, with only a few articles deeply opened per query.
 - [ ] There is no persistent document store; the system writes final artifacts, not a reusable research corpus.
-- [ ] Search, fetch, extract, analyze, and write are still tightly coupled inside task classes.
+- [ ] Search, fetch, extract, and synthesize now live in separate modules, but long-running execution is still orchestrated by one top-level runner.
 - [ ] There is no normalized source model with metadata like canonical URL, published date, author, freshness, trust score, or extraction status.
 - [ ] There is no long-running orchestration layer for retries, budgets, queues, backoff, scheduling, or concurrency control.
 - [ ] There is no workflow abstraction yet; use cases are hardcoded into specific tasks.
@@ -253,7 +254,7 @@ This is the execution checklist. Items already present in the repo are marked `[
 
 ### Phase 3: Split Search, Fetch, And Extraction
 
-- [ ] Refactor `agent-runner` into composable pipeline stages
+- [x] Refactor `agent-runner` into composable pipeline stages
 - [ ] Create a search adapter interface
 - [ ] Create a fetcher interface
 - [ ] Create an extractor interface
@@ -317,7 +318,7 @@ If we start implementation after validating this roadmap, the highest-leverage o
 
 - [ ] Create the job and step schema
 - [ ] Add SQLite persistence
-- [ ] Refactor `agent-runner` into staged pipeline modules
+- [x] Refactor `agent-runner` into staged pipeline modules
 - [ ] Save fetched documents and extracted page records
 - [ ] Build the first reusable workflow template: `android-opportunity`
 - [ ] Add evidence-backed report generation
