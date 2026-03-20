@@ -709,17 +709,53 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                 try {
                   const fetchedBatch = await jobStore.runStep(
                     fetchStep,
-                    async () =>
-                      fetchStage.fetchResultBatch(
-                        workItem.results,
-                        workItem.fetchCursor,
-                        state.input.fetchBatchSize
-                      ),
+                    async () => {
+                      const startIndex = workItem.fetchCursor;
+                      const batchSlice = workItem.results.slice(
+                        startIndex,
+                        startIndex + state.input.fetchBatchSize
+                      );
+                      const reusedBatch = jobStore.reuseStoredSearchResults(batchSlice, {
+                        maxAgeDays: 30
+                      });
+                      const pendingBrowserResults = reusedBatch.results.filter(
+                        (result) => !result.page && !result.reviewStatus
+                      );
+                      const fetchedBrowserResults =
+                        pendingBrowserResults.length > 0
+                          ? await fetchStage.fetchResults(pendingBrowserResults)
+                          : [];
+                      const fetchedByUrl = new Map(
+                        fetchedBrowserResults.map((entry) => [entry.url, entry])
+                      );
+                      const mergedSlice = reusedBatch.results.map(
+                        (entry) => fetchedByUrl.get(entry.url) ?? entry
+                      );
+                      const results = [
+                        ...workItem.results.slice(0, startIndex),
+                        ...mergedSlice,
+                        ...workItem.results.slice(startIndex + batchSlice.length)
+                      ];
+
+                      return {
+                        results,
+                        startIndex,
+                        fetchedCount: batchSlice.length,
+                        remainingCount: Math.max(
+                          0,
+                          workItem.results.length - startIndex - batchSlice.length
+                        ),
+                        reusedCount: reusedBatch.reusedCount,
+                        browserFetchCount: pendingBrowserResults.length
+                      };
+                    },
                     {
                       output: (result) => ({
                         startIndex: result.startIndex,
                         fetchedCount: result.fetchedCount,
                         remainingCount: result.remainingCount,
+                        reusedCount: result.reusedCount,
+                        browserFetchCount: result.browserFetchCount,
                         ...summarizeFetchedResults(
                           result.results.slice(
                             result.startIndex,

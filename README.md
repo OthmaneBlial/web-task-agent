@@ -31,7 +31,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Multi-hour job execution with automatic recovery
 - [x] Hundreds-of-pages research per run
 - [x] Durable database-backed source storage
-- [ ] Source deduplication and canonicalization across runs
+- [x] Source deduplication and canonicalization across runs
 - [ ] Evidence graph linking sources, claims, entities, and outputs
 - [ ] Workflow templates for real business research jobs
 - [ ] Scheduler, queue, or worker mode
@@ -85,7 +85,7 @@ That platform should be able to:
 - [ ] Evidence first: every important conclusion should point back to captured sources.
 - [x] Long-running by design: every workflow should survive restarts, failures, and partial completion.
 - [ ] Separation of concerns: search, fetch, extract, analyze, synthesize, and publish should be independent stages.
-- [ ] Reusability: once a source is fetched and parsed, later workflows should be able to reuse it.
+- [x] Reusability: once a source is fetched and parsed, later workflows should be able to reuse it.
 - [ ] Human approval gates: publishing-oriented tasks should stop at review.
 - [ ] Honest freshness: time-sensitive outputs should record when the research was collected.
 

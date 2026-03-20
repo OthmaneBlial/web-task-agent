@@ -119,6 +119,12 @@ function canonicalizeUrl(rawUrl: string): string {
   parsed.hash = "";
   parsed.protocol = parsed.protocol.toLowerCase();
   parsed.hostname = parsed.hostname.toLowerCase();
+  if (
+    (parsed.protocol === "http:" && parsed.port === "80") ||
+    (parsed.protocol === "https:" && parsed.port === "443")
+  ) {
+    parsed.port = "";
+  }
   const trackingParams = [
     "utm_source",
     "utm_medium",
@@ -150,7 +156,15 @@ function canonicalizeUrl(rawUrl: string): string {
   }
 
   if (parsed.pathname.length > 1) {
-    parsed.pathname = parsed.pathname.replace(/\/+$/g, "");
+    parsed.pathname = parsed.pathname
+      .replace(/\/{2,}/g, "/")
+      .replace(/\/index\.(html?|php)$/i, "/")
+      .replace(/\/amp$/i, "")
+      .replace(/\/+$/g, "");
+  }
+
+  if (!parsed.pathname) {
+    parsed.pathname = "/";
   }
 
   return parsed.toString();
@@ -811,6 +825,17 @@ function initializeSchema(database: DatabaseSync): void {
       metadata_json TEXT NOT NULL DEFAULT '{}'
     );
 
+    CREATE TABLE IF NOT EXISTS source_aliases (
+      id TEXT PRIMARY KEY,
+      source_id TEXT NOT NULL,
+      raw_url TEXT NOT NULL UNIQUE,
+      canonical_url TEXT NOT NULL,
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      FOREIGN KEY(source_id) REFERENCES sources(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS job_sources (
       id TEXT PRIMARY KEY,
       job_id TEXT NOT NULL,
@@ -917,6 +942,8 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_job_artifacts_job_id ON job_artifacts(job_id);
     CREATE INDEX IF NOT EXISTS idx_research_queries_job_id ON research_queries(job_id, searched_at);
     CREATE INDEX IF NOT EXISTS idx_sources_site ON sources(site);
+    CREATE INDEX IF NOT EXISTS idx_source_aliases_source_id ON source_aliases(source_id, last_seen_at);
+    CREATE INDEX IF NOT EXISTS idx_source_aliases_canonical_url ON source_aliases(canonical_url);
     CREATE INDEX IF NOT EXISTS idx_job_sources_job_id ON job_sources(job_id, rank);
     CREATE INDEX IF NOT EXISTS idx_documents_source_id ON documents(source_id, captured_at);
     CREATE INDEX IF NOT EXISTS idx_documents_canonical_url ON documents(canonical_url);
@@ -1464,6 +1491,127 @@ export class JobStore {
     );
   }
 
+  private upsertSourceAlias(input: {
+    sourceId: string;
+    rawUrl: string;
+    canonicalUrl: string;
+    timestamp: string;
+    metadata?: unknown;
+  }): void {
+    const normalizedRawUrl = input.rawUrl.trim();
+    if (!normalizedRawUrl) {
+      return;
+    }
+
+    this.db.prepare(`
+      INSERT INTO source_aliases (
+        id, source_id, raw_url, canonical_url, first_seen_at, last_seen_at, metadata_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(raw_url) DO UPDATE SET
+        source_id = excluded.source_id,
+        canonical_url = excluded.canonical_url,
+        last_seen_at = excluded.last_seen_at,
+        metadata_json = excluded.metadata_json
+    `).run(
+      `alias_${hashValue(normalizedRawUrl).slice(0, 24)}`,
+      input.sourceId,
+      normalizedRawUrl,
+      input.canonicalUrl,
+      input.timestamp,
+      input.timestamp,
+      serializeJson(input.metadata)
+    );
+  }
+
+  reuseStoredSearchResults(
+    results: AgentSearchResult[],
+    options?: {
+      maxAgeDays?: number;
+    }
+  ): { results: AgentSearchResult[]; reusedCount: number } {
+    const maxAgeDays = Math.max(1, Math.round(options?.maxAgeDays ?? 30));
+    const cutoffTimestamp = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
+    const lookupStatement = this.db.prepare(`
+      SELECT
+        s.id AS source_id,
+        s.canonical_url AS canonical_url,
+        d.id AS document_id,
+        d.url AS document_url,
+        d.title AS document_title,
+        d.description AS document_description,
+        d.h1 AS document_h1,
+        d.headings_json AS headings_json,
+        d.paragraphs_json AS paragraphs_json,
+        d.captured_at AS captured_at,
+        d.metadata_json AS metadata_json
+      FROM sources s
+      LEFT JOIN source_aliases sa ON sa.source_id = s.id
+      LEFT JOIN documents d ON d.id = (
+        SELECT d2.id
+        FROM documents d2
+        WHERE d2.source_id = s.id
+        ORDER BY d2.captured_at DESC
+        LIMIT 1
+      )
+      WHERE (s.canonical_url = ? OR sa.raw_url = ?)
+        AND d.id IS NOT NULL
+        AND d.captured_at >= ?
+      ORDER BY d.captured_at DESC
+      LIMIT 1
+    `);
+
+    let reusedCount = 0;
+    const hydrated = results.map((result) => {
+      if (result.page || result.reviewStatus) {
+        return result;
+      }
+
+      const canonicalUrl = canonicalizeUrl(result.url);
+      const row = lookupStatement.get(canonicalUrl, result.url, cutoffTimestamp) as
+        | Record<string, unknown>
+        | undefined;
+
+      if (!row || !row.document_id) {
+        return result;
+      }
+
+      const metadata = parseJsonValue<Record<string, unknown>>(row.metadata_json, {});
+      const storedReviewStatus: AgentSearchResult["reviewStatus"] =
+        metadata.reviewStatus === "read" ||
+        metadata.reviewStatus === "skipped" ||
+        metadata.reviewStatus === "error"
+          ? metadata.reviewStatus
+          : undefined;
+      reusedCount += 1;
+
+      return {
+        ...result,
+        page: {
+          title: String(row.document_title ?? result.title),
+          url: String(row.document_url ?? result.url),
+          description: String(row.document_description ?? ""),
+          h1: row.document_h1 ? String(row.document_h1) : null,
+          headings: parseJsonValue<string[]>(row.headings_json, []),
+          paragraphs: parseJsonValue<string[]>(row.paragraphs_json, []),
+          capturedAt: String(row.captured_at ?? nowIso())
+        },
+        reviewStatus: storedReviewStatus ?? "read",
+        dwellSeconds:
+          typeof metadata.dwellSeconds === "number"
+            ? Number(metadata.dwellSeconds)
+            : result.dwellSeconds,
+        skipReason:
+          (typeof metadata.skipReason === "string" ? metadata.skipReason : undefined) ??
+          "reused stored snapshot"
+      };
+    });
+
+    return {
+      results: hydrated,
+      reusedCount
+    };
+  }
+
   persistAgentResearchResult(
     research: AgentResearchResult,
     options?: PersistAgentResearchOptions
@@ -1561,6 +1709,29 @@ export class JobStore {
           searchProvider
         })
       );
+
+      this.upsertSourceAlias({
+        sourceId,
+        rawUrl: resultUrl,
+        canonicalUrl,
+        timestamp: research.searchedAt,
+        metadata: {
+          kind: "search_result",
+          searchProvider
+        }
+      });
+      if (result.page?.url) {
+        this.upsertSourceAlias({
+          sourceId,
+          rawUrl: result.page.url,
+          canonicalUrl,
+          timestamp: result.page.capturedAt,
+          metadata: {
+            kind: "page_digest",
+            searchProvider
+          }
+        });
+      }
 
       this.db.prepare(`
         INSERT INTO job_sources (
