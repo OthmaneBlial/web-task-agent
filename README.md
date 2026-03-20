@@ -34,7 +34,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Source deduplication and canonicalization across runs
 - [x] Evidence graph linking sources, claims, entities, and outputs
 - [x] Workflow templates for real business research jobs
-- [ ] Scheduler, queue, or worker mode
+- [x] Scheduler, queue, or worker mode
 - [ ] API and dashboard for managing runs
 
 ## Deep Analysis Of The Current Codebase
@@ -220,7 +220,11 @@ npm run start -- workflow run article-research \
   --max-results 25
 
 # Continue a stopped job
-npm run start -- job resume --id 20260320_ab12cd
+npm run start -- workflow enqueue article-research \
+  --topic "browser automation with Lightpanda and CDP"
+
+# Process queued work
+npm run start -- worker run --once
 
 # Inspect evidence collected for a job
 npm run start -- job inspect --id 20260320_ab12cd
