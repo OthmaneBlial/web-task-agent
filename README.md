@@ -20,6 +20,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Basic extraction persistence for entities, themes, complaints, feature requests, and claims
 - [x] Agent research summary generation from persisted evidence bundles
 - [x] Evidence references in research summaries and reports
+- [x] Cross-source clustering of repeated evidence signals
 - [ ] Multi-hour job execution with automatic recovery
 - [ ] Hundreds-of-pages research per run
 - [ ] Durable database-backed source storage
@@ -271,7 +272,7 @@ This is the execution checklist. Items already present in the repo are marked `[
 - [x] Extract basic claims, entities, complaints, feature requests, and themes from agent research documents
 - [x] Link persisted extraction items back to source documents
 - [x] Store confidence and extraction method metadata
-- [ ] Deduplicate repeated findings across sources
+- [x] Deduplicate repeated findings across sources
 - [x] Make research summaries cite supporting evidence ids or links
 
 ### Phase 6: Improve Analysis Quality

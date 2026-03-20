@@ -295,16 +295,31 @@ export interface AgentEvidenceHighlights {
   claims: string[];
 }
 
+export interface AgentEvidenceCluster {
+  id: string;
+  kind: AgentEvidenceExtraction["kind"];
+  label: string;
+  sourceCount: number;
+  evidenceCount: number;
+  averageConfidence: number;
+  sourceIds: string[];
+  evidenceIds: string[];
+  queries: string[];
+  supportingValues: string[];
+}
+
 export interface AgentEvidenceBundle {
   counts: {
     queries: number;
     sources: number;
     documents: number;
     extractions: number;
+    clusters: number;
   };
   queries: AgentEvidenceQuery[];
   sources: AgentEvidenceSource[];
   highlights: AgentEvidenceHighlights;
+  clusters: AgentEvidenceCluster[];
 }
 
 export interface AgentPostDraft {

@@ -214,6 +214,7 @@ function renderEvidenceSection(evidence: AgentEvidenceBundle): string {
     `Sources: ${evidence.counts.sources}`,
     `Documents: ${evidence.counts.documents}`,
     `Extractions: ${evidence.counts.extractions}`,
+    `Clusters: ${evidence.counts.clusters}`,
     ""
   ];
 
@@ -241,6 +242,30 @@ function renderEvidenceSection(evidence: AgentEvidenceBundle): string {
     lines.push("");
   }
 
+  return lines.join("\n").trim();
+}
+
+function renderClusterSection(evidence: AgentEvidenceBundle): string {
+  if (evidence.clusters.length === 0) {
+    return "";
+  }
+
+  const lines = ["## Repeated Evidence Clusters", ""];
+
+  for (const cluster of evidence.clusters.slice(0, 12)) {
+    const supportMeta =
+      `${cluster.kind} | ${cluster.sourceCount} sources | ${cluster.evidenceCount} evidence items | confidence ${(cluster.averageConfidence * 100).toFixed(0)}%`;
+    lines.push(`- [${cluster.id}] ${cluster.label}`);
+    lines.push(`  Support: ${supportMeta}`);
+    if (cluster.supportingValues.length > 0) {
+      lines.push(`  Variants: ${cluster.supportingValues.slice(0, 3).join(" | ")}`);
+    }
+    if (cluster.evidenceIds.length > 0) {
+      lines.push(`  Evidence IDs: ${cluster.evidenceIds.slice(0, 4).join(", ")}`);
+    }
+  }
+
+  lines.push("");
   return lines.join("\n").trim();
 }
 
@@ -441,6 +466,10 @@ function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundle | nul
     }
 
     lines.push("");
+  }
+
+  if (evidence && evidence.clusters.length > 0) {
+    lines.push(renderClusterSection(evidence), "");
   }
 
   if (postDraft) {

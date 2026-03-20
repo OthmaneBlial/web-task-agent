@@ -609,6 +609,17 @@ export class LlmService {
       counts: input.evidence.counts,
       queries: input.evidence.queries,
       highlights: input.evidence.highlights,
+      clusters: input.evidence.clusters.slice(0, 24).map((cluster) => ({
+        id: cluster.id,
+        kind: cluster.kind,
+        label: cluster.label,
+        sourceCount: cluster.sourceCount,
+        evidenceCount: cluster.evidenceCount,
+        averageConfidence: cluster.averageConfidence,
+        queries: cluster.queries,
+        evidenceIds: cluster.evidenceIds.slice(0, 6),
+        supportingValues: cluster.supportingValues.slice(0, 4)
+      })),
       sources: input.evidence.sources.slice(0, 20).map((source) => ({
         sourceId: source.sourceId,
         query: source.query,
@@ -634,6 +645,7 @@ export class LlmService {
       "You synthesize web research from a persisted evidence bundle.",
       "Prefer repeated patterns, concrete findings, and useful angles grounded in the extracted evidence.",
       "Treat persisted queries, sources, document snapshots, and extraction rows as the only source of truth.",
+      "Use clustered repeated evidence as the primary signal when multiple sources support the same point.",
       "You must reference evidence ids from the bundle for every finding and angle."
     ].join(" ");
 
@@ -644,6 +656,7 @@ export class LlmService {
       "Rules:",
       "- Use only the supplied persisted evidence bundle.",
       "- Prefer findings backed by repeated complaints, requests, themes, claims, or multiple sources.",
+      "- Prefer clusters with higher sourceCount when choosing the most important repeated findings.",
       "- Every finding and every content angle must include 1 to 3 evidence ids from the bundle.",
       "- Prefer extraction ids when possible. Use source ids when the source itself is the best evidence unit.",
       "- Do not invent ids. Use only ids that exist in the supplied evidence bundle.",

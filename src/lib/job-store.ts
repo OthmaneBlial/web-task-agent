@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import type {
   AgentEvidenceBundle,
+  AgentEvidenceCluster,
   AgentEvidenceExtraction,
   AgentEvidenceQuery,
   AgentEvidenceSource,
@@ -246,6 +247,106 @@ function uniqueValues(values: string[], limit: number): string[] {
   }
 
   return output;
+}
+
+const CLUSTER_STOP_WORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "that",
+  "this",
+  "from",
+  "into",
+  "have",
+  "has",
+  "had",
+  "they",
+  "them",
+  "their",
+  "about",
+  "because",
+  "would",
+  "could",
+  "should",
+  "more",
+  "than",
+  "what",
+  "when",
+  "where",
+  "which",
+  "users",
+  "many",
+  "some",
+  "current",
+  "using",
+  "need",
+  "needs"
+]);
+
+function tokenizeClusterText(text: string): string[] {
+  return normalizeText(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !CLUSTER_STOP_WORDS.has(token));
+}
+
+function buildClusterSignature(text: string, kind: AgentEvidenceExtraction["kind"]): string {
+  const tokens = uniqueValues(tokenizeClusterText(text), 6).sort();
+  if (tokens.length === 0) {
+    return normalizeExtractionValue(text);
+  }
+
+  if (kind === "entity" || kind === "theme") {
+    return tokens.slice(0, Math.min(4, tokens.length)).join(" ");
+  }
+
+  return tokens.slice(0, Math.min(6, tokens.length)).join(" ");
+}
+
+function jaccardSimilarity(left: string[], right: string[]): number {
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  if (leftSet.size === 0 || rightSet.size === 0) {
+    return 0;
+  }
+
+  let intersection = 0;
+  for (const token of leftSet) {
+    if (rightSet.has(token)) {
+      intersection += 1;
+    }
+  }
+
+  return intersection / (leftSet.size + rightSet.size - intersection);
+}
+
+function clusterThreshold(kind: AgentEvidenceExtraction["kind"]): number {
+  switch (kind) {
+    case "entity":
+      return 0.95;
+    case "theme":
+      return 0.65;
+    case "complaint":
+    case "feature_request":
+    case "claim":
+      return 0.52;
+    default:
+      return 0.65;
+  }
+}
+
+function chooseClusterLabel(values: string[]): string {
+  const sorted = [...values].sort((left, right) => {
+    if (left.length !== right.length) {
+      return left.length - right.length;
+    }
+    return left.localeCompare(right);
+  });
+
+  return sorted[0] ?? "";
 }
 
 function extractCandidateEntities(text: string): string[] {
@@ -1186,27 +1287,133 @@ export class JobStore {
       };
     });
 
+    interface ClusterItem {
+      extraction: AgentEvidenceExtraction;
+      source: AgentEvidenceSource;
+      tokens: string[];
+      signature: string;
+    }
+
+    interface ClusterWorking {
+      kind: AgentEvidenceExtraction["kind"];
+      items: ClusterItem[];
+      tokenSet: Set<string>;
+      signature: string;
+    }
+
+    const clusterItems: ClusterItem[] = [];
+    for (const source of sources) {
+      for (const extraction of source.extractions) {
+        clusterItems.push({
+          extraction,
+          source,
+          tokens: tokenizeClusterText(extraction.value),
+          signature: buildClusterSignature(extraction.value, extraction.kind)
+        });
+      }
+    }
+
+    const clusterGroups: ClusterWorking[] = [];
+    for (const item of clusterItems) {
+      const threshold = clusterThreshold(item.extraction.kind);
+      let bestCluster: ClusterWorking | null = null;
+      let bestScore = 0;
+
+      for (const cluster of clusterGroups) {
+        if (cluster.kind !== item.extraction.kind) {
+          continue;
+        }
+
+        const sameSignature = cluster.signature === item.signature && item.signature.length > 0;
+        const similarity = jaccardSimilarity(item.tokens, Array.from(cluster.tokenSet));
+        const leftValue = normalizeExtractionValue(item.extraction.value);
+        const representative = normalizeExtractionValue(cluster.items[0]?.extraction.value ?? "");
+        const containsMatch =
+          (leftValue.length > 0 && representative.includes(leftValue)) ||
+          (representative.length > 0 && leftValue.includes(representative));
+        const score = sameSignature ? 1 : containsMatch ? Math.max(similarity, 0.9) : similarity;
+
+        if (score >= threshold && score > bestScore) {
+          bestScore = score;
+          bestCluster = cluster;
+        }
+      }
+
+      if (bestCluster) {
+        bestCluster.items.push(item);
+        for (const token of item.tokens) {
+          bestCluster.tokenSet.add(token);
+        }
+      } else {
+        clusterGroups.push({
+          kind: item.extraction.kind,
+          items: [item],
+          tokenSet: new Set(item.tokens),
+          signature: item.signature
+        });
+      }
+    }
+
+    const clusters: AgentEvidenceCluster[] = clusterGroups
+      .map((cluster, index) => {
+        const sourceIds = Array.from(new Set(cluster.items.map((item) => item.source.sourceId)));
+        const evidenceIds = Array.from(new Set(cluster.items.map((item) => item.extraction.id)));
+        const queries = Array.from(new Set(cluster.items.map((item) => item.source.query)));
+        const supportingValues = uniqueValues(
+          cluster.items.map((item) => item.extraction.value),
+          5
+        );
+        const label = chooseClusterLabel(supportingValues);
+        const averageConfidence =
+          cluster.items.reduce((total, item) => total + item.extraction.confidence, 0) /
+          Math.max(1, cluster.items.length);
+
+        return {
+          id: `cluster_${cluster.kind}_${String(index + 1).padStart(3, "0")}`,
+          kind: cluster.kind,
+          label,
+          sourceCount: sourceIds.length,
+          evidenceCount: evidenceIds.length,
+          averageConfidence: Number(averageConfidence.toFixed(2)),
+          sourceIds,
+          evidenceIds,
+          queries,
+          supportingValues
+        };
+      })
+      .sort((left, right) => {
+        if (right.sourceCount !== left.sourceCount) {
+          return right.sourceCount - left.sourceCount;
+        }
+        if (right.evidenceCount !== left.evidenceCount) {
+          return right.evidenceCount - left.evidenceCount;
+        }
+        if (right.averageConfidence !== left.averageConfidence) {
+          return right.averageConfidence - left.averageConfidence;
+        }
+        return left.label.localeCompare(right.label);
+      });
+
+    const clusteredHighlights = (kind: AgentEvidenceExtraction["kind"]) =>
+      uniqueValues(
+        clusters
+          .filter((cluster) => cluster.kind === kind)
+          .sort((left, right) => {
+            if (right.sourceCount !== left.sourceCount) {
+              return right.sourceCount - left.sourceCount;
+            }
+            return right.averageConfidence - left.averageConfidence;
+          })
+          .map((cluster) => cluster.label),
+        8
+      );
+
     const highlights = {
-      entities: uniqueValues(
-        extractionRows.filter((row) => row.kind === "entity").map((row) => String(row.value ?? "")),
-        8
-      ),
-      themes: uniqueValues(
-        extractionRows.filter((row) => row.kind === "theme").map((row) => String(row.value ?? "")),
-        8
-      ),
-      complaints: uniqueValues(
-        extractionRows.filter((row) => row.kind === "complaint").map((row) => String(row.value ?? "")),
-        8
-      ),
-      featureRequests: uniqueValues(
-        extractionRows.filter((row) => row.kind === "feature_request").map((row) => String(row.value ?? "")),
-        8
-      ),
-      claims: uniqueValues(
-        extractionRows.filter((row) => row.kind === "claim").map((row) => String(row.value ?? "")),
-        8
-      )
+      entities: clusteredHighlights("entity"),
+      themes: clusteredHighlights("theme"),
+      complaints: clusteredHighlights("complaint"),
+      featureRequests: clusteredHighlights("feature_request"),
+      claims: clusteredHighlights("claim")
     };
 
     return {
@@ -1214,11 +1421,13 @@ export class JobStore {
         queries: queries.length,
         sources: sources.length,
         documents: sources.filter((source) => Boolean(source.documentId)).length,
-        extractions: extractionRows.length
+        extractions: extractionRows.length,
+        clusters: clusters.length
       },
       queries,
       sources,
-      highlights
+      highlights,
+      clusters
     };
   }
 
