@@ -13,9 +13,11 @@ import { ensureDebuggerReady } from "../lib/cdp";
 import { loadAgentMemory } from "../lib/agent-memory";
 import { JobStore } from "../lib/job-store";
 import { LlmService } from "../lib/llm";
+import { linkQueuedJobToJob } from "../lib/job-queue";
 import type {
   AgentCommentsDraft,
   AgentEvidenceBundle,
+  JobControlAction,
   AgentPlan,
   AgentResearchResult,
   AgentRunOptions,
@@ -73,6 +75,12 @@ interface AgentTaskResult extends TaskJobInfo {
   artifactDir: string;
   status: AgentRunState["status"];
   estimatedMinutes: number;
+}
+
+class JobControlSignal extends Error {
+  constructor(readonly action: JobControlAction) {
+    super(`job control requested: ${action}`);
+  }
 }
 
 function defaultReportPath(runId: string): string {
@@ -223,6 +231,12 @@ function hasStep(plan: AgentPlan | null, kind: AgentStepKind): boolean {
 
 export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> {
   private readonly llm = new LlmService();
+  private jobEventLogger: ((message: string) => void) | null = null;
+
+  protected override log(message: string): void {
+    super.log(message);
+    this.jobEventLogger?.(message);
+  }
 
   private writePipelineManifest(state: AgentRunState): void {
     if (!state.outputs.pipelineManifestPath) {
@@ -273,6 +287,26 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       fs.writeFileSync(commentsPath, `${lines.join("\n").trim()}\n`, "utf8");
       state.outputs.commentsDraftPath = commentsPath;
     }
+  }
+
+  private checkpointRequestedControl(
+    jobStore: JobStore,
+    state: AgentRunState,
+    cachePath: string
+  ): void {
+    const pending = jobStore.getPendingControlAction();
+    if (!pending) {
+      return;
+    }
+
+    appendNote(
+      state,
+      pending.action === "pause"
+        ? "Pause requested by operator. Saving progress and pausing the job."
+        : "Cancel requested by operator. Saving progress and stopping the job."
+    );
+    this.saveState(cachePath, state);
+    throw new JobControlSignal(pending.action);
   }
 
   private syncArtifacts(jobStore: JobStore, state: AgentRunState): void {
@@ -358,6 +392,17 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         researchQueriesCompleted: state.research.length
       }
     });
+    this.jobEventLogger = (message) => {
+      jobStore.appendRunEvent("log", message, {
+        source: "agent-runner"
+      });
+    };
+    if (this.options.queuedJobId) {
+      linkQueuedJobToJob({
+        queueId: this.options.queuedJobId,
+        jobId: state.runId
+      });
+    }
     jobStore.registerArtifact("cache", "cache_state", cachePath, {
       task: "agent"
     });
@@ -556,6 +601,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         },
         output: buildJobOutput()
       });
+      this.checkpointRequestedControl(jobStore, state, cachePath);
       heartbeatTimer = setInterval(() => {
         try {
           const lease = jobStore.heartbeat({
@@ -572,6 +618,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       heartbeatTimer.unref?.();
 
       if (!state.plan) {
+        this.checkpointRequestedControl(jobStore, state, cachePath);
         state.status = "planning";
         appendNote(state, "Planning the job.");
         this.saveState(cachePath, state);
@@ -657,6 +704,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       }
 
       if (state.plan.researchQueries.length > 0) {
+        this.checkpointRequestedControl(jobStore, state, cachePath);
         state.status = "running";
         updateStepStatus(state.plan, "research", "running");
         this.saveState(cachePath, state);
@@ -673,9 +721,11 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         if (pendingWorkItems.length > 0) {
           for (const seedWorkItem of pendingWorkItems) {
             let workItem = seedWorkItem;
+            this.checkpointRequestedControl(jobStore, state, cachePath);
             this.log(`researching: ${workItem.query}`);
 
             while (workItem.nextStage !== "completed") {
+              this.checkpointRequestedControl(jobStore, state, cachePath);
               if (workItem.nextStage === "search") {
                 workItem = markWorkItemStageRunning(workItem, "search");
                 state.pipeline = upsertWorkItem(state.pipeline, workItem);
@@ -898,6 +948,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       evidenceBundle = evidenceBundle ?? jobStore.getAgentEvidenceBundle();
 
       if (evidenceBundle.counts.sources > 0) {
+        this.checkpointRequestedControl(jobStore, state, cachePath);
         if (shouldGenerateResearchSummary(state.researchSummary, evidenceBundle)) {
           state.status = "running";
           const summary = await jobStore.runStep(
@@ -963,6 +1014,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       let commentsDraft: AgentCommentsDraft | null = null;
 
       if (hasStep(state.plan, "draft_post")) {
+        this.checkpointRequestedControl(jobStore, state, cachePath);
         if (!state.outputs.postDraftPath) {
           state.status = "running";
           updateStepStatus(state.plan, "draft_post", "running");
@@ -998,6 +1050,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       }
 
       if (hasStep(state.plan, "draft_comments")) {
+        this.checkpointRequestedControl(jobStore, state, cachePath);
         if (!state.outputs.commentsDraftPath) {
           state.status = "running";
           updateStepStatus(state.plan, "draft_comments", "running");
@@ -1072,6 +1125,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
       updateStepStatus(state.plan, "report", "running");
       this.saveState(cachePath, state);
+      this.checkpointRequestedControl(jobStore, state, cachePath);
 
       const hasDrafts = Boolean(state.outputs.postDraftPath || state.outputs.commentsDraftPath);
       state.status = state.plan.approvalRequired || hasDrafts ? "waiting_review" : "completed";
@@ -1144,6 +1198,43 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         estimatedMinutes: state.plan.estimatedMinutes
       };
     } catch (error) {
+      if (error instanceof JobControlSignal) {
+        const nextStatus = error.action === "pause" ? "paused" : "cancelled";
+        state.status = nextStatus;
+        appendNote(
+          state,
+          nextStatus === "paused"
+            ? "Job paused. Resume it later from the queue or dashboard."
+            : "Job cancelled by operator."
+        );
+        this.saveState(cachePath, state);
+        jobStore.clearControlRequest();
+        jobStore.appendRunEvent(
+          "control_applied",
+          nextStatus === "paused" ? "Job paused at a checkpoint" : "Job cancelled at a checkpoint",
+          {
+            action: error.action
+          }
+        );
+        jobStore.setStatus(nextStatus, {
+          output: {
+            ...buildJobOutput(),
+            hasPostDraft: Boolean(state.outputs.postDraftPath),
+            hasCommentsDraft: Boolean(state.outputs.commentsDraftPath)
+          },
+          completedAt: nextStatus === "cancelled" ? state.updatedAt : null
+        });
+        return {
+          jobId: state.runId,
+          databasePath: jobStore.databasePath,
+          cachePath,
+          reportPath: state.reportPath,
+          artifactDir: state.artifactDir,
+          status: state.status,
+          estimatedMinutes: state.plan?.estimatedMinutes ?? 0
+        };
+      }
+
       state.status = "failed";
       updateStepStatus(state.plan, "report", "failed");
       appendNote(
@@ -1162,6 +1253,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       });
       throw error;
     } finally {
+      this.jobEventLogger = null;
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
       }

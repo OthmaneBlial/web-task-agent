@@ -3,10 +3,16 @@ import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
-import type { AgentRunOptions } from "../types";
+import type { AgentRunOptions, QueueControlAction } from "../types";
 import { resolveJobDatabasePath } from "./job-store";
 
-type QueuedJobStatus = "queued" | "running" | "completed" | "failed";
+type QueuedJobStatus =
+  | "queued"
+  | "running"
+  | "paused"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export interface QueuedAgentJobPayload {
   taskType: "agent";
@@ -26,6 +32,9 @@ export interface QueuedJobRecord {
   maxAttempts: number;
   runAfter: string;
   leaseExpiresAt: string | null;
+  jobId: string | null;
+  controlAction: "pause" | "cancel" | null;
+  controlRequestedAt: string | null;
   payload: QueuedAgentJobPayload;
   lastError: string | null;
   createdAt: string;
@@ -95,6 +104,24 @@ function addSecondsToIso(input: string, seconds: number): string {
   return new Date(Date.parse(input) + seconds * 1000).toISOString();
 }
 
+function ensureTableColumns(
+  db: DatabaseSync,
+  tableName: string,
+  columns: Array<{
+    name: string;
+    definition: string;
+  }>
+): void {
+  const rows = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<Record<string, unknown>>;
+  const existing = new Set(rows.map((row) => String(row.name ?? "")));
+  for (const column of columns) {
+    if (existing.has(column.name)) {
+      continue;
+    }
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${column.name} ${column.definition}`);
+  }
+}
+
 function getQueueDatabase(customPath?: string): { db: DatabaseSync; databasePath: string } {
   const databasePath = resolveJobDatabasePath(customPath);
   ensureParentDir(databasePath);
@@ -118,6 +145,9 @@ function getQueueDatabase(customPath?: string): { db: DatabaseSync; databasePath
       payload_json TEXT NOT NULL,
       result_json TEXT NOT NULL DEFAULT '{}',
       last_error TEXT,
+      job_id TEXT,
+      control_action TEXT,
+      control_requested_at TEXT,
       leased_by TEXT,
       leased_at TEXT,
       lease_expires_at TEXT,
@@ -128,7 +158,13 @@ function getQueueDatabase(customPath?: string): { db: DatabaseSync; databasePath
 
     CREATE INDEX IF NOT EXISTS idx_queued_jobs_status ON queued_jobs(status, run_after);
     CREATE INDEX IF NOT EXISTS idx_queued_jobs_lease_expires_at ON queued_jobs(lease_expires_at);
+    CREATE INDEX IF NOT EXISTS idx_queued_jobs_job_id ON queued_jobs(job_id, updated_at);
   `);
+  ensureTableColumns(db, "queued_jobs", [
+    { name: "job_id", definition: "TEXT" },
+    { name: "control_action", definition: "TEXT" },
+    { name: "control_requested_at", definition: "TEXT" }
+  ]);
 
   return {
     db,
@@ -150,6 +186,12 @@ function mapQueuedJob(row: Record<string, unknown>): QueuedJobRecord {
     maxAttempts: Number(row.max_attempts ?? 3),
     runAfter: String(row.run_after ?? ""),
     leaseExpiresAt: row.lease_expires_at ? String(row.lease_expires_at) : null,
+    jobId: row.job_id ? String(row.job_id) : null,
+    controlAction:
+      row.control_action === "pause" || row.control_action === "cancel"
+        ? (row.control_action as "pause" | "cancel")
+        : null,
+    controlRequestedAt: row.control_requested_at ? String(row.control_requested_at) : null,
     payload: parseQueuedPayload(row.payload_json, {
       forceResume: attempts > 1
     }),
@@ -162,6 +204,7 @@ function mapQueuedJob(row: Record<string, unknown>): QueuedJobRecord {
 export function enqueueQueuedAgentJob(input: {
   databasePath?: string;
   payload: QueuedAgentJobPayload;
+  jobId?: string | null;
   priority?: number;
   maxAttempts?: number;
   delaySeconds?: number;
@@ -194,8 +237,8 @@ export function enqueueQueuedAgentJob(input: {
   db.prepare(`
     INSERT INTO queued_jobs (
       id, task_type, mode, label, status, priority, attempts, max_attempts,
-      run_after, payload_json, result_json, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, 'queued', ?, 0, ?, ?, ?, '{}', ?, ?)
+      run_after, payload_json, result_json, job_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, 'queued', ?, 0, ?, ?, ?, '{}', ?, ?, ?)
   `).run(
     queueId,
     normalizedPayload.taskType,
@@ -205,6 +248,7 @@ export function enqueueQueuedAgentJob(input: {
     Math.max(1, Math.min(10, input.maxAttempts ?? 3)),
     addSecondsToIso(timestamp, Math.max(0, input.delaySeconds ?? 0)),
     serializeJson(normalizedPayload),
+    input.jobId ?? null,
     timestamp,
     timestamp
   );
@@ -220,6 +264,7 @@ export function enqueueQueuedAgentJob(input: {
 export function listQueuedJobs(options?: {
   databasePath?: string;
   status?: QueuedJobStatus;
+  jobId?: string;
   limit?: number;
 }): QueuedJobRecord[] {
   const { db } = getQueueDatabase(options?.databasePath);
@@ -227,12 +272,15 @@ export function listQueuedJobs(options?: {
     SELECT *
     FROM queued_jobs
     WHERE (? IS NULL OR status = ?)
+      AND (? IS NULL OR job_id = ?)
     ORDER BY
       CASE status
         WHEN 'running' THEN 0
         WHEN 'queued' THEN 1
-        WHEN 'failed' THEN 2
-        ELSE 3
+        WHEN 'paused' THEN 2
+        WHEN 'failed' THEN 3
+        WHEN 'cancelled' THEN 4
+        ELSE 5
       END,
       priority ASC,
       created_at ASC
@@ -240,10 +288,45 @@ export function listQueuedJobs(options?: {
   `).all(
     options?.status ?? null,
     options?.status ?? null,
+    options?.jobId ?? null,
+    options?.jobId ?? null,
     Math.max(1, Math.min(100, options?.limit ?? 50))
   ) as Array<Record<string, unknown>>;
 
   return rows.map(mapQueuedJob);
+}
+
+export function getQueuedJob(input: {
+  databasePath?: string;
+  queueId: string;
+}): QueuedJobRecord | null {
+  const { db } = getQueueDatabase(input.databasePath);
+  const row = db.prepare(`
+    SELECT *
+    FROM queued_jobs
+    WHERE id = ?
+  `).get(input.queueId) as Record<string, unknown> | undefined;
+
+  return row ? mapQueuedJob(row) : null;
+}
+
+export function linkQueuedJobToJob(input: {
+  databasePath?: string;
+  queueId: string;
+  jobId: string;
+}): void {
+  const { db } = getQueueDatabase(input.databasePath);
+  db.prepare(`
+    UPDATE queued_jobs
+    SET
+      job_id = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(
+    input.jobId,
+    nowIso(),
+    input.queueId
+  );
 }
 
 export function recoverStaleQueuedJobs(options?: {
@@ -268,6 +351,8 @@ export function recoverStaleQueuedJobs(options?: {
     SET
       status = 'queued',
       payload_json = ?,
+      control_action = NULL,
+      control_requested_at = NULL,
       leased_by = NULL,
       leased_at = NULL,
       lease_expires_at = NULL,
@@ -295,6 +380,132 @@ export function recoverStaleQueuedJobs(options?: {
   }
 
   return recoveredCount;
+}
+
+export function controlQueuedJob(input: {
+  databasePath?: string;
+  queueId: string;
+  action: QueueControlAction;
+}): QueuedJobRecord | null {
+  const { db } = getQueueDatabase(input.databasePath);
+  const timestamp = nowIso();
+  const row = db.prepare(`
+    SELECT *
+    FROM queued_jobs
+    WHERE id = ?
+  `).get(input.queueId) as Record<string, unknown> | undefined;
+
+  if (!row) {
+    return null;
+  }
+
+  const job = mapQueuedJob(row);
+  const payload = parseQueuedPayload(row.payload_json, {
+    forceResume:
+      input.action === "resume" ||
+      input.action === "retry" ||
+      job.status === "paused" ||
+      job.attempts > 0
+  });
+
+  if (input.action === "pause") {
+    if (job.status === "queued") {
+      db.prepare(`
+        UPDATE queued_jobs
+        SET
+          status = 'paused',
+          control_action = NULL,
+          control_requested_at = NULL,
+          updated_at = ?
+        WHERE id = ?
+      `).run(timestamp, input.queueId);
+    } else if (job.status === "running") {
+      db.prepare(`
+        UPDATE queued_jobs
+        SET
+          control_action = 'pause',
+          control_requested_at = ?,
+          updated_at = ?
+        WHERE id = ?
+      `).run(timestamp, timestamp, input.queueId);
+    }
+  }
+
+  if (input.action === "resume" && job.status === "paused") {
+    db.prepare(`
+      UPDATE queued_jobs
+      SET
+        status = 'queued',
+        payload_json = ?,
+        control_action = NULL,
+        control_requested_at = NULL,
+        run_after = ?,
+        completed_at = NULL,
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      serializeJson(payload),
+      timestamp,
+      timestamp,
+      input.queueId
+    );
+  }
+
+  if (input.action === "cancel") {
+    if (job.status === "running") {
+      db.prepare(`
+        UPDATE queued_jobs
+        SET
+          control_action = 'cancel',
+          control_requested_at = ?,
+          updated_at = ?
+        WHERE id = ?
+      `).run(timestamp, timestamp, input.queueId);
+    } else if (job.status !== "completed" && job.status !== "cancelled") {
+      db.prepare(`
+        UPDATE queued_jobs
+        SET
+          status = 'cancelled',
+          control_action = NULL,
+          control_requested_at = NULL,
+          lease_expires_at = NULL,
+          leased_at = NULL,
+          leased_by = NULL,
+          updated_at = ?,
+          completed_at = ?
+        WHERE id = ?
+      `).run(
+        timestamp,
+        timestamp,
+        input.queueId
+      );
+    }
+  }
+
+  if (input.action === "retry" && (job.status === "failed" || job.status === "cancelled")) {
+    db.prepare(`
+      UPDATE queued_jobs
+      SET
+        status = 'queued',
+        payload_json = ?,
+        control_action = NULL,
+        control_requested_at = NULL,
+        run_after = ?,
+        completed_at = NULL,
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      serializeJson(parseQueuedPayload(row.payload_json, { forceResume: true })),
+      timestamp,
+      timestamp,
+      input.queueId
+    );
+  }
+
+  return getQueuedJob({
+    databasePath: input.databasePath,
+    queueId: input.queueId
+  });
 }
 
 export function claimNextQueuedJob(input: {
@@ -386,6 +597,8 @@ export function completeQueuedJob(input: {
     SET
       status = 'completed',
       result_json = ?,
+      control_action = NULL,
+      control_requested_at = NULL,
       leased_by = NULL,
       leased_at = NULL,
       lease_expires_at = NULL,
@@ -396,6 +609,51 @@ export function completeQueuedJob(input: {
   `).run(
     serializeJson(input.result),
     timestamp,
+    timestamp,
+    input.queueId,
+    input.workerId
+  );
+}
+
+export function settleControlledQueuedJob(input: {
+  databasePath?: string;
+  queueId: string;
+  workerId: string;
+  status: "paused" | "cancelled";
+  result?: unknown;
+}): void {
+  const { db } = getQueueDatabase(input.databasePath);
+  const timestamp = nowIso();
+  const row = db.prepare(`
+    SELECT payload_json
+    FROM queued_jobs
+    WHERE id = ?
+  `).get(input.queueId) as Record<string, unknown> | undefined;
+  const payload = parseQueuedPayload(row?.payload_json, {
+    forceResume: input.status === "paused"
+  });
+
+  db.prepare(`
+    UPDATE queued_jobs
+    SET
+      status = ?,
+      payload_json = ?,
+      result_json = ?,
+      control_action = NULL,
+      control_requested_at = NULL,
+      leased_by = NULL,
+      leased_at = NULL,
+      lease_expires_at = NULL,
+      updated_at = ?,
+      completed_at = CASE WHEN ? = 'cancelled' THEN ? ELSE NULL END
+    WHERE id = ?
+      AND leased_by = ?
+  `).run(
+    input.status,
+    serializeJson(payload),
+    serializeJson(input.result),
+    timestamp,
+    input.status,
     timestamp,
     input.queueId,
     input.workerId
@@ -434,6 +692,8 @@ export function failQueuedJob(input: {
       status = ?,
       payload_json = ?,
       last_error = ?,
+      control_action = NULL,
+      control_requested_at = NULL,
       leased_by = NULL,
       leased_at = NULL,
       lease_expires_at = NULL,

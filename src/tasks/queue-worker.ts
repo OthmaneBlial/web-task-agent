@@ -5,7 +5,8 @@ import {
   completeQueuedJob,
   failQueuedJob,
   heartbeatQueuedJob,
-  recoverStaleQueuedJobs
+  recoverStaleQueuedJobs,
+  settleControlledQueuedJob
 } from "../lib/job-queue";
 import type { AgentRunOptions } from "../types";
 import { BaseTask } from "./BaseTask";
@@ -75,16 +76,29 @@ export class QueueWorkerTask extends BaseTask<QueueWorkerOptions, QueueWorkerRes
         }
 
         const result = await new AgentRunnerTask(
-          queuedJob.payload.options as AgentRunOptions
+          {
+            ...(queuedJob.payload.options as AgentRunOptions),
+            queuedJobId: queuedJob.queueId
+          }
         ).run();
-        completeQueuedJob({
-          databasePath: this.options.databasePath,
-          queueId: queuedJob.queueId,
-          workerId,
-          result
-        });
+        if (result.status === "paused" || result.status === "cancelled") {
+          settleControlledQueuedJob({
+            databasePath: this.options.databasePath,
+            queueId: queuedJob.queueId,
+            workerId,
+            status: result.status,
+            result
+          });
+        } else {
+          completeQueuedJob({
+            databasePath: this.options.databasePath,
+            queueId: queuedJob.queueId,
+            workerId,
+            result
+          });
+        }
         processedJobs += 1;
-        this.log(`worker ${workerId} completed ${queuedJob.queueId}`);
+        this.log(`worker ${workerId} finished ${queuedJob.queueId} with status ${result.status}`);
       } catch (error) {
         const message = error instanceof Error ? error.stack ?? error.message : String(error);
         failQueuedJob({

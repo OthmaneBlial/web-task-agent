@@ -147,7 +147,18 @@ export interface MarketInsightReport {
 
 export type JobTaskType = "github" | "playstore" | "agent";
 
-export type JobLifecycleStatus = "planning" | "running" | "waiting_review" | "completed" | "failed";
+export type JobLifecycleStatus =
+  | "planning"
+  | "running"
+  | "waiting_review"
+  | "paused"
+  | "cancelled"
+  | "completed"
+  | "failed";
+
+export type JobControlAction = "pause" | "cancel";
+
+export type QueueControlAction = "pause" | "resume" | "cancel" | "retry";
 
 export type JobStepStatus = "pending" | "running" | "completed" | "failed" | "skipped";
 
@@ -189,6 +200,14 @@ export interface RecoverableJobRecord {
   heartbeatAt: string | null;
   recoveryCount: number;
   updatedAt: string;
+}
+
+export interface JobRunEventRecord {
+  id: string;
+  eventType: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }
 
 export type AgentJobStatus = JobLifecycleStatus;
@@ -413,6 +432,7 @@ export interface AgentRunOptions {
   jobTitle?: string;
   workflowTemplateId?: string | null;
   workflowInputs?: Record<string, string | null>;
+  queuedJobId?: string | null;
 }
 
 export type AgentPipelineStage = "search" | "fetch" | "extract" | "completed";

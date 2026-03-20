@@ -15,7 +15,7 @@ This repository is now a practical research system, not just a small browser aut
 - Reuses canonicalized sources and stored page snapshots across runs.
 - Supports built-in workflows for `android-opportunity` and `article-research`.
 - Supports queued execution with worker mode.
-- Exposes a local HTTP API and HTML dashboard for jobs and queue state.
+- Exposes a local HTTP API and HTML dashboard for jobs, queue state, controls, and live logs.
 
 ## Main Commands
 
@@ -39,7 +39,15 @@ npm run start -- workflow run article-research \
 npm run start -- workflow enqueue android-opportunity \
   --topic "budgeting app for couples"
 npm run start -- queue list
+npm run start -- queue pause <queue-id>
+npm run start -- queue resume <queue-id>
 npm run start -- worker run --once
+
+# Job controls and logs
+npm run start -- job pause <job-id>
+npm run start -- job resume <job-id>
+npm run start -- job rerun <job-id>
+npm run start -- job logs <job-id> --limit 100
 
 # Monitoring API and dashboard
 npm run start -- server run --port 4317
@@ -73,7 +81,11 @@ The dashboard is served from the local management server root:
 - `GET /api/health`
 - `GET /api/jobs`
 - `GET /api/jobs/:id`
+- `GET /api/jobs/:id/events`
+- `GET /api/jobs/:id/events/stream`
+- `POST /api/jobs/:id/control`
 - `GET /api/queue`
+- `POST /api/queue/:id/control`
 - `GET /api/recoverable`
 
 ## Project Layout
@@ -100,9 +112,9 @@ WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 
 ## Current Limitations
 
-- The dashboard is currently read-focused; pause, resume, cancel, rerun, and live log streaming are not implemented yet.
+- Queue and job controls are now implemented, but only agent jobs support graceful pause, cancel, resume, and rerun.
 - Research quality still relies on generic heuristics in several places and needs stronger source-specific extractors.
-- Automated tests and fixture coverage are still thin compared with the size of the system.
+- Automated tests now cover queue recovery, control helpers, and management API endpoints, but broader fixture coverage is still thin compared with the size of the system.
 
 ## Roadmap
 

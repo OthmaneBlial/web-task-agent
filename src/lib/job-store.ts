@@ -13,7 +13,9 @@ import type {
   AgentEvidenceSource,
   AgentResearchResult,
   AgentSearchResult,
+  JobControlAction,
   JobExecutionLeaseSnapshot,
+  JobRunEventRecord,
   JobLifecycleStatus,
   JobStepDefinition,
   JobStepStatus,
@@ -729,6 +731,35 @@ function recoverableStatus(status: string): boolean {
   return status === "planning" || status === "running";
 }
 
+function normalizeJobControlAction(value: unknown): JobControlAction | null {
+  if (value === "pause" || value === "cancel") {
+    return value;
+  }
+  return null;
+}
+
+function insertJobRunEvent(
+  db: DatabaseSync,
+  jobId: string,
+  eventType: string,
+  message: string,
+  metadata?: unknown
+): void {
+  const timestamp = nowIso();
+  db.prepare(`
+    INSERT INTO job_run_events (
+      id, job_id, event_type, message, metadata_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    `evt_${hashValue(`${jobId}:${eventType}:${timestamp}:${message}`).slice(0, 24)}`,
+    jobId,
+    eventType,
+    message,
+    serializeJson(metadata),
+    timestamp
+  );
+}
+
 function initializeSchema(database: DatabaseSync): void {
   database.exec(`
     PRAGMA journal_mode = WAL;
@@ -992,7 +1023,9 @@ function initializeSchema(database: DatabaseSync): void {
     { name: "stale_after_seconds", definition: "INTEGER NOT NULL DEFAULT 900" },
     { name: "recovery_count", definition: "INTEGER NOT NULL DEFAULT 0" },
     { name: "last_recovered_at", definition: "TEXT" },
-    { name: "last_recovery_reason", definition: "TEXT" }
+    { name: "last_recovery_reason", definition: "TEXT" },
+    { name: "control_action", definition: "TEXT" },
+    { name: "control_requested_at", definition: "TEXT" }
   ]);
 
   database.exec(`
@@ -1090,6 +1123,8 @@ export interface StoredJobSummary {
   startedAt: string;
   updatedAt: string;
   completedAt: string | null;
+  controlAction: JobControlAction | null;
+  controlRequestedAt: string | null;
   input: Record<string, unknown>;
   budget: Record<string, unknown>;
   output: Record<string, unknown>;
@@ -1124,6 +1159,7 @@ export interface StoredJobDetail {
   job: StoredJobSummary;
   steps: StoredJobStepRecord[];
   artifacts: StoredJobArtifactRecord[];
+  events: JobRunEventRecord[];
   evidenceGraph: {
     nodes: number;
     edges: number;
@@ -1145,6 +1181,8 @@ function mapJobSummary(row: Record<string, unknown>): StoredJobSummary {
     startedAt: String(row.started_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
     completedAt: row.completed_at ? String(row.completed_at) : null,
+    controlAction: normalizeJobControlAction(row.control_action),
+    controlRequestedAt: row.control_requested_at ? String(row.control_requested_at) : null,
     input: parseJsonValue<Record<string, unknown>>(row.input_json, {}),
     budget: parseJsonValue<Record<string, unknown>>(row.budget_json, {}),
     output: parseJsonValue<Record<string, unknown>>(row.output_json, {})
@@ -1176,6 +1214,114 @@ export function listStoredJobs(options?: {
   return rows.map(mapJobSummary);
 }
 
+export function listJobRunEvents(options: {
+  databasePath?: string;
+  jobId: string;
+  afterCreatedAt?: string | null;
+  limit?: number;
+}): JobRunEventRecord[] {
+  const { db } = getDatabase(options.databasePath);
+  const rows = db.prepare(`
+    SELECT id, event_type, message, metadata_json, created_at
+    FROM job_run_events
+    WHERE job_id = ?
+      AND (? IS NULL OR created_at > ?)
+    ORDER BY created_at ASC
+    LIMIT ?
+  `).all(
+    options.jobId,
+    options.afterCreatedAt ?? null,
+    options.afterCreatedAt ?? null,
+    Math.max(1, Math.min(1000, options.limit ?? 200))
+  ) as Array<Record<string, unknown>>;
+
+  return rows.map((row) => ({
+    id: String(row.id ?? ""),
+    eventType: String(row.event_type ?? "log"),
+    message: String(row.message ?? ""),
+    metadata: parseJsonValue<Record<string, unknown>>(row.metadata_json, {}),
+    createdAt: String(row.created_at ?? "")
+  }));
+}
+
+export function requestStoredJobControl(input: {
+  databasePath?: string;
+  jobId: string;
+  action: JobControlAction;
+}): StoredJobSummary | null {
+  const { db } = getDatabase(input.databasePath);
+  const timestamp = nowIso();
+  const row = db.prepare(`
+    SELECT id, status, title, control_action
+    FROM jobs
+    WHERE id = ?
+  `).get(input.jobId) as Record<string, unknown> | undefined;
+
+  if (!row) {
+    return null;
+  }
+
+  const status = String(row.status ?? "running") as JobLifecycleStatus;
+  const title = String(row.title ?? input.jobId);
+  const currentAction = normalizeJobControlAction(row.control_action);
+
+  if (input.action === "cancel" && (status === "paused" || status === "waiting_review")) {
+    db.prepare(`
+      UPDATE jobs
+      SET
+        status = 'cancelled',
+        control_action = NULL,
+        control_requested_at = NULL,
+        updated_at = ?,
+        completed_at = ?
+      WHERE id = ?
+    `).run(
+      timestamp,
+      timestamp,
+      input.jobId
+    );
+    insertJobRunEvent(db, input.jobId, "control_applied", `Cancelled job "${title}"`, {
+      action: input.action
+    });
+  } else if (
+    (input.action === "pause" && (status === "planning" || status === "running")) ||
+    (input.action === "cancel" && (status === "planning" || status === "running"))
+  ) {
+    db.prepare(`
+      UPDATE jobs
+      SET
+        control_action = ?,
+        control_requested_at = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      input.action,
+      timestamp,
+      timestamp,
+      input.jobId
+    );
+    if (currentAction !== input.action) {
+      insertJobRunEvent(
+        db,
+        input.jobId,
+        "control_requested",
+        `${input.action === "pause" ? "Pause" : "Cancel"} requested for "${title}"`,
+        {
+          action: input.action
+        }
+      );
+    }
+  }
+
+  const updated = db.prepare(`
+    SELECT *
+    FROM jobs
+    WHERE id = ?
+  `).get(input.jobId) as Record<string, unknown> | undefined;
+
+  return updated ? mapJobSummary(updated) : null;
+}
+
 export function getStoredJobDetail(input: {
   databasePath?: string;
   jobId: string;
@@ -1203,6 +1349,11 @@ export function getStoredJobDetail(input: {
     WHERE job_id = ?
     ORDER BY artifact_key ASC
   `).all(input.jobId) as Array<Record<string, unknown>>;
+  const events = listJobRunEvents({
+    databasePath: input.databasePath,
+    jobId: input.jobId,
+    limit: 200
+  });
   const graphRow = db.prepare(`
     SELECT
       (SELECT COUNT(*) FROM evidence_nodes WHERE job_id = ?) AS nodes,
@@ -1234,6 +1385,7 @@ export function getStoredJobDetail(input: {
       createdAt: String(row.created_at ?? ""),
       updatedAt: String(row.updated_at ?? "")
     })),
+    events,
     evidenceGraph: {
       nodes: Number(graphRow?.nodes ?? 0),
       edges: Number(graphRow?.edges ?? 0)
@@ -1320,19 +1472,44 @@ export class JobStore {
   }
 
   private recordRunEvent(eventType: string, message: string, metadata?: unknown): void {
-    const timestamp = nowIso();
+    insertJobRunEvent(this.db, this.jobId, eventType, message, metadata);
+  }
+
+  appendRunEvent(eventType: string, message: string, metadata?: unknown): void {
+    this.recordRunEvent(eventType, message, metadata);
+  }
+
+  getPendingControlAction(): {
+    action: JobControlAction;
+    requestedAt: string;
+  } | null {
+    const row = this.db.prepare(`
+      SELECT control_action, control_requested_at
+      FROM jobs
+      WHERE id = ?
+    `).get(this.jobId) as Record<string, unknown> | undefined;
+
+    const action = normalizeJobControlAction(row?.control_action);
+    const requestedAt = row?.control_requested_at ? String(row.control_requested_at) : null;
+
+    if (!action || !requestedAt) {
+      return null;
+    }
+
+    return {
+      action,
+      requestedAt
+    };
+  }
+
+  clearControlRequest(): void {
     this.db.prepare(`
-      INSERT INTO job_run_events (
-        id, job_id, event_type, message, metadata_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      `evt_${hashValue(`${this.jobId}:${eventType}:${timestamp}:${message}`).slice(0, 24)}`,
-      this.jobId,
-      eventType,
-      message,
-      serializeJson(metadata),
-      timestamp
-    );
+      UPDATE jobs
+      SET
+        control_action = NULL,
+        control_requested_at = NULL
+      WHERE id = ?
+    `).run(this.jobId);
   }
 
   private readLeaseRow(): Record<string, unknown> | null {
@@ -1648,12 +1825,22 @@ export class JobStore {
       completedAt?: string | null;
     }
   ): void {
+    const previousStatus = this.job.status;
     this.syncJob({
       status,
       output: options?.output ?? this.job.output,
       errorMessage: options?.errorMessage,
       completedAt: options?.completedAt
     });
+    if (status === "paused" || status === "cancelled" || status === "completed" || status === "failed") {
+      this.clearControlRequest();
+    }
+    if (previousStatus !== status) {
+      this.recordRunEvent("status_changed", `Job status changed from ${previousStatus} to ${status}`, {
+        previousStatus,
+        status
+      });
+    }
   }
 
   registerArtifact(
@@ -2834,12 +3021,20 @@ export class JobStore {
       status: "pending",
       output
     });
+    this.recordRunEvent("step_pending", `Step pending: ${step.title}`, {
+      stepKey: step.stepKey,
+      kind: step.kind
+    });
   }
 
   markSkipped(step: JobStepDefinition, output?: unknown): void {
     this.writeStep(step, {
       status: "skipped",
       output
+    });
+    this.recordRunEvent("step_skipped", `Step skipped: ${step.title}`, {
+      stepKey: step.stepKey,
+      kind: step.kind
     });
   }
 
@@ -2848,12 +3043,20 @@ export class JobStore {
       status: "running",
       bumpAttempt: true
     });
+    this.recordRunEvent("step_started", `Step started: ${step.title}`, {
+      stepKey: step.stepKey,
+      kind: step.kind
+    });
   }
 
   completeStep(step: JobStepDefinition, output?: unknown): void {
     this.writeStep(step, {
       status: "completed",
       output
+    });
+    this.recordRunEvent("step_completed", `Step completed: ${step.title}`, {
+      stepKey: step.stepKey,
+      kind: step.kind
     });
   }
 
@@ -2862,6 +3065,11 @@ export class JobStore {
       status: "failed",
       output,
       errorMessage: normalizeError(error)
+    });
+    this.recordRunEvent("step_failed", `Step failed: ${step.title}`, {
+      stepKey: step.stepKey,
+      kind: step.kind,
+      error: normalizeError(error)
     });
   }
 

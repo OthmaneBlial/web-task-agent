@@ -1,8 +1,8 @@
 # Roadmap
 
-Current progress: the core platform is built. The project can now run long research jobs, store and reuse evidence, queue work for workers, and expose a local dashboard. The next phase is about control, quality, and hardening.
+Current progress: the core platform is built. The project can now run long research jobs, store and reuse evidence, queue work for workers, expose a local dashboard, control jobs in flight, and stream live logs. The next phase is about research quality, output polish, and hardening.
 
-Recommended next focus: build job controls and live operational visibility first, then improve research quality and testing.
+Recommended next focus: improve research quality first, then polish workflow outputs and expand test coverage.
 
 ## [x] Browser And Task Foundation
 
@@ -36,9 +36,9 @@ Jobs can now be enqueued, claimed by a worker, heartbeated during execution, ret
 
 There is now a local HTTP management surface for jobs, queue state, recoverable runs, and job detail inspection, plus a simple HTML dashboard.
 
-## [ ] Job Controls And Live Logs
+## [x] Job Controls And Live Logs
 
-The next high-value step is to add pause, resume, cancel, and rerun controls, then expose live execution logs in the API and dashboard so long jobs are easier to operate.
+The API, CLI, and dashboard now support pause, resume, cancel, retry, and rerun controls, and selected jobs expose live event logs through stored run events and an SSE stream.
 
 ## [ ] Research Quality Hardening
 

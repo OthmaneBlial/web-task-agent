@@ -4,7 +4,9 @@ import path from "node:path";
 
 import { Command } from "commander";
 
-import { enqueueQueuedAgentJob, listQueuedJobs } from "./lib/job-queue";
+import { requestAgentJobControl, resumeAgentJob, rerunAgentJob } from "./lib/job-operations";
+import { controlQueuedJob, enqueueQueuedAgentJob, getQueuedJob, listQueuedJobs } from "./lib/job-queue";
+import { listJobRunEvents } from "./lib/job-store";
 import { createManagementServer } from "./server/management-server";
 import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
@@ -426,8 +428,170 @@ async function main(): Promise<void> {
 
       for (const queuedJob of queuedJobs) {
         console.log(
-          `${queuedJob.queueId} ${queuedJob.status} attempts=${queuedJob.attempts}/${queuedJob.maxAttempts} ${queuedJob.label}`
+          `${queuedJob.queueId} ${queuedJob.status} attempts=${queuedJob.attempts}/${queuedJob.maxAttempts} job=${queuedJob.jobId ?? "-"} ${queuedJob.label}`
         );
+      }
+    });
+
+  queue
+    .command("pause <queueId>")
+    .action((queueId) => {
+      const queuedJob = getQueuedJob({
+        queueId: String(queueId)
+      });
+      if (!queuedJob) {
+        throw new Error(`Unknown queue item: ${queueId}`);
+      }
+      const updated = controlQueuedJob({
+        queueId: String(queueId),
+        action: "pause"
+      });
+      if (queuedJob.status === "running" && queuedJob.jobId) {
+        requestAgentJobControl({
+          jobId: queuedJob.jobId,
+          action: "pause"
+        });
+      }
+      console.log(`Queue item updated.`);
+      console.log(`Queue ID: ${queuedJob.queueId}`);
+      console.log(`Status: ${updated?.status ?? queuedJob.status}`);
+      console.log(`Control: ${updated?.controlAction ?? "-"}`);
+    });
+
+  queue
+    .command("resume <queueId>")
+    .action((queueId) => {
+      const updated = controlQueuedJob({
+        queueId: String(queueId),
+        action: "resume"
+      });
+      if (!updated) {
+        throw new Error(`Unknown queue item: ${queueId}`);
+      }
+      console.log(`Queue item updated.`);
+      console.log(`Queue ID: ${updated.queueId}`);
+      console.log(`Status: ${updated.status}`);
+    });
+
+  queue
+    .command("cancel <queueId>")
+    .action((queueId) => {
+      const queuedJob = getQueuedJob({
+        queueId: String(queueId)
+      });
+      if (!queuedJob) {
+        throw new Error(`Unknown queue item: ${queueId}`);
+      }
+      const updated = controlQueuedJob({
+        queueId: String(queueId),
+        action: "cancel"
+      });
+      if (queuedJob.status === "running" && queuedJob.jobId) {
+        requestAgentJobControl({
+          jobId: queuedJob.jobId,
+          action: "cancel"
+        });
+      }
+      console.log(`Queue item updated.`);
+      console.log(`Queue ID: ${String(queueId)}`);
+      console.log(`Status: ${updated?.status ?? queuedJob.status}`);
+    });
+
+  queue
+    .command("retry <queueId>")
+    .action((queueId) => {
+      const updated = controlQueuedJob({
+        queueId: String(queueId),
+        action: "retry"
+      });
+      if (!updated) {
+        throw new Error(`Unknown queue item: ${queueId}`);
+      }
+      console.log(`Queue item updated.`);
+      console.log(`Queue ID: ${updated.queueId}`);
+      console.log(`Status: ${updated.status}`);
+    });
+
+  const job = program
+    .command("job")
+    .description("Control and inspect stored jobs");
+
+  job
+    .command("pause <jobId>")
+    .action((jobId) => {
+      const updated = requestAgentJobControl({
+        jobId: String(jobId),
+        action: "pause"
+      });
+      if (!updated) {
+        throw new Error(`Unknown job: ${jobId}`);
+      }
+      console.log(`Pause requested.`);
+      console.log(`Job ID: ${updated.jobId}`);
+      console.log(`Status: ${updated.status}`);
+      console.log(`Control: ${updated.controlAction ?? "-"}`);
+    });
+
+  job
+    .command("cancel <jobId>")
+    .action((jobId) => {
+      const updated = requestAgentJobControl({
+        jobId: String(jobId),
+        action: "cancel"
+      });
+      if (!updated) {
+        throw new Error(`Unknown job: ${jobId}`);
+      }
+      console.log(`Cancel requested.`);
+      console.log(`Job ID: ${updated.jobId}`);
+      console.log(`Status: ${updated.status}`);
+      console.log(`Control: ${updated.controlAction ?? "-"}`);
+    });
+
+  job
+    .command("resume <jobId>")
+    .action((jobId) => {
+      const resumed = resumeAgentJob({
+        jobId: String(jobId)
+      });
+      console.log(`Resume enqueued.`);
+      console.log(`Job ID: ${String(jobId)}`);
+      console.log(`Queue ID: ${resumed.queueId}`);
+      console.log(`Reused paused queue: ${resumed.resumedExistingQueue ? "yes" : "no"}`);
+      console.log(`Job DB: ${resumed.databasePath}`);
+    });
+
+  job
+    .command("rerun <jobId>")
+    .action((jobId) => {
+      const rerun = rerunAgentJob({
+        jobId: String(jobId)
+      });
+      console.log(`Rerun enqueued.`);
+      console.log(`Source Job ID: ${String(jobId)}`);
+      console.log(`Queue ID: ${rerun.queueId}`);
+      console.log(`Job DB: ${rerun.databasePath}`);
+    });
+
+  job
+    .command("logs <jobId>")
+    .option(
+      "--limit <number>",
+      "Maximum number of log events to print",
+      (value) => parsePositiveInteger(value, "limit"),
+      50
+    )
+    .action((jobId, options) => {
+      const events = listJobRunEvents({
+        jobId: String(jobId),
+        limit: Number(options.limit)
+      });
+      if (events.length === 0) {
+        console.log("No job events found.");
+        return;
+      }
+      for (const event of events) {
+        console.log(`${event.createdAt} [${event.eventType}] ${event.message}`);
       }
     });
 
