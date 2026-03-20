@@ -38,6 +38,7 @@ function createAgentJobStore(databasePath: string, jobId: string, status: "runni
       fetchBatchSize: 5,
       maxRuntimeHours: 6,
       workflowName: "article-research",
+      workflowPresetId: "standard",
       workflowTemplateId: "article-research",
       workflowInputs: {
         topic: "job controls",
@@ -121,6 +122,14 @@ test("job controls can pause, resume a paused queue, and rerun from stored confi
     assert.equal(rerunQueue.status, "queued");
     assert.equal(rerunQueue.payload.options.resume, false);
     assert.equal(rerunQueue.jobId, null);
+    assert.equal(
+      rerunQueue.payload.options.cachePath,
+      path.join(tempDir, "job_run.json")
+    );
+    assert.equal(
+      rerunQueue.payload.options.reportPath,
+      path.join(tempDir, "job_run.md")
+    );
 
     const events = listJobRunEvents({
       databasePath,

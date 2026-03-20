@@ -36,6 +36,7 @@ test("management server exposes controls and log endpoints", async () => {
         fetchBatchSize: 5,
         maxRuntimeHours: 6,
         workflowName: "article-research",
+        workflowPresetId: "standard",
         workflowTemplateId: "article-research",
         workflowInputs: {
           topic: "server controls",

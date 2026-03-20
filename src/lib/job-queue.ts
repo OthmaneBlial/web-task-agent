@@ -75,7 +75,7 @@ function parseQueuedPayload(
     forceResume?: boolean;
   }
 ): QueuedAgentJobPayload {
-  const payload = parseJsonValue<QueuedAgentJobPayload>(value, {
+  const fallback: QueuedAgentJobPayload = {
     taskType: "agent",
     mode: "agent",
     label: "",
@@ -83,7 +83,11 @@ function parseQueuedPayload(
       instruction: "",
       resume: false
     }
-  });
+  };
+  const payload =
+    value && typeof value === "object"
+      ? (value as Partial<QueuedAgentJobPayload>)
+      : parseJsonValue<QueuedAgentJobPayload>(value, fallback);
   const payloadOptions = payload.options ?? {
     instruction: "",
     resume: false
@@ -92,7 +96,7 @@ function parseQueuedPayload(
   return {
     taskType: "agent",
     mode: payload.mode === "workflow" ? "workflow" : "agent",
-    label: payload.label,
+    label: typeof payload.label === "string" ? payload.label : fallback.label,
     options: {
       ...payloadOptions,
       resume: options?.forceResume ? true : Boolean(payloadOptions.resume)

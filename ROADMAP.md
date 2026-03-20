@@ -50,4 +50,4 @@ Workflow runs now use topic-based cache and report paths, support `fast`/`standa
 
 ## [ ] Tests And Production Hardening
 
-The final macro phase is to add fixtures, golden outputs, failure-mode tests, prompt/version tracking, and a cleaner path for multi-worker or Postgres-backed deployments.
+This final macro phase is local-first hardening: it now includes golden workflow fixtures and prompt/version trace files, and it still needs broader failure-mode coverage and stronger recovery/debugging for long research runs on one machine.

@@ -13,6 +13,7 @@ import { ensureDebuggerReady } from "../lib/cdp";
 import { loadAgentMemory } from "../lib/agent-memory";
 import { JobStore } from "../lib/job-store";
 import { LlmService } from "../lib/llm";
+import { createPromptTraceRecorder } from "../lib/prompt-trace";
 import { linkQueuedJobToJob } from "../lib/job-queue";
 import type {
   AgentCommentsDraft,
@@ -226,6 +227,7 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
     outputs: {
       planPath: outputPaths.planPath,
       pipelineManifestPath: outputPaths.pipelineManifestPath,
+      promptTracePath: outputPaths.promptTracePath,
       researchSummaryPath: outputPaths.researchSummaryPath,
       postDraftPath: outputPaths.postDraftPath,
       commentsDraftPath: outputPaths.commentsDraftPath,
@@ -337,6 +339,12 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       );
     }
 
+    if (state.outputs.promptTracePath && fs.existsSync(state.outputs.promptTracePath)) {
+      jobStore.registerArtifact("llm_prompt_traces", "json_prompt_trace", state.outputs.promptTracePath, {
+        kind: "llm_prompt_traces"
+      });
+    }
+
     if (state.outputs.researchSummaryPath && fs.existsSync(state.outputs.researchSummaryPath)) {
       jobStore.registerArtifact("research_summary", "markdown_summary", state.outputs.researchSummaryPath, {
         kind: "research_summary"
@@ -423,6 +431,17 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         source: "agent-runner"
       });
     };
+    if (state.outputs.promptTracePath) {
+      const promptTraceRecorder = createPromptTraceRecorder({
+        outputPath: state.outputs.promptTracePath,
+        appendRunEvent: (eventType, message, metadata) => {
+          jobStore.appendRunEvent(eventType, message, metadata);
+        }
+      });
+      this.llm.setTraceHooks(promptTraceRecorder.createHooks());
+    } else {
+      this.llm.setTraceHooks(null);
+    }
     if (this.options.queuedJobId) {
       linkQueuedJobToJob({
         queueId: this.options.queuedJobId,

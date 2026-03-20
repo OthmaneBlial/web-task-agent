@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-03-20T12:00:00.000Z",
+  "workflowId": "article-research",
+  "workflowTitle": "Technical Article Research",
+  "handoffTitle": "Technical Article Research Package",
+  "topic": "AI summary automation",
+  "preset": "standard",
+  "status": "waiting_review",
+  "examplePath": "examples/workflows/article-research.md",
+  "reportPath": "report.md",
+  "files": {
+    "researchSummary": "handoff/research-summary.md",
+    "workflowBrief": "handoff/workflow-brief.md",
+    "plan": "plan/plan.json",
+    "postDraft": "drafts/post-draft.md",
+    "commentsDraft": "drafts/comments-draft.md",
+    "rawResearchDir": "raw/research",
+    "runtimeManifest": "runtime/pipeline-manifest.json",
+    "promptTraces": "runtime/llm-prompt-traces.json"
+  },
+  "evidenceCounts": {
+    "queries": 1,
+    "sources": 2,
+    "documents": 2,
+    "extractions": 3,
+    "clusters": 2,
+    "contradictions": 1
+  }
+}

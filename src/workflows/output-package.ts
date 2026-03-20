@@ -15,6 +15,7 @@ import {
 export interface AgentOutputPaths {
   planPath: string;
   pipelineManifestPath: string;
+  promptTracePath: string;
   researchSummaryPath: string;
   postDraftPath: string;
   commentsDraftPath: string;
@@ -195,7 +196,8 @@ function renderWorkflowPackageReadme(
     `- Plan: ${relativeArtifactPath(state.artifactDir, outputPaths.planPath)}`,
     `- Drafts: ${relativeArtifactPath(state.artifactDir, outputPaths.postDraftPath)} and ${relativeArtifactPath(state.artifactDir, outputPaths.commentsDraftPath)}`,
     `- Raw research snapshots: ${relativeArtifactPath(state.artifactDir, outputPaths.researchDir)}`,
-    `- Runtime manifest: ${relativeArtifactPath(state.artifactDir, outputPaths.pipelineManifestPath)}`
+    `- Runtime manifest: ${relativeArtifactPath(state.artifactDir, outputPaths.pipelineManifestPath)}`,
+    `- Prompt traces: ${relativeArtifactPath(state.artifactDir, outputPaths.promptTracePath)}`
   ];
 
   return [
@@ -238,6 +240,7 @@ export function buildAgentOutputPaths(artifactDir: string): AgentOutputPaths {
   return {
     planPath: path.join(artifactDir, "plan", "plan.json"),
     pipelineManifestPath: path.join(artifactDir, "runtime", "pipeline-manifest.json"),
+    promptTracePath: path.join(artifactDir, "runtime", "llm-prompt-traces.json"),
     researchSummaryPath: path.join(artifactDir, "handoff", "research-summary.md"),
     postDraftPath: path.join(artifactDir, "drafts", "post-draft.md"),
     commentsDraftPath: path.join(artifactDir, "drafts", "comments-draft.md"),
@@ -253,6 +256,7 @@ export function applyAgentOutputPaths(state: AgentRunState): AgentOutputPaths {
   state.outputs.planPath = state.outputs.planPath ?? layout.planPath;
   state.outputs.pipelineManifestPath =
     state.outputs.pipelineManifestPath ?? layout.pipelineManifestPath;
+  state.outputs.promptTracePath = state.outputs.promptTracePath ?? layout.promptTracePath;
   state.outputs.researchSummaryPath =
     state.outputs.researchSummaryPath ?? layout.researchSummaryPath;
   state.outputs.postDraftPath = state.outputs.postDraftPath ?? layout.postDraftPath;
@@ -294,7 +298,7 @@ export function writeWorkflowPackageArtifacts(
   fs.writeFileSync(outputPaths.workflowBriefPath, `${workflowBrief.trim()}\n`, "utf8");
 
   const manifest = {
-    generatedAt: new Date().toISOString(),
+    generatedAt: state.updatedAt,
     workflowId: template.id,
     workflowTitle: template.title,
     handoffTitle: template.handoffTitle,
@@ -310,7 +314,8 @@ export function writeWorkflowPackageArtifacts(
       postDraft: relativeArtifactPath(state.artifactDir, outputPaths.postDraftPath),
       commentsDraft: relativeArtifactPath(state.artifactDir, outputPaths.commentsDraftPath),
       rawResearchDir: relativeArtifactPath(state.artifactDir, outputPaths.researchDir),
-      runtimeManifest: relativeArtifactPath(state.artifactDir, outputPaths.pipelineManifestPath)
+      runtimeManifest: relativeArtifactPath(state.artifactDir, outputPaths.pipelineManifestPath),
+      promptTraces: relativeArtifactPath(state.artifactDir, outputPaths.promptTracePath)
     },
     evidenceCounts: evidence.counts
   };

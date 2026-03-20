@@ -17,6 +17,10 @@ import type {
   AgentRunState
 } from "../types";
 
+function fixturePath(...segments: string[]): string {
+  return path.join(process.cwd(), "src", "tests", "fixtures", ...segments);
+}
+
 function createSampleEvidence(): AgentEvidenceBundle {
   return {
     counts: {
@@ -170,6 +174,7 @@ function createWorkflowState(
     outputs: {
       planPath: outputPaths.planPath,
       pipelineManifestPath: outputPaths.pipelineManifestPath,
+      promptTracePath: outputPaths.promptTracePath,
       researchSummaryPath: outputPaths.researchSummaryPath,
       postDraftPath: outputPaths.postDraftPath,
       commentsDraftPath: outputPaths.commentsDraftPath,
@@ -204,6 +209,8 @@ test("workflow package writer creates polished handoff files", () => {
   try {
     const state = createWorkflowState(tempDir, "article-research");
     fs.writeFileSync(state.reportPath, "# Final Report\n", "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.promptTracePath!), { recursive: true });
+    fs.writeFileSync(state.outputs.promptTracePath!, '{\n  "version": 1,\n  "updatedAt": "2026-03-20T12:00:00.000Z",\n  "traces": []\n}\n', "utf8");
 
     const written = writeWorkflowPackageArtifacts(state, createSampleEvidence());
     assert.ok(written.workflowBriefPath);
@@ -216,21 +223,31 @@ test("workflow package writer creates polished handoff files", () => {
 
     const workflowBrief = fs.readFileSync(String(written.workflowBriefPath), "utf8");
     const packageReadme = fs.readFileSync(String(written.packageReadmePath), "utf8");
-    const packageManifest = JSON.parse(
-      fs.readFileSync(String(written.packageManifestPath), "utf8")
-    ) as {
-      workflowId: string;
-      reportPath: string | null;
-      files: Record<string, string | null>;
-      examplePath: string;
-    };
+    const packageManifest = fs.readFileSync(String(written.packageManifestPath), "utf8");
 
-    assert.match(workflowBrief, /Article Brief/);
-    assert.match(packageReadme, /Package Overview/);
-    assert.equal(packageManifest.workflowId, "article-research");
-    assert.equal(packageManifest.reportPath, "report.md");
-    assert.equal(packageManifest.files.workflowBrief, path.join("handoff", "workflow-brief.md"));
-    assert.equal(packageManifest.examplePath, "examples/workflows/article-research.md");
+    assert.equal(
+      workflowBrief,
+      fs.readFileSync(
+        fixturePath("workflow-output", "article-research", "workflow-brief.md"),
+        "utf8"
+      )
+    );
+    assert.equal(
+      packageReadme,
+      fs.readFileSync(
+        fixturePath("workflow-output", "article-research", "README.md"),
+        "utf8"
+      )
+    );
+    assert.deepEqual(
+      JSON.parse(packageManifest),
+      JSON.parse(
+        fs.readFileSync(
+          fixturePath("workflow-output", "article-research", "package-manifest.json"),
+          "utf8"
+        )
+      )
+    );
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

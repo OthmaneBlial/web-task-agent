@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { randomUUID } from "node:crypto";
 
 import type {
   AgentEvidenceBundle,
@@ -60,6 +61,35 @@ interface AgentPostDraftResponse {
 
 interface AgentCommentsDraftResponse {
   comments?: string[];
+}
+
+export interface LlmTraceStartRecord {
+  traceId: string;
+  operation: string;
+  promptVersion: string;
+  model: string;
+  maxTokens: number;
+  createdAt: string;
+  system: string;
+  prompt: string;
+}
+
+export interface LlmTraceSuccessRecord extends LlmTraceStartRecord {
+  completedAt: string;
+  durationMs: number;
+  responseText: string;
+}
+
+export interface LlmTraceErrorRecord extends LlmTraceStartRecord {
+  completedAt: string;
+  durationMs: number;
+  errorMessage: string;
+}
+
+export interface LlmTraceHooks {
+  onStart?: (record: LlmTraceStartRecord) => void;
+  onSuccess?: (record: LlmTraceSuccessRecord) => void;
+  onError?: (record: LlmTraceErrorRecord) => void;
 }
 
 const DEFAULT_BASE_URL = process.env.ANTHROPIC_BASE_URL ?? process.env.ZAI_BASE_URL;
@@ -340,6 +370,7 @@ function buildFallbackPlan(instruction: string): AgentPlan {
 export class LlmService {
   private readonly anthropic: Anthropic;
   private readonly model: string;
+  private traceHooks: LlmTraceHooks | null = null;
 
   constructor(model: string = DEFAULT_MODEL) {
     if (!DEFAULT_API_KEY) {
@@ -358,21 +389,68 @@ export class LlmService {
     this.model = model;
   }
 
-  private async requestJson<T>(system: string, prompt: string, maxTokens: number): Promise<T> {
-    const response = await this.anthropic.messages.create({
-      model: this.model,
-      max_tokens: maxTokens,
-      temperature: 0.2,
-      system,
-      messages: [
-        {
-          role: "user",
-          content: prompt
-        }
-      ]
-    });
+  setTraceHooks(hooks: LlmTraceHooks | null): void {
+    this.traceHooks = hooks;
+  }
 
-    return extractJsonPayload<T>(extractTextContent(response.content));
+  private async requestJson<T>(input: {
+    operation: string;
+    promptVersion: string;
+    system: string;
+    prompt: string;
+    maxTokens: number;
+  }): Promise<T> {
+    const traceId = `llm_${randomUUID().slice(0, 12)}`;
+    const createdAt = new Date().toISOString();
+    const baseTrace: LlmTraceStartRecord = {
+      traceId,
+      operation: input.operation,
+      promptVersion: input.promptVersion,
+      model: this.model,
+      maxTokens: input.maxTokens,
+      createdAt,
+      system: input.system,
+      prompt: input.prompt
+    };
+
+    this.traceHooks?.onStart?.(baseTrace);
+
+    try {
+      const response = await this.anthropic.messages.create({
+        model: this.model,
+        max_tokens: input.maxTokens,
+        temperature: 0.2,
+        system: input.system,
+        messages: [
+          {
+            role: "user",
+            content: input.prompt
+          }
+        ]
+      });
+      const responseText = extractTextContent(response.content);
+      const completedAt = new Date().toISOString();
+      const durationMs = Math.max(0, Date.parse(completedAt) - Date.parse(createdAt));
+
+      this.traceHooks?.onSuccess?.({
+        ...baseTrace,
+        completedAt,
+        durationMs,
+        responseText
+      });
+
+      return extractJsonPayload<T>(responseText);
+    } catch (error) {
+      const completedAt = new Date().toISOString();
+      const durationMs = Math.max(0, Date.parse(completedAt) - Date.parse(createdAt));
+      this.traceHooks?.onError?.({
+        ...baseTrace,
+        completedAt,
+        durationMs,
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
   }
 
   private async evaluateRepositoryChunk(
@@ -410,7 +488,13 @@ export class LlmService {
       JSON.stringify({ repositories: compactRepos }, null, 2)
     ].join("\n");
 
-    const payload = await this.requestJson<RepositorySelectionResponse>(system, prompt, 4_000);
+    const payload = await this.requestJson<RepositorySelectionResponse>({
+      operation: `github_repository_selection_${stage}`,
+      promptVersion: "github_repository_selection.v1",
+      system,
+      prompt,
+      maxTokens: 4_000
+    });
     const repoByUrl = new Map(repos.map((repo) => [repo.url, repo]));
     const winners: ScoredRepo[] = [];
 
@@ -499,7 +583,13 @@ export class LlmService {
       JSON.stringify({ keyword, apps }, null, 2)
     ].join("\n");
 
-    return this.requestJson<MarketInsightReport>(system, prompt, 4_000);
+    return this.requestJson<MarketInsightReport>({
+      operation: "playstore_market_insights",
+      promptVersion: "playstore_market_insights.v1",
+      system,
+      prompt,
+      maxTokens: 4_000
+    });
   }
 
   async planAgentJob(input: {
@@ -530,7 +620,13 @@ export class LlmService {
       "- Do not include prose outside the JSON."
     ].join("\n");
 
-    const payload = await this.requestJson<AgentPlanResponse>(system, prompt, 3_000);
+    const payload = await this.requestJson<AgentPlanResponse>({
+      operation: "agent_plan",
+      promptVersion: "agent_plan.v1",
+      system,
+      prompt,
+      maxTokens: 3_000
+    });
     const steps = normalizePlanSteps(payload.steps);
 
     const normalizedPlan: AgentPlan = {
@@ -584,7 +680,13 @@ export class LlmService {
       JSON.stringify({ research: input.research }, null, 2)
     ].join("\n");
 
-    const payload = await this.requestJson<AgentResearchSummaryResponse>(system, prompt, 3_000);
+    const payload = await this.requestJson<AgentResearchSummaryResponse>({
+      operation: "agent_research_summary_light",
+      promptVersion: "agent_research_summary_light.v1",
+      system,
+      prompt,
+      maxTokens: 3_000
+    });
     return {
       executiveSummary:
         String(payload.executiveSummary ?? "").trim() || "Research gathered. Review the source notes below.",
@@ -694,7 +796,13 @@ export class LlmService {
       JSON.stringify({ evidence: compactEvidence }, null, 2)
     ].join("\n");
 
-    const payload = await this.requestJson<AgentEvidenceSummaryResponse>(system, prompt, 3_000);
+    const payload = await this.requestJson<AgentEvidenceSummaryResponse>({
+      operation: "agent_evidence_summary",
+      promptVersion: "agent_evidence_summary.v2",
+      system,
+      prompt,
+      maxTokens: 3_000
+    });
 
     const normalizeItems = (
       items: AgentEvidenceSummaryResponse["keyFindings"] | AgentEvidenceSummaryResponse["contentAngles"]
@@ -775,7 +883,13 @@ export class LlmService {
       "- Do not include prose outside the JSON."
     ].join("\n");
 
-    const payload = await this.requestJson<AgentPostDraftResponse>(system, prompt, 2_500);
+    const payload = await this.requestJson<AgentPostDraftResponse>({
+      operation: "agent_post_draft",
+      promptVersion: "agent_post_draft.v1",
+      system,
+      prompt,
+      maxTokens: 2_500
+    });
     return {
       headline: String(payload.headline ?? "Draft Post").trim() || "Draft Post",
       body: String(payload.body ?? "").trim() || "Draft body not generated.",
@@ -814,7 +928,13 @@ export class LlmService {
       "- Do not include prose outside the JSON."
     ].join("\n");
 
-    const payload = await this.requestJson<AgentCommentsDraftResponse>(system, prompt, 2_500);
+    const payload = await this.requestJson<AgentCommentsDraftResponse>({
+      operation: "agent_comments_draft",
+      promptVersion: "agent_comments_draft.v1",
+      system,
+      prompt,
+      maxTokens: 2_500
+    });
     const comments = uniqueStrings(
       Array.isArray(payload.comments) ? payload.comments.map(String) : [],
       desiredCount

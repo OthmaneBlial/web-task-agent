@@ -15,6 +15,7 @@ This repository is now a practical research system, not just a small browser aut
 - Reuses canonicalized sources and stored page snapshots across runs.
 - Supports built-in workflows for `android-opportunity` and `article-research`.
 - Gives workflows stable topic-based cache/report paths, operator presets, and handoff packages.
+- Stores local prompt/version traces for agent runs under the runtime artifact folder.
 - Supports queued execution with worker mode.
 - Exposes a local HTTP API and HTML dashboard for jobs, queue state, controls, and live logs.
 - Applies research-quality hardening with domain policies, search-result ranking, source-specific extractors, and trend-aware evidence scoring.
@@ -96,6 +97,7 @@ plan/
 raw/
   research/
 runtime/
+  llm-prompt-traces.json
   pipeline-manifest.json
 ```
 
@@ -145,8 +147,9 @@ WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 
 - Queue and job controls are now implemented, but only agent jobs support graceful pause, cancel, resume, and rerun.
 - Research quality is stronger now, but extraction, ranking, and trend scoring are still heuristic rather than model-verified or domain-trained.
-- Workflow outputs are cleaner now, but there are still only two built-in workflow templates and no golden-output fixture coverage yet.
-- Automated tests now cover queue recovery, control helpers, management API endpoints, research quality, and workflow packaging, but broader fixture coverage is still thin compared with the size of the system.
+- Workflow outputs are cleaner now, but there are still only two built-in workflow templates and the fixture coverage is still narrow.
+- Prompt/version traceability is local-first, but today it is centered on agent runs rather than every LLM-using task.
+- Automated tests now cover queue recovery, control helpers, management API endpoints, research quality, and workflow packaging, but broader failure-mode and fixture coverage is still thin compared with the size of the system.
 
 ## Roadmap
 
