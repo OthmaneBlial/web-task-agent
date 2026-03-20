@@ -6,10 +6,8 @@ import {
 } from "../../lib/cache";
 import { JobStore } from "../../lib/job-store";
 import type { AgentResearchResult } from "../../types";
-import {
-  DUCKDUCKGO_SEARCH_PROVIDER,
-  slugify
-} from "./shared";
+import { slugify } from "./shared";
+import type { AgentSearchAdapter } from "./search-adapter";
 
 export interface AgentExtractStageResult {
   query: string;
@@ -19,38 +17,60 @@ export interface AgentExtractStageResult {
   extractionCount: number;
 }
 
+interface PersistResearchMetadata {
+  searchProvider?: string;
+  searchUrl?: string | null;
+}
+
 export class AgentExtractStage {
   private readonly researchDir: string;
 
   constructor(
     private readonly jobStore: JobStore,
     artifactDir: string,
-    private readonly buildSearchUrl: (query: string) => string,
-    private readonly searchProvider: string = DUCKDUCKGO_SEARCH_PROVIDER
+    private readonly searchAdapter: Pick<AgentSearchAdapter, "id" | "buildSearchUrl">
   ) {
     this.researchDir = path.join(artifactDir, "research");
     ensureDir(this.researchDir);
   }
 
-  persistExistingResearch(research: AgentResearchResult[]): void {
+  private resolvePersistMetadata(
+    query: string,
+    metadata?: PersistResearchMetadata
+  ): { searchProvider: string; searchUrl: string | null } {
+    return {
+      searchProvider: metadata?.searchProvider ?? this.searchAdapter.id,
+      searchUrl: metadata?.searchUrl ?? this.searchAdapter.buildSearchUrl(query)
+    };
+  }
+
+  persistExistingResearch(
+    research: AgentResearchResult[],
+    resolveMetadata?: (query: string) => PersistResearchMetadata | undefined
+  ): void {
     for (const result of research) {
+      const metadata = this.resolvePersistMetadata(result.query, resolveMetadata?.(result.query));
       this.jobStore.persistAgentResearchResult(result, {
-        searchProvider: this.searchProvider,
-        searchUrl: this.buildSearchUrl(result.query)
+        searchProvider: metadata.searchProvider,
+        searchUrl: metadata.searchUrl
       });
     }
   }
 
-  persistQueryResult(result: AgentResearchResult): AgentExtractStageResult {
+  persistQueryResult(
+    result: AgentResearchResult,
+    metadataInput?: PersistResearchMetadata
+  ): AgentExtractStageResult {
     const rawPath = path.join(this.researchDir, `${slugify(result.query)}.json`);
     writeJsonAtomic(rawPath, result);
     this.jobStore.registerArtifact(`research_${slugify(result.query)}`, "research_json", rawPath, {
       query: result.query
     });
+    const metadata = this.resolvePersistMetadata(result.query, metadataInput);
 
     const persisted = this.jobStore.persistAgentResearchResult(result, {
-      searchProvider: this.searchProvider,
-      searchUrl: this.buildSearchUrl(result.query)
+      searchProvider: metadata.searchProvider,
+      searchUrl: metadata.searchUrl
     });
 
     return {

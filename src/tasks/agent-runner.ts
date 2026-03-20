@@ -43,6 +43,7 @@ import {
   upsertResearchResult,
   upsertWorkItem
 } from "./agent/pipeline-state";
+import { createDefaultAgentSearchAdapter } from "./agent/search-adapters/duckduckgo-html";
 import { AgentSearchStage } from "./agent/search-stage";
 import {
   AgentSynthesisStage,
@@ -258,12 +259,13 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     });
     this.syncArtifacts(jobStore, state);
 
-    const searchStage = new AgentSearchStage((message) => this.log(message));
+    const searchAdapter = createDefaultAgentSearchAdapter((message) => this.log(message));
+    const searchStage = new AgentSearchStage(searchAdapter);
     const fetchStage = new AgentFetchStage((message) => this.log(message));
     const extractStage = new AgentExtractStage(
       jobStore,
       state.artifactDir,
-      (query) => searchStage.buildSearchUrl(query)
+      searchAdapter
     );
     const synthesisStage = new AgentSynthesisStage(this.llm);
 

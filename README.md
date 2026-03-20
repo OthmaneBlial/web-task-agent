@@ -25,6 +25,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Cross-source contradiction detection for conflicting evidence signals
 - [x] Explicit search, fetch, extract, and synthesize stage modules for the agent pipeline
 - [x] Stage-level resume with a per-query pipeline manifest for agent research
+- [x] Search adapter interface with a DuckDuckGo HTML implementation
 - [ ] Multi-hour job execution with automatic recovery
 - [ ] Hundreds-of-pages research per run
 - [ ] Durable database-backed source storage
@@ -256,7 +257,7 @@ This is the execution checklist. Items already present in the repo are marked `[
 ### Phase 3: Split Search, Fetch, And Extraction
 
 - [x] Refactor `agent-runner` into composable pipeline stages
-- [ ] Create a search adapter interface
+- [x] Create a search adapter interface
 - [ ] Create a fetcher interface
 - [ ] Create an extractor interface
 - [ ] Create document quality checks for thin pages, blocked pages, and duplicates
