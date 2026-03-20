@@ -21,6 +21,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Agent research summary generation from persisted evidence bundles
 - [x] Evidence references in research summaries and reports
 - [x] Cross-source clustering of repeated evidence signals
+- [x] Source quality and freshness scoring for evidence ranking
 - [ ] Multi-hour job execution with automatic recovery
 - [ ] Hundreds-of-pages research per run
 - [ ] Durable database-backed source storage
@@ -280,8 +281,8 @@ This is the execution checklist. Items already present in the repo are marked `[
 - [ ] Add clustering of sources by topic and intent
 - [ ] Add trend scoring from repeated signals across recent sources
 - [ ] Add contradiction detection between sources
-- [ ] Add source quality scoring with bias toward primary sources when available
-- [ ] Add freshness awareness for time-sensitive workflows
+- [x] Add source quality scoring with bias toward primary sources when available
+- [x] Add freshness awareness for time-sensitive workflows
 - [x] Add structured synthesis prompts that consume evidence, not raw page dumps
 
 ### Phase 7: Productize The First Two Workflows

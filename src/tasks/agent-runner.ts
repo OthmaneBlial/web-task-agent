@@ -254,7 +254,7 @@ function renderClusterSection(evidence: AgentEvidenceBundle): string {
 
   for (const cluster of evidence.clusters.slice(0, 12)) {
     const supportMeta =
-      `${cluster.kind} | ${cluster.sourceCount} sources | ${cluster.evidenceCount} evidence items | confidence ${(cluster.averageConfidence * 100).toFixed(0)}%`;
+      `${cluster.kind} | ${cluster.sourceCount} sources | ${cluster.evidenceCount} evidence items | confidence ${(cluster.averageConfidence * 100).toFixed(0)}% | score ${(cluster.overallScore * 100).toFixed(0)}%`;
     lines.push(`- [${cluster.id}] ${cluster.label}`);
     lines.push(`  Support: ${supportMeta}`);
     if (cluster.supportingValues.length > 0) {
@@ -280,8 +280,10 @@ function renderSummaryReferenceCatalog(summary: AgentResearchSummary): string {
   for (const reference of referencedEvidence) {
     const confidence =
       typeof reference.confidence === "number" ? ` | confidence ${(reference.confidence * 100).toFixed(0)}%` : "";
+    const score =
+      typeof reference.overallScore === "number" ? ` | score ${(reference.overallScore * 100).toFixed(0)}%` : "";
     lines.push(
-      `- [${reference.id}] ${reference.kind} | ${reference.sourceTitle} | ${reference.value}${confidence}`
+      `- [${reference.id}] ${reference.kind} | ${reference.sourceTitle} | ${reference.value}${confidence}${score}`
     );
     lines.push(`  Query: ${reference.query} | URL: ${reference.sourceUrl}`);
   }
@@ -448,13 +450,18 @@ function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundle | nul
     for (const source of evidence.sources.slice(0, 8)) {
       lines.push(`- [${source.title}](${source.url})`);
       lines.push(`  Query: ${source.query}`);
-      lines.push(`  Site: ${source.site || "unknown"}`);
+      lines.push(
+        `  Site: ${source.site || "unknown"} | quality ${(source.sourceQualityScore * 100).toFixed(0)}% | freshness ${(source.freshnessScore * 100).toFixed(0)}% | score ${(source.overallScore * 100).toFixed(0)}%`
+      );
       if (source.reviewStatus) {
         const reviewMeta =
           source.reviewStatus === "read"
             ? `read for ${source.dwellSeconds ?? 0}s`
             : `skipped${source.skipReason ? ` (${source.skipReason})` : ""}`;
         lines.push(`  Review: ${reviewMeta}`);
+      }
+      if (source.qualitySignals.length > 0) {
+        lines.push(`  Signals: ${source.qualitySignals.slice(0, 4).join(" | ")}`);
       }
 
       const extractionBits = source.extractions

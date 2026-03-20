@@ -264,6 +264,7 @@ export interface AgentReferencedEvidence {
   kind: "source" | AgentEvidenceExtraction["kind"];
   value: string;
   confidence?: number;
+  overallScore?: number;
 }
 
 export interface AgentEvidenceSource {
@@ -280,10 +281,15 @@ export interface AgentEvidenceSource {
   reviewStatus?: "read" | "skipped" | "error";
   dwellSeconds?: number;
   skipReason?: string;
+  capturedAt?: string;
   pageTitle?: string;
   description?: string;
   headings: string[];
   paragraphs: string[];
+  qualitySignals: string[];
+  sourceQualityScore: number;
+  freshnessScore: number;
+  overallScore: number;
   extractions: AgentEvidenceExtraction[];
 }
 
@@ -302,6 +308,9 @@ export interface AgentEvidenceCluster {
   sourceCount: number;
   evidenceCount: number;
   averageConfidence: number;
+  qualityScore: number;
+  freshnessScore: number;
+  overallScore: number;
   sourceIds: string[];
   evidenceIds: string[];
   queries: string[];

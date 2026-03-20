@@ -173,29 +173,31 @@ function buildEvidenceReferenceLookup(
   const lookup = new Map<string, AgentReferencedEvidence>();
 
   for (const source of evidence.sources) {
-    lookup.set(source.sourceId, {
-      id: source.sourceId,
-      sourceId: source.sourceId,
-      query: source.query,
-      sourceTitle: source.title,
-      sourceUrl: source.url,
-      kind: "source",
-      value: source.snippet || source.description || source.title
-    });
-
-    for (const extraction of source.extractions) {
-      lookup.set(extraction.id, {
-        id: extraction.id,
-        sourceId: extraction.sourceId,
+      lookup.set(source.sourceId, {
+        id: source.sourceId,
+        sourceId: source.sourceId,
         query: source.query,
         sourceTitle: source.title,
         sourceUrl: source.url,
-        kind: extraction.kind,
-        value: extraction.value,
-        confidence: extraction.confidence
+        kind: "source",
+        value: source.snippet || source.description || source.title,
+        overallScore: source.overallScore
       });
+
+      for (const extraction of source.extractions) {
+        lookup.set(extraction.id, {
+          id: extraction.id,
+        sourceId: extraction.sourceId,
+          query: source.query,
+          sourceTitle: source.title,
+          sourceUrl: source.url,
+          kind: extraction.kind,
+          value: extraction.value,
+          confidence: extraction.confidence,
+          overallScore: Number((source.overallScore * 0.6 + extraction.confidence * 0.4).toFixed(2))
+        });
+      }
     }
-  }
 
   return lookup;
 }
@@ -222,9 +224,10 @@ function suggestEvidenceIdsForText(
         }
       }
       const confidenceBoost = reference.confidence ?? (reference.kind === "source" ? 0.4 : 0.5);
+      const overallBoost = reference.overallScore ?? 0.5;
       return {
         id: reference.id,
-        score: overlap + confidenceBoost
+        score: overlap + confidenceBoost + overallBoost
       };
     })
     .filter((item) => item.score > 0)
@@ -616,6 +619,9 @@ export class LlmService {
         sourceCount: cluster.sourceCount,
         evidenceCount: cluster.evidenceCount,
         averageConfidence: cluster.averageConfidence,
+        qualityScore: cluster.qualityScore,
+        freshnessScore: cluster.freshnessScore,
+        overallScore: cluster.overallScore,
         queries: cluster.queries,
         evidenceIds: cluster.evidenceIds.slice(0, 6),
         supportingValues: cluster.supportingValues.slice(0, 4)
@@ -630,6 +636,10 @@ export class LlmService {
         snippet: source.snippet,
         description: source.description,
         reviewStatus: source.reviewStatus ?? null,
+        sourceQualityScore: source.sourceQualityScore,
+        freshnessScore: source.freshnessScore,
+        overallScore: source.overallScore,
+        qualitySignals: source.qualitySignals.slice(0, 4),
         headings: source.headings.slice(0, 4),
         paragraphs: source.paragraphs.slice(0, 2),
         extractions: source.extractions.slice(0, 10).map((extraction) => ({

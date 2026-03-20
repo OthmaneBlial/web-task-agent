@@ -349,6 +349,141 @@ function chooseClusterLabel(values: string[]): string {
   return sorted[0] ?? "";
 }
 
+function clampUnit(value: number): number {
+  return Math.max(0, Math.min(1, Number(value.toFixed(2))));
+}
+
+function scoreFreshness(isoTimestamp: string | null | undefined): number {
+  if (!isoTimestamp) {
+    return 0.35;
+  }
+
+  const millis = Date.parse(isoTimestamp);
+  if (!Number.isFinite(millis)) {
+    return 0.35;
+  }
+
+  const ageDays = Math.max(0, (Date.now() - millis) / (1000 * 60 * 60 * 24));
+  if (ageDays <= 1) {
+    return 1;
+  }
+  if (ageDays <= 7) {
+    return 0.95;
+  }
+  if (ageDays <= 30) {
+    return 0.85;
+  }
+  if (ageDays <= 90) {
+    return 0.65;
+  }
+  if (ageDays <= 365) {
+    return 0.4;
+  }
+  return 0.2;
+}
+
+function scoreSourceQuality(input: {
+  site: string;
+  title: string;
+  description?: string;
+  reviewStatus?: "read" | "skipped" | "error";
+  dwellSeconds?: number;
+  skipReason?: string;
+  headings: string[];
+  paragraphs: string[];
+  hasDocument: boolean;
+}): { score: number; signals: string[] } {
+  let score = 0.42;
+  const signals: string[] = [];
+  const site = input.site.toLowerCase();
+
+  if (site.endsWith(".gov")) {
+    score += 0.25;
+    signals.push("government domain");
+  } else if (site.endsWith(".edu")) {
+    score += 0.2;
+    signals.push("education domain");
+  } else if (site === "github.com") {
+    score += 0.14;
+    signals.push("github source");
+  } else if (site.startsWith("docs.") || site.startsWith("developer.")) {
+    score += 0.14;
+    signals.push("documentation domain");
+  } else if (site.endsWith(".org")) {
+    score += 0.08;
+    signals.push("organization domain");
+  }
+
+  if (
+    site.includes("facebook.com") ||
+    site.includes("instagram.com") ||
+    site.includes("pinterest.") ||
+    site === "x.com" ||
+    site.endsWith(".tiktok.com")
+  ) {
+    score -= 0.14;
+    signals.push("social domain");
+  }
+
+  if (input.hasDocument) {
+    score += 0.12;
+    signals.push("captured page");
+  }
+
+  if ((input.description?.length ?? 0) >= 80) {
+    score += 0.05;
+    signals.push("good description");
+  }
+
+  if (input.headings.length >= 2) {
+    score += 0.05;
+    signals.push("multiple headings");
+  }
+
+  if (input.paragraphs.length >= 2) {
+    score += 0.1;
+    signals.push("multiple paragraphs");
+  } else if (input.paragraphs.length === 1) {
+    score += 0.04;
+    signals.push("single paragraph");
+  }
+
+  if (input.reviewStatus === "read") {
+    score += 0.12;
+    signals.push("reviewed in depth");
+  } else if (input.reviewStatus === "skipped") {
+    score -= 0.08;
+    signals.push("skipped during review");
+  } else if (input.reviewStatus === "error") {
+    score -= 0.18;
+    signals.push("page review error");
+  }
+
+  if ((input.dwellSeconds ?? 0) >= 10) {
+    score += 0.05;
+    signals.push("longer dwell");
+  }
+
+  const skipReason = (input.skipReason ?? "").toLowerCase();
+  if (skipReason.includes("thin")) {
+    score -= 0.12;
+    signals.push("thin content");
+  }
+  if (skipReason.includes("error")) {
+    score -= 0.16;
+    signals.push("error-like page");
+  }
+
+  if (input.title.length >= 20) {
+    score += 0.02;
+  }
+
+  return {
+    score: clampUnit(score),
+    signals
+  };
+}
+
 function extractCandidateEntities(text: string): string[] {
   const matches = text.match(/\b(?:[A-Z][a-z0-9]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z0-9]+|[A-Z]{2,})){0,3}\b/g) ?? [];
   const blocked = new Set([
@@ -1178,6 +1313,7 @@ export class JobStore {
       SELECT
         rq.query AS query,
         rq.status AS query_status,
+        rq.searched_at AS searched_at,
         js.rank AS rank,
         js.source_id AS source_id,
         js.title AS title,
@@ -1189,6 +1325,7 @@ export class JobStore {
         js.dwell_seconds AS dwell_seconds,
         js.skip_reason AS skip_reason,
         d.id AS document_id,
+        d.captured_at AS captured_at,
         d.title AS page_title,
         d.description AS description,
         d.headings_json AS headings_json,
@@ -1264,6 +1401,21 @@ export class JobStore {
       const headings = parseJsonValue<string[]>(row.headings_json, []);
       const paragraphs = parseJsonValue<string[]>(row.paragraphs_json, []);
       const extractions = extractionsByKey.get(`${sourceId}:${documentId ?? "none"}`) ?? [];
+      const capturedAt =
+        row.captured_at === null || row.captured_at === undefined ? undefined : String(row.captured_at);
+      const quality = scoreSourceQuality({
+        site: String(row.site ?? ""),
+        title: String(row.title ?? ""),
+        description: row.description ? String(row.description) : undefined,
+        reviewStatus: row.review_status ? String(row.review_status) as AgentEvidenceSource["reviewStatus"] : undefined,
+        dwellSeconds: row.dwell_seconds === null || row.dwell_seconds === undefined ? undefined : Number(row.dwell_seconds),
+        skipReason: row.skip_reason ? String(row.skip_reason) : undefined,
+        headings,
+        paragraphs,
+        hasDocument: Boolean(documentId)
+      });
+      const freshnessScore = scoreFreshness(capturedAt ?? String(row.searched_at ?? ""));
+      const overallScore = clampUnit(quality.score * 0.65 + freshnessScore * 0.35);
 
       return {
         query: String(row.query ?? ""),
@@ -1279,10 +1431,15 @@ export class JobStore {
         reviewStatus: row.review_status ? String(row.review_status) as AgentEvidenceSource["reviewStatus"] : undefined,
         dwellSeconds: row.dwell_seconds === null || row.dwell_seconds === undefined ? undefined : Number(row.dwell_seconds),
         skipReason: row.skip_reason ? String(row.skip_reason) : undefined,
+        capturedAt,
         pageTitle: row.page_title ? String(row.page_title) : undefined,
         description: row.description ? String(row.description) : undefined,
         headings,
         paragraphs,
+        qualitySignals: quality.signals,
+        sourceQualityScore: quality.score,
+        freshnessScore,
+        overallScore,
         extractions
       };
     });
@@ -1367,6 +1524,16 @@ export class JobStore {
         const averageConfidence =
           cluster.items.reduce((total, item) => total + item.extraction.confidence, 0) /
           Math.max(1, cluster.items.length);
+        const qualityScore =
+          cluster.items.reduce((total, item) => total + item.source.sourceQualityScore, 0) /
+          Math.max(1, cluster.items.length);
+        const freshnessScore =
+          cluster.items.reduce((total, item) => total + item.source.freshnessScore, 0) /
+          Math.max(1, cluster.items.length);
+        const supportScore = Math.min(1, cluster.items.length / 3);
+        const overallScore = clampUnit(
+          qualityScore * 0.4 + freshnessScore * 0.2 + averageConfidence * 0.2 + supportScore * 0.2
+        );
 
         return {
           id: `cluster_${cluster.kind}_${String(index + 1).padStart(3, "0")}`,
@@ -1374,7 +1541,10 @@ export class JobStore {
           label,
           sourceCount: sourceIds.length,
           evidenceCount: evidenceIds.length,
-          averageConfidence: Number(averageConfidence.toFixed(2)),
+          averageConfidence: clampUnit(averageConfidence),
+          qualityScore: clampUnit(qualityScore),
+          freshnessScore: clampUnit(freshnessScore),
+          overallScore,
           sourceIds,
           evidenceIds,
           queries,
@@ -1382,14 +1552,14 @@ export class JobStore {
         };
       })
       .sort((left, right) => {
+        if (right.overallScore !== left.overallScore) {
+          return right.overallScore - left.overallScore;
+        }
         if (right.sourceCount !== left.sourceCount) {
           return right.sourceCount - left.sourceCount;
         }
         if (right.evidenceCount !== left.evidenceCount) {
           return right.evidenceCount - left.evidenceCount;
-        }
-        if (right.averageConfidence !== left.averageConfidence) {
-          return right.averageConfidence - left.averageConfidence;
         }
         return left.label.localeCompare(right.label);
       });
@@ -1425,7 +1595,12 @@ export class JobStore {
         clusters: clusters.length
       },
       queries,
-      sources,
+      sources: [...sources].sort((left, right) => {
+        if (right.overallScore !== left.overallScore) {
+          return right.overallScore - left.overallScore;
+        }
+        return left.rank - right.rank;
+      }),
       highlights,
       clusters
     };
