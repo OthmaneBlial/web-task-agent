@@ -215,6 +215,7 @@ function renderEvidenceSection(evidence: AgentEvidenceBundle): string {
     `Documents: ${evidence.counts.documents}`,
     `Extractions: ${evidence.counts.extractions}`,
     `Clusters: ${evidence.counts.clusters}`,
+    `Contradictions: ${evidence.counts.contradictions}`,
     ""
   ];
 
@@ -262,6 +263,33 @@ function renderClusterSection(evidence: AgentEvidenceBundle): string {
     }
     if (cluster.evidenceIds.length > 0) {
       lines.push(`  Evidence IDs: ${cluster.evidenceIds.slice(0, 4).join(", ")}`);
+    }
+  }
+
+  lines.push("");
+  return lines.join("\n").trim();
+}
+
+function renderContradictionSection(evidence: AgentEvidenceBundle): string {
+  if (evidence.contradictions.length === 0) {
+    return "";
+  }
+
+  const lines = ["## Contradictory Evidence", ""];
+
+  for (const contradiction of evidence.contradictions.slice(0, 10)) {
+    lines.push(`- [${contradiction.id}] ${contradiction.topic}`);
+    lines.push(`  Left: [${contradiction.leftClusterId}] ${contradiction.leftLabel}`);
+    lines.push(`  Right: [${contradiction.rightClusterId}] ${contradiction.rightLabel}`);
+    lines.push(
+      `  Conflict: ${contradiction.leftKind} vs ${contradiction.rightKind} | score ${(contradiction.contradictionScore * 100).toFixed(0)}%`
+    );
+    lines.push(`  Reason: ${contradiction.reason}`);
+    if (contradiction.queries.length > 0) {
+      lines.push(`  Queries: ${contradiction.queries.slice(0, 3).join(" | ")}`);
+    }
+    if (contradiction.evidenceIds.length > 0) {
+      lines.push(`  Evidence IDs: ${contradiction.evidenceIds.slice(0, 6).join(", ")}`);
     }
   }
 
@@ -477,6 +505,10 @@ function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundle | nul
 
   if (evidence && evidence.clusters.length > 0) {
     lines.push(renderClusterSection(evidence), "");
+  }
+
+  if (evidence && evidence.contradictions.length > 0) {
+    lines.push(renderContradictionSection(evidence), "");
   }
 
   if (postDraft) {

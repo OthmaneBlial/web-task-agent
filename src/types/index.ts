@@ -317,6 +317,24 @@ export interface AgentEvidenceCluster {
   supportingValues: string[];
 }
 
+export interface AgentEvidenceContradiction {
+  id: string;
+  topic: string;
+  leftClusterId: string;
+  rightClusterId: string;
+  leftKind: AgentEvidenceCluster["kind"];
+  rightKind: AgentEvidenceCluster["kind"];
+  leftLabel: string;
+  rightLabel: string;
+  leftScore: number;
+  rightScore: number;
+  contradictionScore: number;
+  reason: string;
+  sourceIds: string[];
+  evidenceIds: string[];
+  queries: string[];
+}
+
 export interface AgentEvidenceBundle {
   counts: {
     queries: number;
@@ -324,11 +342,13 @@ export interface AgentEvidenceBundle {
     documents: number;
     extractions: number;
     clusters: number;
+    contradictions: number;
   };
   queries: AgentEvidenceQuery[];
   sources: AgentEvidenceSource[];
   highlights: AgentEvidenceHighlights;
   clusters: AgentEvidenceCluster[];
+  contradictions: AgentEvidenceContradiction[];
 }
 
 export interface AgentPostDraft {

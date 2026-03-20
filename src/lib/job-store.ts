@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import type {
   AgentEvidenceBundle,
   AgentEvidenceCluster,
+  AgentEvidenceContradiction,
   AgentEvidenceExtraction,
   AgentEvidenceQuery,
   AgentEvidenceSource,
@@ -284,6 +285,143 @@ const CLUSTER_STOP_WORDS = new Set([
   "needs"
 ]);
 
+const POLARITY_STOP_WORDS = new Set([
+  "support",
+  "supports",
+  "supported",
+  "available",
+  "offers",
+  "offer",
+  "includes",
+  "include",
+  "included",
+  "enables",
+  "enable",
+  "enabled",
+  "allows",
+  "allow",
+  "allowed",
+  "fast",
+  "faster",
+  "easy",
+  "easier",
+  "simple",
+  "simpler",
+  "stable",
+  "reliable",
+  "works",
+  "working",
+  "good",
+  "great",
+  "missing",
+  "lack",
+  "lacks",
+  "lacking",
+  "slow",
+  "slower",
+  "difficult",
+  "hard",
+  "confusing",
+  "broken",
+  "problem",
+  "problems",
+  "issue",
+  "issues",
+  "frustrating",
+  "bad",
+  "poor",
+  "worse",
+  "without",
+  "unsupported",
+  "unreliable",
+  "request",
+  "requests",
+  "requested",
+  "want",
+  "wants",
+  "wanted",
+  "need",
+  "needs",
+  "needed",
+  "wish",
+  "roadmap"
+]);
+
+const POSITIVE_POLARITY_TERMS = [
+  "support",
+  "supports",
+  "supported",
+  "available",
+  "offers",
+  "offer",
+  "includes",
+  "include",
+  "included",
+  "enables",
+  "enable",
+  "enabled",
+  "allows",
+  "allow",
+  "allowed",
+  "fast",
+  "faster",
+  "easy",
+  "easier",
+  "simple",
+  "simpler",
+  "stable",
+  "reliable",
+  "works",
+  "working",
+  "good",
+  "great",
+  "improved",
+  "improves"
+];
+
+const NEGATIVE_POLARITY_TERMS = [
+  "missing",
+  "lack",
+  "lacks",
+  "lacking",
+  "slow",
+  "slower",
+  "difficult",
+  "hard",
+  "confusing",
+  "broken",
+  "problem",
+  "problems",
+  "issue",
+  "issues",
+  "frustrating",
+  "bad",
+  "poor",
+  "worse",
+  "without",
+  "unsupported",
+  "unreliable",
+  "error",
+  "errors",
+  "fail",
+  "fails",
+  "failing"
+];
+
+const REQUEST_POLARITY_TERMS = [
+  "request",
+  "requests",
+  "requested",
+  "want",
+  "wants",
+  "wanted",
+  "need",
+  "needs",
+  "needed",
+  "wish",
+  "roadmap"
+];
+
 function tokenizeClusterText(text: string): string[] {
   return normalizeText(text)
     .toLowerCase()
@@ -291,6 +429,30 @@ function tokenizeClusterText(text: string): string[] {
     .split(/\s+/)
     .map((token) => token.trim())
     .filter((token) => token.length >= 3 && !CLUSTER_STOP_WORDS.has(token));
+}
+
+function normalizeTopicToken(token: string): string {
+  if (token.length > 4 && token.endsWith("ies")) {
+    return `${token.slice(0, -3)}y`;
+  }
+  if (token.length > 4 && token.endsWith("s") && !token.endsWith("ss")) {
+    return token.slice(0, -1);
+  }
+  return token;
+}
+
+function tokenizeContradictionTopic(text: string): string[] {
+  return normalizeText(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .split(/\s+/)
+    .map((token) => normalizeTopicToken(token.trim()))
+    .filter(
+      (token) =>
+        token.length >= 3 &&
+        !CLUSTER_STOP_WORDS.has(token) &&
+        !POLARITY_STOP_WORDS.has(token)
+    );
 }
 
 function buildClusterSignature(text: string, kind: AgentEvidenceExtraction["kind"]): string {
@@ -323,6 +485,20 @@ function jaccardSimilarity(left: string[], right: string[]): number {
   return intersection / (leftSet.size + rightSet.size - intersection);
 }
 
+function sharedTokens(left: string[], right: string[]): string[] {
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  const intersection: string[] = [];
+
+  for (const token of leftSet) {
+    if (rightSet.has(token)) {
+      intersection.push(token);
+    }
+  }
+
+  return intersection;
+}
+
 function clusterThreshold(kind: AgentEvidenceExtraction["kind"]): number {
   switch (kind) {
     case "entity":
@@ -351,6 +527,68 @@ function chooseClusterLabel(values: string[]): string {
 
 function clampUnit(value: number): number {
   return Math.max(0, Math.min(1, Number(value.toFixed(2))));
+}
+
+function detectClusterPolarity(
+  cluster: AgentEvidenceCluster
+): "positive" | "negative" | "request" | "mixed" | "neutral" {
+  if (cluster.kind === "complaint") {
+    return "negative";
+  }
+  if (cluster.kind === "feature_request") {
+    return "request";
+  }
+
+  const haystack = `${cluster.label} ${cluster.supportingValues.join(" ")}`.toLowerCase();
+  let positiveHits = 0;
+  let negativeHits = 0;
+  let requestHits = 0;
+
+  for (const term of POSITIVE_POLARITY_TERMS) {
+    if (haystack.includes(term)) {
+      positiveHits += 1;
+    }
+  }
+  for (const term of NEGATIVE_POLARITY_TERMS) {
+    if (haystack.includes(term)) {
+      negativeHits += 1;
+    }
+  }
+  for (const term of REQUEST_POLARITY_TERMS) {
+    if (haystack.includes(term)) {
+      requestHits += 1;
+    }
+  }
+
+  if (positiveHits > 0 && negativeHits > 0) {
+    return "mixed";
+  }
+  if (requestHits > 0 && negativeHits === 0 && positiveHits === 0) {
+    return "request";
+  }
+  if (negativeHits > 0 && positiveHits === 0) {
+    return requestHits > 0 ? "request" : "negative";
+  }
+  if (positiveHits > 0 && negativeHits === 0) {
+    return "positive";
+  }
+  if (requestHits > 0) {
+    return "request";
+  }
+  return cluster.kind === "claim" ? "neutral" : "mixed";
+}
+
+function contradictionsByPolarity(
+  left: "positive" | "negative" | "request" | "mixed" | "neutral",
+  right: "positive" | "negative" | "request" | "mixed" | "neutral"
+): boolean {
+  const pair = `${left}:${right}`;
+  return (
+    pair === "positive:negative" ||
+    pair === "negative:positive" ||
+    pair === "positive:request" ||
+    pair === "request:positive"
+  );
 }
 
 function scoreFreshness(isoTimestamp: string | null | undefined): number {
@@ -1586,13 +1824,100 @@ export class JobStore {
       claims: clusteredHighlights("claim")
     };
 
+    const contradictionCandidates: AgentEvidenceContradiction[] = [];
+    const claimLikeClusters = clusters.filter((cluster) =>
+      cluster.kind === "claim" || cluster.kind === "complaint" || cluster.kind === "feature_request"
+    );
+
+    for (let leftIndex = 0; leftIndex < claimLikeClusters.length; leftIndex += 1) {
+      const left = claimLikeClusters[leftIndex];
+      const leftPolarity = detectClusterPolarity(left);
+      const leftTopicTokens = tokenizeContradictionTopic(left.label);
+
+      if (leftTopicTokens.length === 0) {
+        continue;
+      }
+
+      for (let rightIndex = leftIndex + 1; rightIndex < claimLikeClusters.length; rightIndex += 1) {
+        const right = claimLikeClusters[rightIndex];
+        const rightPolarity = detectClusterPolarity(right);
+
+        if (!contradictionsByPolarity(leftPolarity, rightPolarity)) {
+          continue;
+        }
+
+        const combinedSourceIds = Array.from(new Set([...left.sourceIds, ...right.sourceIds]));
+        if (combinedSourceIds.length < 2) {
+          continue;
+        }
+
+        const rightTopicTokens = tokenizeContradictionTopic(right.label);
+        if (rightTopicTokens.length === 0) {
+          continue;
+        }
+
+        const topicSimilarity = jaccardSimilarity(leftTopicTokens, rightTopicTokens);
+        const sharedTopicTokens = sharedTokens(leftTopicTokens, rightTopicTokens);
+        if (topicSimilarity < 0.34 && sharedTopicTokens.length < 2) {
+          continue;
+        }
+
+        const contradictionScore = clampUnit(
+          topicSimilarity * 0.45 +
+          ((left.overallScore + right.overallScore) / 2) * 0.35 +
+          Math.min(1, combinedSourceIds.length / 3) * 0.2
+        );
+        if (contradictionScore < 0.45) {
+          continue;
+        }
+
+        const topic =
+          (sharedTopicTokens.length >= 2 ? sharedTopicTokens.slice(0, 2).join(" ") : "") ||
+          chooseClusterLabel(
+            uniqueValues(
+              [...left.supportingValues, ...right.supportingValues].flatMap((value) => tokenizeContradictionTopic(value)),
+              4
+            )
+          ) ||
+          chooseClusterLabel(uniqueValues([...leftTopicTokens, ...rightTopicTokens], 4));
+
+        contradictionCandidates.push({
+          id: `contr_${hashValue(`${left.id}:${right.id}`).slice(0, 16)}`,
+          topic: topic || "conflicting signal",
+          leftClusterId: left.id,
+          rightClusterId: right.id,
+          leftKind: left.kind,
+          rightKind: right.kind,
+          leftLabel: left.label,
+          rightLabel: right.label,
+          leftScore: left.overallScore,
+          rightScore: right.overallScore,
+          contradictionScore,
+          reason: `Topic overlap with opposing stances: ${leftPolarity} vs ${rightPolarity} across ${sharedTopicTokens.length} shared topic tokens`,
+          sourceIds: combinedSourceIds,
+          evidenceIds: Array.from(new Set([...left.evidenceIds, ...right.evidenceIds])).slice(0, 8),
+          queries: Array.from(new Set([...left.queries, ...right.queries]))
+        });
+      }
+    }
+
+    const contradictions = contradictionCandidates
+      .filter((candidate, index, array) => array.findIndex((item) => item.id === candidate.id) === index)
+      .sort((left, right) => {
+        if (right.contradictionScore !== left.contradictionScore) {
+          return right.contradictionScore - left.contradictionScore;
+        }
+        return left.topic.localeCompare(right.topic);
+      });
+
     return {
       counts: {
         queries: queries.length,
         sources: sources.length,
         documents: sources.filter((source) => Boolean(source.documentId)).length,
         extractions: extractionRows.length,
-        clusters: clusters.length
+        clusters: clusters.length,
+        contradictions: contradictions.length
       },
       queries,
       sources: [...sources].sort((left, right) => {
@@ -1602,7 +1927,8 @@ export class JobStore {
         return left.rank - right.rank;
       }),
       highlights,
-      clusters
+      clusters,
+      contradictions
     };
   }
 
