@@ -926,6 +926,33 @@ function initializeSchema(database: DatabaseSync): void {
       UNIQUE(source_id, document_id, kind, normalized_value)
     );
 
+    CREATE TABLE IF NOT EXISTS evidence_nodes (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      node_type TEXT NOT NULL,
+      reference_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+      UNIQUE(job_id, node_type, reference_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS evidence_edges (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      from_node_id TEXT NOT NULL,
+      to_node_id TEXT NOT NULL,
+      edge_type TEXT NOT NULL,
+      weight REAL NOT NULL DEFAULT 1,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+      UNIQUE(job_id, from_node_id, to_node_id, edge_type)
+    );
+
     CREATE TABLE IF NOT EXISTS job_run_events (
       id TEXT PRIMARY KEY,
       job_id TEXT NOT NULL,
@@ -952,6 +979,8 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_extractions_job_id ON extractions(job_id, kind);
     CREATE INDEX IF NOT EXISTS idx_extractions_source_id ON extractions(source_id, kind);
     CREATE INDEX IF NOT EXISTS idx_extractions_document_id ON extractions(document_id);
+    CREATE INDEX IF NOT EXISTS idx_evidence_nodes_job_id ON evidence_nodes(job_id, node_type);
+    CREATE INDEX IF NOT EXISTS idx_evidence_edges_job_id ON evidence_edges(job_id, edge_type);
     CREATE INDEX IF NOT EXISTS idx_job_run_events_job_id ON job_run_events(job_id, created_at);
   `);
 
@@ -1612,6 +1641,158 @@ export class JobStore {
     };
   }
 
+  private upsertEvidenceNode(input: {
+    nodeType: "source" | "document" | "extraction" | "entity" | "output";
+    referenceId: string;
+    label: string;
+    metadata?: unknown;
+  }): string {
+    const timestamp = nowIso();
+    const nodeId = `node_${hashValue(`${this.jobId}:${input.nodeType}:${input.referenceId}`).slice(0, 24)}`;
+
+    this.db.prepare(`
+      INSERT INTO evidence_nodes (
+        id, job_id, node_type, reference_id, label, metadata_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(job_id, node_type, reference_id) DO UPDATE SET
+        label = excluded.label,
+        metadata_json = excluded.metadata_json,
+        updated_at = excluded.updated_at
+    `).run(
+      nodeId,
+      this.jobId,
+      input.nodeType,
+      input.referenceId,
+      input.label,
+      serializeJson(input.metadata),
+      timestamp,
+      timestamp
+    );
+
+    return nodeId;
+  }
+
+  private upsertEvidenceEdge(input: {
+    fromNodeId: string;
+    toNodeId: string;
+    edgeType:
+      | "source_has_document"
+      | "source_contains_extraction"
+      | "document_contains_extraction"
+      | "extraction_resolves_entity"
+      | "extraction_mentions_entity"
+      | "output_references_source"
+      | "output_references_extraction";
+    weight?: number;
+    metadata?: unknown;
+  }): void {
+    const timestamp = nowIso();
+    const edgeId = `edge_${hashValue(
+      `${this.jobId}:${input.fromNodeId}:${input.toNodeId}:${input.edgeType}`
+    ).slice(0, 24)}`;
+
+    this.db.prepare(`
+      INSERT INTO evidence_edges (
+        id, job_id, from_node_id, to_node_id, edge_type, weight, metadata_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(job_id, from_node_id, to_node_id, edge_type) DO UPDATE SET
+        weight = excluded.weight,
+        metadata_json = excluded.metadata_json,
+        updated_at = excluded.updated_at
+    `).run(
+      edgeId,
+      this.jobId,
+      input.fromNodeId,
+      input.toNodeId,
+      input.edgeType,
+      input.weight ?? 1,
+      serializeJson(input.metadata),
+      timestamp,
+      timestamp
+    );
+  }
+
+  getEvidenceGraphStats(): {
+    nodes: number;
+    edges: number;
+    entityNodes: number;
+    extractionNodes: number;
+    outputNodes: number;
+  } {
+    const countsRow = this.db.prepare(`
+      SELECT
+        COUNT(*) AS nodes,
+        SUM(CASE WHEN node_type = 'entity' THEN 1 ELSE 0 END) AS entity_nodes,
+        SUM(CASE WHEN node_type = 'extraction' THEN 1 ELSE 0 END) AS extraction_nodes,
+        SUM(CASE WHEN node_type = 'output' THEN 1 ELSE 0 END) AS output_nodes
+      FROM evidence_nodes
+      WHERE job_id = ?
+    `).get(this.jobId) as Record<string, unknown> | undefined;
+    const edgeRow = this.db.prepare(`
+      SELECT COUNT(*) AS edges
+      FROM evidence_edges
+      WHERE job_id = ?
+    `).get(this.jobId) as Record<string, unknown> | undefined;
+
+    return {
+      nodes: Number(countsRow?.nodes ?? 0),
+      edges: Number(edgeRow?.edges ?? 0),
+      entityNodes: Number(countsRow?.entity_nodes ?? 0),
+      extractionNodes: Number(countsRow?.extraction_nodes ?? 0),
+      outputNodes: Number(countsRow?.output_nodes ?? 0)
+    };
+  }
+
+  syncAgentOutputGraph(input: {
+    outputKey: string;
+    label: string;
+    referencedEvidence: Array<{
+      id: string;
+      sourceId: string;
+      kind: "source" | AgentEvidenceExtraction["kind"];
+      value: string;
+    }>;
+    metadata?: unknown;
+  }): void {
+    if (input.referencedEvidence.length === 0) {
+      return;
+    }
+
+    const outputNodeId = this.upsertEvidenceNode({
+      nodeType: "output",
+      referenceId: input.outputKey,
+      label: input.label,
+      metadata: input.metadata
+    });
+
+    for (const item of input.referencedEvidence) {
+      if (item.kind === "source") {
+        const sourceNodeId = this.upsertEvidenceNode({
+          nodeType: "source",
+          referenceId: item.sourceId,
+          label: item.value || item.sourceId
+        });
+        this.upsertEvidenceEdge({
+          fromNodeId: outputNodeId,
+          toNodeId: sourceNodeId,
+          edgeType: "output_references_source"
+        });
+        continue;
+      }
+
+      const extractionNodeId = this.upsertEvidenceNode({
+        nodeType: "extraction",
+        referenceId: item.id,
+        label: item.value || item.id
+      });
+      this.upsertEvidenceEdge({
+        fromNodeId: outputNodeId,
+        toNodeId: extractionNodeId,
+        edgeType: "output_references_extraction"
+      });
+    }
+  }
+
   persistAgentResearchResult(
     research: AgentResearchResult,
     options?: PersistAgentResearchOptions
@@ -1675,6 +1856,16 @@ export class JobStore {
       const site = result.site || hostnameOf(pageUrl) || hostnameOf(resultUrl) || "";
       const sourceTitle = result.page?.title || result.title;
       const sourceDescription = result.page?.description || result.snippet || "";
+      const sourceNodeId = this.upsertEvidenceNode({
+        nodeType: "source",
+        referenceId: sourceId,
+        label: sourceTitle || canonicalUrl,
+        metadata: {
+          canonicalUrl,
+          site,
+          resultUrl
+        }
+      });
 
       this.db.prepare(`
         INSERT INTO sources (
@@ -1821,6 +2012,7 @@ export class JobStore {
       snapshotCount += 1;
 
       let documentId: string | null = null;
+      let documentNodeId: string | null = null;
       if (result.page) {
         const contentText = buildDigestText(result);
         const checksum = hashValue(contentText);
@@ -1870,6 +2062,21 @@ export class JobStore {
         );
 
         documentCount += 1;
+        documentNodeId = this.upsertEvidenceNode({
+          nodeType: "document",
+          referenceId: documentId,
+          label: result.page.title || sourceTitle || canonicalUrl,
+          metadata: {
+            url: result.page.url,
+            capturedAt: result.page.capturedAt,
+            checksum
+          }
+        });
+        this.upsertEvidenceEdge({
+          fromNodeId: sourceNodeId,
+          toNodeId: documentNodeId,
+          edgeType: "source_has_document"
+        });
 
         const pageSnapshotJson = {
           url: result.page.url,
@@ -1923,6 +2130,19 @@ export class JobStore {
 
       const extractionCandidates =
         options?.getExtractionCandidates?.(result) ?? buildHeuristicExtractionCandidates(result);
+      const persistedExtractions: Array<{
+        extractionId: string;
+        extractionNodeId: string;
+        kind: AgentExtractionCandidate["kind"];
+        normalizedValue: string;
+        value: string;
+        evidenceText: string;
+      }> = [];
+      const entityNodes: Array<{
+        normalizedValue: string;
+        entityNodeId: string;
+      }> = [];
+
       extractionCandidates.forEach((candidate) => {
         const normalizedValue = normalizeExtractionValue(candidate.value);
         const extractionId = `ext_${hashValue(
@@ -1965,7 +2185,81 @@ export class JobStore {
         );
 
         extractionCount += 1;
+
+        const extractionNodeId = this.upsertEvidenceNode({
+          nodeType: "extraction",
+          referenceId: extractionId,
+          label: candidate.value,
+          metadata: {
+            kind: candidate.kind,
+            sourceId,
+            documentId,
+            confidence: clampConfidence(candidate.confidence)
+          }
+        });
+        this.upsertEvidenceEdge({
+          fromNodeId: documentNodeId ?? sourceNodeId,
+          toNodeId: extractionNodeId,
+          edgeType: documentNodeId ? "document_contains_extraction" : "source_contains_extraction",
+          metadata: {
+            kind: candidate.kind
+          }
+        });
+
+        persistedExtractions.push({
+          extractionId,
+          extractionNodeId,
+          kind: candidate.kind,
+          normalizedValue,
+          value: candidate.value,
+          evidenceText: candidate.evidenceText
+        });
+
+        if (candidate.kind === "entity") {
+          const entityNodeId = this.upsertEvidenceNode({
+            nodeType: "entity",
+            referenceId: normalizedValue,
+            label: candidate.value,
+            metadata: {
+              sourceId,
+              documentId
+            }
+          });
+          this.upsertEvidenceEdge({
+            fromNodeId: extractionNodeId,
+            toNodeId: entityNodeId,
+            edgeType: "extraction_resolves_entity"
+          });
+          entityNodes.push({
+            normalizedValue,
+            entityNodeId
+          });
+        }
       });
+
+      if (entityNodes.length > 0) {
+        for (const extraction of persistedExtractions) {
+          if (extraction.kind === "entity") {
+            continue;
+          }
+
+          const haystack = normalizeExtractionValue(
+            `${extraction.value} ${extraction.evidenceText ?? ""}`
+          );
+
+          for (const entity of entityNodes) {
+            if (!entity.normalizedValue || !haystack.includes(entity.normalizedValue)) {
+              continue;
+            }
+
+            this.upsertEvidenceEdge({
+              fromNodeId: extraction.extractionNodeId,
+              toNodeId: entity.entityNodeId,
+              edgeType: "extraction_mentions_entity"
+            });
+          }
+        }
+      }
     });
 
     return {

@@ -419,6 +419,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         recoveryCount: state.runtime.recoveryCount,
         executionDeadlineAt: state.runtime.executionDeadlineAt
       },
+      evidenceGraph: jobStore.getEvidenceGraphStats(),
       ...summarizeResearch(),
       pipeline: {
         ...summarizePipeline(),
@@ -911,6 +912,16 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           state.researchSummary = summary;
           synthesisStage.writeResearchSummaryArtifact(state, summary, evidenceBundle);
           this.syncArtifacts(jobStore, state);
+          if (state.outputs.researchSummaryPath) {
+            jobStore.syncAgentOutputGraph({
+              outputKey: "research_summary",
+              label: "Research summary",
+              referencedEvidence: summary.referencedEvidence,
+              metadata: {
+                path: state.outputs.researchSummaryPath
+              }
+            });
+          }
           appendNote(state, "Research summary generated.");
           this.saveState(cachePath, state);
           jobStore.completeStep(summaryStep, {
@@ -1015,6 +1026,28 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
       this.writeDraftFiles(state, postDraft, commentsDraft);
       this.syncArtifacts(jobStore, state);
+      if (state.researchSummary?.referencedEvidence?.length) {
+        if (state.outputs.postDraftPath) {
+          jobStore.syncAgentOutputGraph({
+            outputKey: "post_draft",
+            label: "Post draft",
+            referencedEvidence: state.researchSummary.referencedEvidence,
+            metadata: {
+              path: state.outputs.postDraftPath
+            }
+          });
+        }
+        if (state.outputs.commentsDraftPath) {
+          jobStore.syncAgentOutputGraph({
+            outputKey: "comments_draft",
+            label: "Comments draft",
+            referencedEvidence: state.researchSummary.referencedEvidence,
+            metadata: {
+              path: state.outputs.commentsDraftPath
+            }
+          });
+        }
+      }
       if (hasStep(state.plan, "draft_post") && state.outputs.postDraftPath) {
         jobStore.completeStep(postDraftStep, {
           headline: postDraft?.headline ?? null,
@@ -1054,6 +1087,16 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       );
       updateStepStatus(state.plan, "report", "completed");
       this.syncArtifacts(jobStore, state);
+      if (state.researchSummary?.referencedEvidence?.length) {
+        jobStore.syncAgentOutputGraph({
+          outputKey: "report",
+          label: "Final report",
+          referencedEvidence: state.researchSummary.referencedEvidence,
+          metadata: {
+            path: state.reportPath
+          }
+        });
+      }
 
       if (hasStep(state.plan, "review")) {
         if (state.status === "waiting_review") {
