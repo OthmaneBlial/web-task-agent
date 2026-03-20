@@ -258,6 +258,10 @@ export interface AgentSearchResult {
   reviewStatus?: "read" | "skipped" | "error";
   dwellSeconds?: number;
   skipReason?: string;
+  policyAction?: "allow" | "skip" | "deprioritize";
+  policyReason?: string;
+  qualityScore?: number;
+  qualitySignals?: string[];
 }
 
 export interface AgentResearchResult {

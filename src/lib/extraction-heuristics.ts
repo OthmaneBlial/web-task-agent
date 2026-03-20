@@ -112,9 +112,39 @@ function extractSentencesByTerms(sentences: string[], terms: string[]): string[]
   });
 }
 
+export function shouldExtractFromResult(result: AgentSearchResult): boolean {
+  if (!result.page) {
+    return false;
+  }
+
+  if (result.reviewStatus && result.reviewStatus !== "read") {
+    return false;
+  }
+
+  if ((result.qualityScore ?? 0) > 0 && (result.qualityScore ?? 0) < 0.45) {
+    return false;
+  }
+
+  const skipReason = (result.skipReason ?? "").toLowerCase();
+  if (
+    skipReason.includes("thin") ||
+    skipReason.includes("low-quality") ||
+    skipReason.includes("index-like") ||
+    skipReason.includes("domain policy")
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 export function buildHeuristicExtractionCandidates(
   result: AgentSearchResult
 ): AgentExtractionCandidate[] {
+  if (!shouldExtractFromResult(result)) {
+    return [];
+  }
+
   const combinedText = buildDigestText(result);
   const sentences = splitSentences(
     [

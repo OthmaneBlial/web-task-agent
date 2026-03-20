@@ -1,6 +1,7 @@
 import type {
   AgentPageDigest,
   AgentPlan,
+  AgentSearchResult,
   AgentResearchResult
 } from "../../types";
 
@@ -19,6 +20,19 @@ export const MAX_AGENT_QUERIES = 25;
 export const MAX_AGENT_RESULTS_PER_QUERY = 100;
 export const DEFAULT_FETCH_BATCH_SIZE = 5;
 export const MAX_FETCH_BATCH_SIZE = 20;
+
+export interface AgentDomainPolicyDecision {
+  action: "allow" | "skip" | "deprioritize";
+  reason: string;
+  signals: string[];
+}
+
+export interface AgentDocumentQualityAssessment {
+  readable: boolean;
+  score: number;
+  reason: string;
+  signals: string[];
+}
 
 const AVERAGE_ARTICLE_READ_MS = Math.round((ARTICLE_READ_MIN_MS + ARTICLE_READ_MAX_MS) / 2);
 const AVERAGE_QUERY_SCAN_MS = Math.round((QUERY_SCAN_MIN_MS + QUERY_SCAN_MAX_MS) / 2);
@@ -68,6 +82,22 @@ function pageContentLength(page: AgentPageDigest): number {
     .trim().length;
 }
 
+function hostnameOf(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function pathnameOf(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).pathname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 export function looksLikeErrorPage(page: AgentPageDigest): boolean {
   const haystack = [page.title, page.h1 ?? "", page.description, ...page.headings]
     .join(" ")
@@ -88,6 +118,103 @@ export function looksLikeErrorPage(page: AgentPageDigest): boolean {
   return errorTerms.some((term) => haystack.includes(term));
 }
 
+export function evaluateDomainPolicy(result: AgentSearchResult): AgentDomainPolicyDecision {
+  const hostname = hostnameOf(result.url);
+  const pathname = pathnameOf(result.url);
+  const title = [result.title, result.snippet].join(" ").toLowerCase();
+  const signals: string[] = [];
+
+  if (
+    hostname === "x.com" ||
+    hostname.endsWith(".x.com") ||
+    hostname.includes("facebook.com") ||
+    hostname.includes("instagram.com") ||
+    hostname.includes("tiktok.com") ||
+    hostname.includes("linkedin.com") ||
+    hostname.includes("youtube.com") ||
+    hostname === "youtu.be"
+  ) {
+    signals.push("social or video domain");
+    return {
+      action: "skip",
+      reason: "blocked by domain policy: social or video domain",
+      signals
+    };
+  }
+
+  if (
+    pathname.includes("/login") ||
+    pathname.includes("/signin") ||
+    pathname.includes("/sign-in") ||
+    pathname.includes("/signup") ||
+    pathname.includes("/sign-up") ||
+    pathname.includes("/auth") ||
+    pathname.includes("/account")
+  ) {
+    signals.push("auth path");
+    return {
+      action: "skip",
+      reason: "blocked by domain policy: auth or account page",
+      signals
+    };
+  }
+
+  if (
+    pathname.includes("/search") ||
+    pathname.includes("/tag/") ||
+    pathname.includes("/tags/") ||
+    pathname.includes("/category/") ||
+    pathname.includes("/categories/") ||
+    pathname.includes("/archive")
+  ) {
+    signals.push("index-like path");
+    return {
+      action: "deprioritize",
+      reason: "domain policy: index-like page",
+      signals
+    };
+  }
+
+  if (hostname.startsWith("docs.") || hostname.startsWith("developer.")) {
+    signals.push("documentation domain");
+    return {
+      action: "allow",
+      reason: "documentation source",
+      signals
+    };
+  }
+
+  if (
+    hostname === "reddit.com" ||
+    hostname.endsWith(".reddit.com") ||
+    hostname === "github.com" ||
+    hostname.endsWith(".gov") ||
+    hostname.endsWith(".edu")
+  ) {
+    signals.push("high-signal domain");
+    return {
+      action: "allow",
+      reason: "high-signal domain",
+      signals
+    };
+  }
+
+  if (title.includes("pricing") || title.includes("careers") || title.includes("press release")) {
+    signals.push("low-research-intent title");
+    return {
+      action: "deprioritize",
+      reason: "domain policy: low-research-intent page",
+      signals
+    };
+  }
+
+  return {
+    action: "allow",
+    reason: "general web page",
+    signals
+  };
+}
+
 export function isReadablePage(page: AgentPageDigest): boolean {
   if (looksLikeErrorPage(page)) {
     return false;
@@ -100,6 +227,103 @@ export function isReadablePage(page: AgentPageDigest): boolean {
     Math.min(3, page.paragraphs.length * 2);
 
   return contentSignals >= 3 || pageContentLength(page) >= 320;
+}
+
+export function assessDocumentQuality(
+  result: Pick<AgentSearchResult, "title" | "url" | "snippet">,
+  page: AgentPageDigest
+): AgentDocumentQualityAssessment {
+  const policy = evaluateDomainPolicy({
+    title: result.title,
+    url: result.url,
+    snippet: result.snippet,
+    site: ""
+  });
+  const scoreSignals = [...policy.signals];
+
+  if (looksLikeErrorPage(page)) {
+    return {
+      readable: false,
+      score: 0.05,
+      reason: "error-like page",
+      signals: [...scoreSignals, "error-like page"]
+    };
+  }
+
+  const titleHaystack = [page.title, page.h1 ?? "", ...page.headings].join(" ").toLowerCase();
+  const contentLength = pageContentLength(page);
+  const uniqueParagraphs = Array.from(
+    new Set(page.paragraphs.map((paragraph) => paragraph.toLowerCase().trim()))
+  );
+  let score = 0.35;
+
+  if (policy.action === "deprioritize") {
+    score -= 0.12;
+    scoreSignals.push("policy deprioritized");
+  }
+
+  if (page.h1) {
+    score += 0.12;
+    scoreSignals.push("has h1");
+  }
+  if ((page.description ?? "").length >= 90) {
+    score += 0.08;
+    scoreSignals.push("strong description");
+  }
+  if (page.headings.length >= 2) {
+    score += 0.08;
+    scoreSignals.push("multiple headings");
+  }
+  if (page.paragraphs.length >= 2) {
+    score += 0.14;
+    scoreSignals.push("multiple paragraphs");
+  }
+  if (contentLength >= 480) {
+    score += 0.16;
+    scoreSignals.push("longer textual content");
+  } else if (contentLength >= 320) {
+    score += 0.08;
+    scoreSignals.push("adequate textual content");
+  } else {
+    score -= 0.16;
+    scoreSignals.push("thin textual content");
+  }
+  if (uniqueParagraphs.length < page.paragraphs.length) {
+    score -= 0.08;
+    scoreSignals.push("repeated paragraph content");
+  }
+  if (
+    titleHaystack.includes("search results") ||
+    titleHaystack.includes("all posts") ||
+    titleHaystack.includes("tag:") ||
+    titleHaystack.includes("category:") ||
+    titleHaystack.includes("archive")
+  ) {
+    score -= 0.18;
+    scoreSignals.push("index-like heading");
+  }
+
+  const clampedScore = clamp(Number(score.toFixed(2)), 0, 1);
+  if (!isReadablePage(page) || clampedScore < 0.45) {
+    return {
+      readable: false,
+      score: clampedScore,
+      reason:
+        clampedScore < 0.25
+          ? "low-quality page"
+          : titleHaystack.includes("archive") || titleHaystack.includes("category:")
+            ? "index-like page"
+            : "thin content",
+      signals: scoreSignals
+    };
+  }
+
+  return {
+    readable: true,
+    score: clampedScore,
+    reason: "readable page",
+    signals: scoreSignals
+  };
 }
 
 export function estimateArticleReadMs(page: AgentPageDigest): number {

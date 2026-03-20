@@ -686,6 +686,18 @@ function scoreSourceQuality(input: {
     score -= 0.12;
     signals.push("thin content");
   }
+  if (skipReason.includes("domain policy")) {
+    score -= 0.14;
+    signals.push("blocked by domain policy");
+  }
+  if (skipReason.includes("index-like")) {
+    score -= 0.1;
+    signals.push("index-like page");
+  }
+  if (skipReason.includes("low-quality")) {
+    score -= 0.12;
+    signals.push("low-quality page");
+  }
   if (skipReason.includes("error")) {
     score -= 0.16;
     signals.push("error-like page");
@@ -1981,6 +1993,21 @@ export class JobStore {
           typeof metadata.dwellSeconds === "number"
             ? Number(metadata.dwellSeconds)
             : result.dwellSeconds,
+        policyAction:
+          metadata.policyAction === "allow" ||
+          metadata.policyAction === "skip" ||
+          metadata.policyAction === "deprioritize"
+            ? metadata.policyAction
+            : result.policyAction,
+        policyReason:
+          typeof metadata.policyReason === "string" ? metadata.policyReason : result.policyReason,
+        qualityScore:
+          typeof metadata.qualityScore === "number"
+            ? Number(metadata.qualityScore)
+            : result.qualityScore,
+        qualitySignals: Array.isArray(metadata.qualitySignals)
+          ? metadata.qualitySignals.filter((value): value is string => typeof value === "string")
+          : result.qualitySignals,
         skipReason:
           (typeof metadata.skipReason === "string" ? metadata.skipReason : undefined) ??
           "reused stored snapshot"
@@ -2309,7 +2336,11 @@ export class JobStore {
         result.skipReason ?? null,
         serializeJson({
           hasPageDigest: Boolean(result.page),
-          searchProvider
+          searchProvider,
+          policyAction: result.policyAction ?? null,
+          policyReason: result.policyReason ?? null,
+          qualityScore: result.qualityScore ?? null,
+          qualitySignals: result.qualitySignals ?? []
         }),
         research.searchedAt,
         timestamp
@@ -2355,7 +2386,11 @@ export class JobStore {
         serializeJson({
           rank: index + 1,
           searchProvider,
-          reviewStatus: result.reviewStatus ?? null
+          reviewStatus: result.reviewStatus ?? null,
+          policyAction: result.policyAction ?? null,
+          policyReason: result.policyReason ?? null,
+          qualityScore: result.qualityScore ?? null,
+          qualitySignals: result.qualitySignals ?? []
         }),
         research.searchedAt,
         timestamp
@@ -2407,7 +2442,11 @@ export class JobStore {
           serializeJson({
             reviewStatus: result.reviewStatus ?? null,
             dwellSeconds: result.dwellSeconds ?? null,
-            skipReason: result.skipReason ?? null
+            skipReason: result.skipReason ?? null,
+            policyAction: result.policyAction ?? null,
+            policyReason: result.policyReason ?? null,
+            qualityScore: result.qualityScore ?? null,
+            qualitySignals: result.qualitySignals ?? []
           }),
           result.page.capturedAt,
           timestamp
@@ -2471,7 +2510,11 @@ export class JobStore {
           serializeJson({
             reviewStatus: result.reviewStatus ?? null,
             dwellSeconds: result.dwellSeconds ?? null,
-            skipReason: result.skipReason ?? null
+            skipReason: result.skipReason ?? null,
+            policyAction: result.policyAction ?? null,
+            policyReason: result.policyReason ?? null,
+            qualityScore: result.qualityScore ?? null,
+            qualitySignals: result.qualitySignals ?? []
           }),
           result.page.capturedAt,
           timestamp

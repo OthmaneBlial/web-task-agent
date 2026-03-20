@@ -11,10 +11,10 @@ import type {
   CDPClient
 } from "../../../types";
 import {
+  assessDocumentQuality,
   clamp,
+  evaluateDomainPolicy,
   estimateArticleReadMs,
-  isReadablePage,
-  looksLikeErrorPage,
   QUICK_SKIP_MAX_MS,
   QUICK_SKIP_MIN_MS,
   randomBetween,
@@ -62,8 +62,12 @@ export class BrowserPageFetcher implements AgentFetcher {
     result: AgentSearchResult,
     page: AgentPageDigest
   ): Promise<Pick<AgentSearchResult, "reviewStatus" | "dwellSeconds" | "skipReason">> {
-    if (!isReadablePage(page)) {
-      const skipReason = looksLikeErrorPage(page) ? "error-like page" : "thin content";
+    const quality = assessDocumentQuality(result, page);
+    result.qualityScore = quality.score;
+    result.qualitySignals = quality.signals;
+
+    if (!quality.readable) {
+      const skipReason = quality.reason;
       const skipMs = randomInt(QUICK_SKIP_MIN_MS, QUICK_SKIP_MAX_MS);
       this.log(`skipping page quickly: ${page.title || result.title} (${skipReason})`);
       await sleep(skipMs, 0.05);
@@ -122,6 +126,24 @@ export class BrowserPageFetcher implements AgentFetcher {
     const enriched: AgentSearchResult[] = [];
 
     for (const result of results) {
+      const policy = evaluateDomainPolicy(result);
+      result.policyAction = policy.action;
+      result.policyReason = policy.reason;
+      result.qualitySignals = policy.signals;
+
+      if (policy.action === "skip") {
+        const skipMs = randomInt(QUICK_SKIP_MIN_MS, QUICK_SKIP_MAX_MS);
+        this.log(`skipping result before open: ${result.title} (${policy.reason})`);
+        await sleep(skipMs, 0.05);
+        result.reviewStatus = "skipped";
+        result.dwellSeconds = Math.max(1, Math.round(skipMs / 1_000));
+        result.skipReason = policy.reason;
+        result.qualityScore = 0;
+        enriched.push(result);
+        await sleep(220, 0.1);
+        continue;
+      }
+
       let client: CDPClient | null = null;
 
       try {

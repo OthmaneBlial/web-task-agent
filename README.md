@@ -113,7 +113,7 @@ WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 ## Current Limitations
 
 - Queue and job controls are now implemented, but only agent jobs support graceful pause, cancel, resume, and rerun.
-- Research quality still relies on generic heuristics in several places and needs stronger source-specific extractors.
+- Research quality now has basic domain policies and document quality filters, but it still relies on generic heuristics in several places and needs stronger source-specific extractors.
 - Automated tests now cover queue recovery, control helpers, and management API endpoints, but broader fixture coverage is still thin compared with the size of the system.
 
 ## Roadmap

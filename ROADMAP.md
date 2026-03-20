@@ -42,7 +42,7 @@ The API, CLI, and dashboard now support pause, resume, cancel, retry, and rerun 
 
 ## [ ] Research Quality Hardening
 
-The next research-quality phase should add document quality filters, source-specific extractors, domain policies, better ranking, and trend scoring so the evidence gets cleaner before synthesis.
+The research-quality phase now has a first pass of document quality filters and domain policies, but it still needs source-specific extractors, better ranking, and trend scoring so the evidence gets cleaner before synthesis.
 
 ## [ ] Workflow Output Polish
 
