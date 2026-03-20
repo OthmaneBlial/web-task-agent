@@ -164,6 +164,33 @@ export interface TaskJobInfo {
   databasePath: string;
 }
 
+export interface JobExecutionLeaseSnapshot {
+  ownerId: string;
+  acquiredAt: string;
+  heartbeatAt: string;
+  expiresAt: string;
+  staleAfterSeconds: number;
+  recoveryCount: number;
+  lastRecoveredAt?: string;
+  lastRecoveryReason?: string;
+}
+
+export interface RecoverableJobRecord {
+  jobId: string;
+  taskType: JobTaskType;
+  workflowName: string | null;
+  title: string;
+  status: JobLifecycleStatus;
+  cachePath: string | null;
+  reportPath: string | null;
+  artifactDir: string | null;
+  leaseOwnerId: string | null;
+  leaseExpiresAt: string | null;
+  heartbeatAt: string | null;
+  recoveryCount: number;
+  updatedAt: string;
+}
+
 export type AgentJobStatus = JobLifecycleStatus;
 
 export type AgentStepStatus = JobStepStatus;
@@ -379,6 +406,8 @@ export interface AgentRunOptions {
   memoryPath?: string;
   maxQueries?: number;
   maxResultsPerQuery?: number;
+  maxRuntimeHours?: number;
+  leaseTtlMinutes?: number;
 }
 
 export type AgentPipelineStage = "search" | "fetch" | "extract" | "completed";
@@ -418,6 +447,16 @@ export interface AgentRunState {
     memoryPath: string | null;
     maxQueries: number;
     maxResultsPerQuery: number;
+    maxRuntimeHours: number;
+  };
+  runtime: {
+    leaseOwnerId: string | null;
+    leaseTtlSeconds: number;
+    heartbeatIntervalSeconds: number;
+    heartbeatAt: string | null;
+    recoveredAt: string | null;
+    recoveryCount: number;
+    executionDeadlineAt: string | null;
   };
   reportPath: string;
   artifactDir: string;

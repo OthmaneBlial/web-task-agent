@@ -109,6 +109,18 @@ async function main(): Promise<void> {
       (value) => parsePositiveInteger(value, "max-results"),
       5
     )
+    .option(
+      "--max-runtime-hours <number>",
+      "Soft runtime budget for a long-running job execution window",
+      (value) => parsePositiveInteger(value, "max-runtime-hours"),
+      6
+    )
+    .option(
+      "--lease-ttl-minutes <number>",
+      "Execution lease TTL before a stale run becomes recoverable",
+      (value) => parsePositiveInteger(value, "lease-ttl-minutes"),
+      15
+    )
     .action(async (instruction, options) => {
       const task = new AgentRunnerTask({
         instruction: normalizeText(String(instruction)),
@@ -117,7 +129,9 @@ async function main(): Promise<void> {
         reportPath: options.report ? path.resolve(String(options.report)) : undefined,
         memoryPath: options.memory ? path.resolve(String(options.memory)) : undefined,
         maxQueries: Number(options.maxQueries),
-        maxResultsPerQuery: Number(options.maxResults)
+        maxResultsPerQuery: Number(options.maxResults),
+        maxRuntimeHours: Number(options.maxRuntimeHours),
+        leaseTtlMinutes: Number(options.leaseTtlMinutes)
       });
 
       const result = await task.run();

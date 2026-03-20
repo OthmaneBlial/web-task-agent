@@ -13,12 +13,15 @@ import type {
   AgentEvidenceSource,
   AgentResearchResult,
   AgentSearchResult,
+  JobExecutionLeaseSnapshot,
   JobLifecycleStatus,
   JobStepDefinition,
   JobStepStatus,
-  JobTaskType
+  JobTaskType,
+  RecoverableJobRecord
 } from "../types";
 import { buildHeuristicExtractionCandidates } from "./extraction-heuristics";
+import { addSecondsToIso } from "../tasks/agent/shared";
 
 const DEFAULT_DATABASE_PATH = path.join(process.cwd(), ".data", "web-task-agent.sqlite");
 
@@ -691,6 +694,27 @@ export function resolveJobDatabasePath(customPath?: string): string {
   return path.resolve(customPath ?? process.env.WEB_TASK_AGENT_DB_PATH ?? DEFAULT_DATABASE_PATH);
 }
 
+function ensureTableColumns(
+  database: DatabaseSync,
+  tableName: string,
+  columns: Array<{ name: string; definition: string }>
+): void {
+  const rows = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<Record<string, unknown>>;
+  const existing = new Set(rows.map((row) => String(row.name ?? "")));
+
+  for (const column of columns) {
+    if (existing.has(column.name)) {
+      continue;
+    }
+
+    database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${column.name} ${column.definition}`);
+  }
+}
+
+function recoverableStatus(status: string): boolean {
+  return status === "planning" || status === "running";
+}
+
 function initializeSchema(database: DatabaseSync): void {
   database.exec(`
     PRAGMA journal_mode = WAL;
@@ -713,7 +737,15 @@ function initializeSchema(database: DatabaseSync): void {
       error_message TEXT,
       started_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      completed_at TEXT
+      completed_at TEXT,
+      lease_owner_id TEXT,
+      lease_acquired_at TEXT,
+      heartbeat_at TEXT,
+      lease_expires_at TEXT,
+      stale_after_seconds INTEGER NOT NULL DEFAULT 900,
+      recovery_count INTEGER NOT NULL DEFAULT 0,
+      last_recovered_at TEXT,
+      last_recovery_reason TEXT
     );
 
     CREATE TABLE IF NOT EXISTS job_steps (
@@ -848,6 +880,16 @@ function initializeSchema(database: DatabaseSync): void {
       UNIQUE(source_id, document_id, kind, normalized_value)
     );
 
+    CREATE TABLE IF NOT EXISTS job_run_events (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
     CREATE INDEX IF NOT EXISTS idx_jobs_task_type ON jobs(task_type);
     CREATE INDEX IF NOT EXISTS idx_job_steps_job_id ON job_steps(job_id, position);
@@ -860,6 +902,22 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_extractions_job_id ON extractions(job_id, kind);
     CREATE INDEX IF NOT EXISTS idx_extractions_source_id ON extractions(source_id, kind);
     CREATE INDEX IF NOT EXISTS idx_extractions_document_id ON extractions(document_id);
+    CREATE INDEX IF NOT EXISTS idx_job_run_events_job_id ON job_run_events(job_id, created_at);
+  `);
+
+  ensureTableColumns(database, "jobs", [
+    { name: "lease_owner_id", definition: "TEXT" },
+    { name: "lease_acquired_at", definition: "TEXT" },
+    { name: "heartbeat_at", definition: "TEXT" },
+    { name: "lease_expires_at", definition: "TEXT" },
+    { name: "stale_after_seconds", definition: "INTEGER NOT NULL DEFAULT 900" },
+    { name: "recovery_count", definition: "INTEGER NOT NULL DEFAULT 0" },
+    { name: "last_recovered_at", definition: "TEXT" },
+    { name: "last_recovery_reason", definition: "TEXT" }
+  ]);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_jobs_lease_expires_at ON jobs(lease_expires_at);
   `);
 }
 
@@ -877,6 +935,66 @@ function getDatabase(customPath?: string): { db: DatabaseSync; databasePath: str
     db: sharedDatabase,
     databasePath
   };
+}
+
+export function listRecoverableJobs(options?: {
+  databasePath?: string;
+  taskType?: JobTaskType;
+  workflowName?: string;
+  limit?: number;
+}): RecoverableJobRecord[] {
+  const { db } = getDatabase(options?.databasePath);
+  const now = nowIso();
+  const limit = Math.max(1, Math.min(100, options?.limit ?? 50));
+  const rows = db.prepare(`
+    SELECT
+      id,
+      task_type,
+      workflow_name,
+      title,
+      status,
+      cache_path,
+      report_path,
+      artifact_dir,
+      lease_owner_id,
+      lease_expires_at,
+      heartbeat_at,
+      recovery_count,
+      updated_at
+    FROM jobs
+    WHERE status IN ('planning', 'running')
+      AND cache_path IS NOT NULL
+      AND lease_owner_id IS NOT NULL
+      AND lease_expires_at IS NOT NULL
+      AND lease_expires_at <= ?
+      AND (? IS NULL OR task_type = ?)
+      AND (? IS NULL OR workflow_name = ?)
+    ORDER BY lease_expires_at ASC, updated_at ASC
+    LIMIT ?
+  `).all(
+    now,
+    options?.taskType ?? null,
+    options?.taskType ?? null,
+    options?.workflowName ?? null,
+    options?.workflowName ?? null,
+    limit
+  ) as Array<Record<string, unknown>>;
+
+  return rows.map((row) => ({
+    jobId: String(row.id ?? ""),
+    taskType: String(row.task_type ?? "agent") as JobTaskType,
+    workflowName: row.workflow_name ? String(row.workflow_name) : null,
+    title: String(row.title ?? ""),
+    status: String(row.status ?? "running") as JobLifecycleStatus,
+    cachePath: row.cache_path ? String(row.cache_path) : null,
+    reportPath: row.report_path ? String(row.report_path) : null,
+    artifactDir: row.artifact_dir ? String(row.artifact_dir) : null,
+    leaseOwnerId: row.lease_owner_id ? String(row.lease_owner_id) : null,
+    leaseExpiresAt: row.lease_expires_at ? String(row.lease_expires_at) : null,
+    heartbeatAt: row.heartbeat_at ? String(row.heartbeat_at) : null,
+    recoveryCount: Number(row.recovery_count ?? 0),
+    updatedAt: String(row.updated_at ?? "")
+  }));
 }
 
 export class JobStore {
@@ -955,6 +1073,230 @@ export class JobStore {
       this.job.updatedAt,
       this.job.completedAt
     );
+  }
+
+  private recordRunEvent(eventType: string, message: string, metadata?: unknown): void {
+    const timestamp = nowIso();
+    this.db.prepare(`
+      INSERT INTO job_run_events (
+        id, job_id, event_type, message, metadata_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      `evt_${hashValue(`${this.jobId}:${eventType}:${timestamp}:${message}`).slice(0, 24)}`,
+      this.jobId,
+      eventType,
+      message,
+      serializeJson(metadata),
+      timestamp
+    );
+  }
+
+  private readLeaseRow(): Record<string, unknown> | null {
+    const row = this.db.prepare(`
+      SELECT
+        status,
+        lease_owner_id,
+        lease_acquired_at,
+        heartbeat_at,
+        lease_expires_at,
+        stale_after_seconds,
+        recovery_count,
+        last_recovered_at,
+        last_recovery_reason
+      FROM jobs
+      WHERE id = ?
+    `).get(this.jobId);
+
+    if (!row || typeof row !== "object") {
+      return null;
+    }
+
+    return row as Record<string, unknown>;
+  }
+
+  getExecutionLease(): JobExecutionLeaseSnapshot | null {
+    const row = this.readLeaseRow();
+    const ownerId = row?.lease_owner_id ? String(row.lease_owner_id) : null;
+    if (!row || !ownerId) {
+      return null;
+    }
+
+    const acquiredAt = row.lease_acquired_at ? String(row.lease_acquired_at) : nowIso();
+    const heartbeatAt = row.heartbeat_at ? String(row.heartbeat_at) : acquiredAt;
+    const expiresAt = row.lease_expires_at ? String(row.lease_expires_at) : heartbeatAt;
+
+    return {
+      ownerId,
+      acquiredAt,
+      heartbeatAt,
+      expiresAt,
+      staleAfterSeconds: Number(row.stale_after_seconds ?? 900),
+      recoveryCount: Number(row.recovery_count ?? 0),
+      lastRecoveredAt: row.last_recovered_at ? String(row.last_recovered_at) : undefined,
+      lastRecoveryReason: row.last_recovery_reason ? String(row.last_recovery_reason) : undefined
+    };
+  }
+
+  acquireLease(options: {
+    ownerId: string;
+    ttlSeconds: number;
+    recoveryReason?: string;
+  }): {
+    recovered: boolean;
+    previousOwnerId: string | null;
+    lease: JobExecutionLeaseSnapshot;
+  } {
+    const timestamp = nowIso();
+    const ttlSeconds = Math.max(60, Math.round(options.ttlSeconds));
+    const expiresAt = addSecondsToIso(timestamp, ttlSeconds);
+    const current = this.readLeaseRow();
+    const previousOwnerId = current?.lease_owner_id ? String(current.lease_owner_id) : null;
+    const previousExpiresAt = current?.lease_expires_at ? String(current.lease_expires_at) : null;
+    const currentStatus = current?.status ? String(current.status) : this.job.status;
+    const isExpired =
+      previousExpiresAt !== null &&
+      Number.isFinite(Date.parse(previousExpiresAt)) &&
+      Date.parse(previousExpiresAt) <= Date.now();
+    const recovered =
+      previousOwnerId !== null &&
+      previousOwnerId !== options.ownerId &&
+      isExpired &&
+      recoverableStatus(currentStatus);
+
+    const result = this.db.prepare(`
+      UPDATE jobs
+      SET
+        lease_owner_id = ?,
+        lease_acquired_at = ?,
+        heartbeat_at = ?,
+        lease_expires_at = ?,
+        stale_after_seconds = ?,
+        recovery_count = CASE WHEN ? THEN recovery_count + 1 ELSE recovery_count END,
+        last_recovered_at = CASE WHEN ? THEN ? ELSE last_recovered_at END,
+        last_recovery_reason = CASE WHEN ? THEN ? ELSE last_recovery_reason END,
+        updated_at = ?
+      WHERE id = ?
+        AND (
+          lease_owner_id IS NULL
+          OR lease_owner_id = ?
+          OR lease_expires_at IS NULL
+          OR lease_expires_at <= ?
+        )
+    `).run(
+      options.ownerId,
+      timestamp,
+      timestamp,
+      expiresAt,
+      ttlSeconds,
+      recovered ? 1 : 0,
+      recovered ? 1 : 0,
+      recovered ? timestamp : null,
+      recovered ? 1 : 0,
+      recovered ? options.recoveryReason ?? "stale execution lease reclaimed" : null,
+      timestamp,
+      this.jobId,
+      options.ownerId,
+      timestamp
+    );
+
+    if (Number(result.changes ?? 0) === 0) {
+      const activeLease = this.getExecutionLease();
+      const holder = activeLease?.ownerId ?? previousOwnerId ?? "another worker";
+      throw new Error(`job ${this.jobId} is already leased by ${holder}`);
+    }
+
+    const lease = this.getExecutionLease();
+    if (!lease) {
+      throw new Error(`failed to acquire execution lease for job ${this.jobId}`);
+    }
+
+    this.recordRunEvent(
+      recovered ? "lease_recovered" : "lease_acquired",
+      recovered
+        ? `Recovered stale execution lease from ${previousOwnerId ?? "unknown"}`
+        : `Acquired execution lease for ${options.ownerId}`,
+      {
+        ownerId: options.ownerId,
+        previousOwnerId,
+        ttlSeconds,
+        recovered
+      }
+    );
+
+    return {
+      recovered,
+      previousOwnerId,
+      lease
+    };
+  }
+
+  heartbeat(options?: {
+    ttlSeconds?: number;
+    output?: unknown;
+  }): JobExecutionLeaseSnapshot {
+    const activeLease = this.getExecutionLease();
+    if (!activeLease) {
+      throw new Error(`job ${this.jobId} has no active execution lease`);
+    }
+
+    const timestamp = nowIso();
+    const ttlSeconds = Math.max(60, Math.round(options?.ttlSeconds ?? activeLease.staleAfterSeconds));
+    const expiresAt = addSecondsToIso(timestamp, ttlSeconds);
+
+    this.db.prepare(`
+      UPDATE jobs
+      SET
+        heartbeat_at = ?,
+        lease_expires_at = ?,
+        stale_after_seconds = ?,
+        updated_at = ?,
+        output_json = ?
+      WHERE id = ?
+        AND lease_owner_id = ?
+    `).run(
+      timestamp,
+      expiresAt,
+      ttlSeconds,
+      timestamp,
+      serializeJson(options?.output ?? this.job.output),
+      this.jobId,
+      activeLease.ownerId
+    );
+
+    this.job.updatedAt = timestamp;
+    this.job.output = options?.output ?? this.job.output;
+    const lease = this.getExecutionLease();
+    if (!lease) {
+      throw new Error(`failed to refresh execution lease for job ${this.jobId}`);
+    }
+    return lease;
+  }
+
+  releaseLease(): void {
+    const activeLease = this.getExecutionLease();
+    if (!activeLease) {
+      return;
+    }
+
+    this.db.prepare(`
+      UPDATE jobs
+      SET
+        lease_owner_id = NULL,
+        lease_acquired_at = NULL,
+        lease_expires_at = NULL,
+        updated_at = ?
+      WHERE id = ?
+        AND lease_owner_id = ?
+    `).run(
+      nowIso(),
+      this.jobId,
+      activeLease.ownerId
+    );
+
+    this.recordRunEvent("lease_released", `Released execution lease for ${activeLease.ownerId}`, {
+      ownerId: activeLease.ownerId,
+      heartbeatAt: activeLease.heartbeatAt
+    });
   }
 
   private getStep(stepKey: string): JobStepRow | null {

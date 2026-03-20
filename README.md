@@ -28,7 +28,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Search adapter interface with a DuckDuckGo HTML implementation
 - [x] Fetcher interface with a browser-based page fetcher implementation
 - [x] Extractor interface with a heuristic default extractor implementation
-- [ ] Multi-hour job execution with automatic recovery
+- [x] Multi-hour job execution with automatic recovery
 - [ ] Hundreds-of-pages research per run
 - [ ] Durable database-backed source storage
 - [ ] Source deduplication and canonicalization across runs
@@ -83,7 +83,7 @@ That platform should be able to:
 ## Core Principles
 
 - [ ] Evidence first: every important conclusion should point back to captured sources.
-- [ ] Long-running by design: every workflow should survive restarts, failures, and partial completion.
+- [x] Long-running by design: every workflow should survive restarts, failures, and partial completion.
 - [ ] Separation of concerns: search, fetch, extract, analyze, synthesize, and publish should be independent stages.
 - [ ] Reusability: once a source is fetched and parsed, later workflows should be able to reuse it.
 - [ ] Human approval gates: publishing-oriented tasks should stop at review.
@@ -272,7 +272,7 @@ This is the execution checklist. Items already present in the repo are marked `[
 - [ ] Add queue-based processing for large source lists
 - [ ] Add per-domain backoff and failure tracking
 - [ ] Add domain allowlists and blocklists
-- [ ] Add incremental saves after every meaningful state transition
+- [x] Add incremental saves after every meaningful state transition
 
 ### Phase 5: Build An Evidence Model
 

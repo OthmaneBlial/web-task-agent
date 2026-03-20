@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import {
@@ -52,6 +53,10 @@ import {
   shouldGenerateResearchSummary
 } from "./agent/synthesis-stage";
 import {
+  addHoursToIso,
+  DEFAULT_AGENT_MAX_RUNTIME_HOURS,
+  DEFAULT_JOB_HEARTBEAT_INTERVAL_SECONDS,
+  DEFAULT_JOB_LEASE_TTL_SECONDS,
   computeExecutionEstimateMinutes,
   countCapturedResearchDocuments,
   countCapturedResearchSources,
@@ -85,10 +90,63 @@ function appendNote(state: AgentRunState, message: string): void {
   state.notes.push(`[${nowIso()}] ${message}`);
 }
 
+function clampWholeNumber(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, Math.round(value)));
+}
+
+function resolveMaxRuntimeHours(options: AgentRunOptions, state?: AgentRunState): number {
+  return clampWholeNumber(
+    options.maxRuntimeHours ?? state?.input.maxRuntimeHours ?? DEFAULT_AGENT_MAX_RUNTIME_HOURS,
+    1,
+    72
+  );
+}
+
+function resolveLeaseTtlSeconds(options: AgentRunOptions, state?: AgentRunState): number {
+  return clampWholeNumber(
+    (options.leaseTtlMinutes ?? 0) * 60 || state?.runtime.leaseTtlSeconds || DEFAULT_JOB_LEASE_TTL_SECONDS,
+    120,
+    7_200
+  );
+}
+
+function resolveHeartbeatIntervalSeconds(leaseTtlSeconds: number, state?: AgentRunState): number {
+  return clampWholeNumber(
+    state?.runtime.heartbeatIntervalSeconds ??
+      Math.min(DEFAULT_JOB_HEARTBEAT_INTERVAL_SECONDS, Math.max(30, Math.round(leaseTtlSeconds / 4))),
+    15,
+    Math.max(15, leaseTtlSeconds)
+  );
+}
+
+function nextLeaseOwnerId(runId: string): string {
+  return `agent-${runId}-${randomUUID().slice(0, 8)}`;
+}
+
+function normalizeRuntimeState(state: AgentRunState, options: AgentRunOptions): void {
+  const maxRuntimeHours = resolveMaxRuntimeHours(options, state);
+  const leaseTtlSeconds = resolveLeaseTtlSeconds(options, state);
+
+  state.input.maxRuntimeHours = maxRuntimeHours;
+  state.runtime = {
+    leaseOwnerId: null,
+    leaseTtlSeconds,
+    heartbeatIntervalSeconds: resolveHeartbeatIntervalSeconds(leaseTtlSeconds, state),
+    heartbeatAt: state.runtime?.heartbeatAt ?? null,
+    recoveredAt: state.runtime?.recoveredAt ?? null,
+    recoveryCount: state.runtime?.recoveryCount ?? 0,
+    executionDeadlineAt:
+      state.runtime?.executionDeadlineAt ??
+      addHoursToIso(state.startedAt || nowIso(), maxRuntimeHours)
+  };
+}
+
 function buildInitialState(options: AgentRunOptions): AgentRunState {
   const runId = createRunId();
   const reportPath = path.resolve(options.reportPath ?? defaultReportPath(runId));
   const artifactDir = path.dirname(reportPath);
+  const maxRuntimeHours = resolveMaxRuntimeHours(options);
+  const leaseTtlSeconds = resolveLeaseTtlSeconds(options);
 
   return {
     task: "agent",
@@ -100,7 +158,17 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
       instruction: options.instruction,
       memoryPath: options.memoryPath ? path.resolve(options.memoryPath) : null,
       maxQueries: Math.max(0, Math.min(5, options.maxQueries ?? 3)),
-      maxResultsPerQuery: Math.max(1, Math.min(10, options.maxResultsPerQuery ?? 5))
+      maxResultsPerQuery: Math.max(1, Math.min(10, options.maxResultsPerQuery ?? 5)),
+      maxRuntimeHours
+    },
+    runtime: {
+      leaseOwnerId: null,
+      leaseTtlSeconds,
+      heartbeatIntervalSeconds: resolveHeartbeatIntervalSeconds(leaseTtlSeconds),
+      heartbeatAt: null,
+      recoveredAt: null,
+      recoveryCount: 0,
+      executionDeadlineAt: addHoursToIso(nowIso(), maxRuntimeHours)
     },
     reportPath,
     artifactDir,
@@ -230,6 +298,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     });
 
     ensureDir(state.artifactDir);
+    normalizeRuntimeState(state, this.options);
     state.pipeline = state.pipeline ?? createPipelineState();
     if (!state.outputs.pipelineManifestPath) {
       state.outputs.pipelineManifestPath = path.join(state.artifactDir, "pipeline-manifest.json");
@@ -250,7 +319,9 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       input: state.input,
       budget: {
         maxQueries: state.input.maxQueries,
-        maxResultsPerQuery: state.input.maxResultsPerQuery
+        maxResultsPerQuery: state.input.maxResultsPerQuery,
+        maxRuntimeHours: state.input.maxRuntimeHours,
+        leaseTtlSeconds: state.runtime.leaseTtlSeconds
       },
       output: {
         researchQueriesCompleted: state.research.length
@@ -319,6 +390,13 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
     const buildJobOutput = (): Record<string, unknown> => ({
       estimatedMinutes: state.plan?.estimatedMinutes ?? null,
+      runtime: {
+        leaseOwnerId: state.runtime.leaseOwnerId,
+        heartbeatAt: state.runtime.heartbeatAt,
+        recoveredAt: state.runtime.recoveredAt,
+        recoveryCount: state.runtime.recoveryCount,
+        executionDeadlineAt: state.runtime.executionDeadlineAt
+      },
       ...summarizeResearch(),
       pipeline: {
         ...summarizePipeline(),
@@ -327,6 +405,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     });
 
     let evidenceBundle: AgentEvidenceBundle | null = null;
+    let heartbeatTimer: NodeJS.Timeout | null = null;
 
     const planStep = {
       stepKey: "plan_job",
@@ -415,6 +494,49 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     }
 
     try {
+      state.runtime.leaseOwnerId = nextLeaseOwnerId(state.runId);
+      const acquiredLease = jobStore.acquireLease({
+        ownerId: state.runtime.leaseOwnerId,
+        ttlSeconds: state.runtime.leaseTtlSeconds,
+        recoveryReason: resumed
+          ? "resumed cached run after interruption"
+          : "continued after interrupted execution"
+      });
+      state.runtime.heartbeatAt = acquiredLease.lease.heartbeatAt;
+      state.runtime.recoveryCount = acquiredLease.lease.recoveryCount;
+      if (acquiredLease.recovered) {
+        state.runtime.recoveredAt = acquiredLease.lease.lastRecoveredAt ?? acquiredLease.lease.acquiredAt;
+        appendNote(
+          state,
+          `Recovered stale execution lease from ${acquiredLease.previousOwnerId ?? "unknown worker"}.`
+        );
+      }
+      this.saveState(cachePath, state);
+      jobStore.syncJob({
+        updatedAt: state.updatedAt,
+        budget: {
+          maxQueries: state.input.maxQueries,
+          maxResultsPerQuery: state.input.maxResultsPerQuery,
+          maxRuntimeHours: state.input.maxRuntimeHours,
+          leaseTtlSeconds: state.runtime.leaseTtlSeconds
+        },
+        output: buildJobOutput()
+      });
+      heartbeatTimer = setInterval(() => {
+        try {
+          const lease = jobStore.heartbeat({
+            ttlSeconds: state.runtime.leaseTtlSeconds,
+            output: buildJobOutput()
+          });
+          state.runtime.heartbeatAt = lease.heartbeatAt;
+        } catch (error) {
+          this.log(
+            `job heartbeat warning: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }, state.runtime.heartbeatIntervalSeconds * 1000);
+      heartbeatTimer.unref?.();
+
       if (!state.plan) {
         state.status = "planning";
         appendNote(state, "Planning the job.");
@@ -902,6 +1024,17 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         completedAt: state.updatedAt
       });
       throw error;
+    } finally {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+      }
+      try {
+        jobStore.releaseLease();
+      } catch (error) {
+        this.log(
+          `job lease release warning: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
     }
   }
 }

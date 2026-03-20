@@ -12,12 +12,23 @@ export const ARTICLE_READ_MAX_MS = 20_000;
 export const QUICK_SKIP_MIN_MS = 700;
 export const QUICK_SKIP_MAX_MS = 1_800;
 export const MAX_ARTICLES_PER_QUERY = 3;
+export const DEFAULT_AGENT_MAX_RUNTIME_HOURS = 6;
+export const DEFAULT_JOB_LEASE_TTL_SECONDS = 15 * 60;
+export const DEFAULT_JOB_HEARTBEAT_INTERVAL_SECONDS = 60;
 
 const AVERAGE_ARTICLE_READ_MS = Math.round((ARTICLE_READ_MIN_MS + ARTICLE_READ_MAX_MS) / 2);
 const AVERAGE_QUERY_SCAN_MS = Math.round((QUERY_SCAN_MIN_MS + QUERY_SCAN_MAX_MS) / 2);
 
 export function nowIso(): string {
   return new Date().toISOString();
+}
+
+export function addSecondsToIso(input: string, seconds: number): string {
+  return new Date(Date.parse(input) + seconds * 1000).toISOString();
+}
+
+export function addHoursToIso(input: string, hours: number): string {
+  return addSecondsToIso(input, Math.round(hours * 60 * 60));
 }
 
 export function slugify(value: string): string {
