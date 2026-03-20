@@ -1,375 +1,90 @@
 # Web Task Agent
 
-Long-running web research agent foundation built on Lightpanda, CDP, and an Anthropic-compatible LLM endpoint.
+Long-running web research agent built on Lightpanda, CDP, SQLite, and an Anthropic-compatible LLM endpoint.
 
-This repository already has a solid browser automation core. What it does not yet have is the full product layer needed to behave like a serious research worker that can search broadly, collect evidence across many pages, store findings, analyze them, and hand back a trustworthy report. This README turns the project into an executable roadmap so we can build that next.
+This repository is now a practical research system, not just a small browser automation demo. It can run long jobs, persist evidence, recover interrupted work, reuse sources across runs, queue jobs for workers, and expose a local dashboard for monitoring.
 
-## Project Status
+`README.md` explains what the project does now and how to use it.
+`ROADMAP.md` is the clean macro roadmap.
 
-- [x] TypeScript CLI entrypoint with task-oriented commands in `src/cli.ts`
-- [x] Lightpanda CDP session management with a custom flattened target proxy in `src/lib/cdp.ts`
-- [x] Human-like scroll and click helpers in `src/lib/humanizer.ts`
-- [x] Local resumable task state in `.cache/` via `src/lib/cache.ts`
-- [x] LLM-backed repository ranking, market analysis, planning, and draft generation in `src/lib/llm.ts`
-- [x] GitHub search scanner in `src/tasks/github-scanner.ts`
-- [x] Google Play market analyzer in `src/tasks/playstore-analyzer.ts`
-- [x] Lightweight browser research runner in `src/tasks/agent-runner.ts`
-- [x] Markdown and JSON artifact output under `reports/`
-- [x] SQLite-backed job, step, and artifact persistence under `.data/web-task-agent.sqlite`
-- [x] Normalized agent research persistence for queries, sources, and document snapshots
-- [x] Basic extraction persistence for entities, themes, complaints, feature requests, and claims
-- [x] Agent research summary generation from persisted evidence bundles
-- [x] Evidence references in research summaries and reports
-- [x] Cross-source clustering of repeated evidence signals
-- [x] Source quality and freshness scoring for evidence ranking
-- [x] Cross-source contradiction detection for conflicting evidence signals
-- [x] Explicit search, fetch, extract, and synthesize stage modules for the agent pipeline
-- [x] Stage-level resume with a per-query pipeline manifest for agent research
-- [x] Search adapter interface with a DuckDuckGo HTML implementation
-- [x] Fetcher interface with a browser-based page fetcher implementation
-- [x] Extractor interface with a heuristic default extractor implementation
-- [x] Multi-hour job execution with automatic recovery
-- [x] Hundreds-of-pages research per run
-- [x] Durable database-backed source storage
-- [x] Source deduplication and canonicalization across runs
-- [x] Evidence graph linking sources, claims, entities, and outputs
-- [x] Workflow templates for real business research jobs
-- [x] Scheduler, queue, or worker mode
-- [x] API and dashboard for managing runs
+## What It Does Now
 
-## Deep Analysis Of The Current Codebase
+- Runs research jobs that plan, search, fetch, extract, synthesize, and write reports.
+- Persists jobs, steps, artifacts, sources, documents, snapshots, extractions, and evidence links in SQLite.
+- Recovers interrupted runs with leases, heartbeats, resumable cache state, and stage-level resume.
+- Reuses canonicalized sources and stored page snapshots across runs.
+- Supports built-in workflows for `android-opportunity` and `article-research`.
+- Supports queued execution with worker mode.
+- Exposes a local HTTP API and HTML dashboard for jobs and queue state.
 
-### What exists today
-
-- [x] The CLI is clean and easy to extend. Each command maps directly to a task class.
-- [x] The CDP layer is the strongest part of the project. It works around Lightpanda's single-WebSocket model instead of assuming standard Chrome flows.
-- [x] The cache layer is simple but useful. Every task can checkpoint and resume.
-- [x] The agent runner already separates planning, research, synthesis, drafting, and report generation.
-- [x] The browser pacing is intentionally humanized, which is valuable for fragile sites.
-- [x] Artifact output is understandable: cache in `.cache/`, reports in `reports/`, screenshots in `/tmp`.
-
-### What is limited today
-
-- [ ] The `agent run` flow is still a small research loop, not a deep research engine.
-- [ ] Research breadth is capped by `--max-queries` and `--max-results`, with only a few articles deeply opened per query.
-- [ ] There is no persistent document store; the system writes final artifacts, not a reusable research corpus.
-- [ ] Search, fetch, extract, and synthesize now live in separate modules, but long-running execution is still orchestrated by one top-level runner.
-- [ ] There is no normalized source model with metadata like canonical URL, published date, author, freshness, trust score, or extraction status.
-- [ ] There is no long-running orchestration layer for retries, budgets, queues, backoff, scheduling, or concurrency control.
-- [ ] There is no workflow abstraction yet; use cases are hardcoded into specific tasks.
-- [ ] The current LLM layer mostly works from prompt-local JSON payloads, not from a structured evidence model.
-- [ ] There are no tests around scraping selectors, page digest quality, cache resume behavior, or report stability.
-
-### The practical conclusion
-
-- [x] This repo is a strong foundation for browser-driven research.
-- [ ] This repo is not yet a full research platform.
-- [ ] The next step should not be "add more prompts". The next step should be "add a research system".
-
-## Product Direction
-
-The project should evolve from "a CLI that runs a few smart browser tasks" into "a long-running research agent platform".
-
-That platform should be able to:
-
-- [ ] search across many pages and many source types
-- [ ] save raw evidence and structured extracts
-- [ ] resume safely after interruptions
-- [ ] analyze repeated patterns across sources
-- [ ] detect trends, gaps, and opportunities
-- [ ] generate reports, briefs, drafts, and datasets
-- [ ] keep every conclusion traceable back to sources
-
-## Core Principles
-
-- [x] Evidence first: every important conclusion should point back to captured sources.
-- [x] Long-running by design: every workflow should survive restarts, failures, and partial completion.
-- [ ] Separation of concerns: search, fetch, extract, analyze, synthesize, and publish should be independent stages.
-- [x] Reusability: once a source is fetched and parsed, later workflows should be able to reuse it.
-- [ ] Human approval gates: publishing-oriented tasks should stop at review.
-- [ ] Honest freshness: time-sensitive outputs should record when the research was collected.
-
-## Example Workflow 1: Android App Opportunity Hunter
-
-This is one of the best target workflows for this repo because the current project already has a Play Store task and a generic browser research task.
-
-### Goal
-
-- [ ] Discover an app category or feature trend that looks promising right now.
-- [ ] Search broadly across app stores, product forums, reviews, discussions, and technical sources.
-- [ ] Save the evidence.
-- [ ] Analyze what users want, what competitors are missing, and what could go viral.
-- [ ] Produce a report with concrete app ideas, feature priorities, and positioning.
-
-### Ideal workflow
-
-- [ ] Define a niche or seed prompt such as "AI habit tracker", "study planner", or "budgeting app for couples".
-- [ ] Search Google Play for competitors and collect top listings, ratings, descriptions, and review patterns.
-- [ ] Search the web for user pain points on forums, blogs, Reddit, Hacker News, Product Hunt, and relevant communities.
-- [ ] Extract recurring complaints, requested features, pricing signals, and market saturation clues.
-- [ ] Group findings into themes such as "onboarding pain", "retention hooks", "AI novelty", or "privacy concerns".
-- [ ] Score opportunities by demand, competition quality, monetization fit, and implementation complexity.
-- [ ] Generate a final report with app ideas, viral hooks, MVP features, audience, risks, and launch angles.
-
-### What the current repo can already support
-
-- [x] Play Store scraping and app detail collection
-- [x] Small-scale web research from DuckDuckGo HTML
-- [x] LLM synthesis into a report
-- [x] Resumable local artifacts
-
-### What must be added for this workflow to be truly useful
-
-- [ ] Multi-source research beyond current search and Play Store coverage
-- [ ] Larger page budgets and source queues
-- [ ] Structured storage for sources and extracted signals
-- [ ] Theme clustering and opportunity scoring
-- [ ] A reusable "android-opportunity" workflow template
-
-## Example Workflow 2: Technical Article Builder
-
-This is the second strong target because the repo already knows how to search, open pages, summarize, and draft.
-
-### Goal
-
-- [ ] Research a technical subject currently discussed across the web.
-- [ ] Collect primary and secondary sources.
-- [ ] Distill the important claims and disagreements.
-- [ ] Produce a structured article brief and a draft with citations.
-
-### Ideal workflow
-
-- [ ] Start with a topic such as "browser automation with CDP", "MCP adoption", or "the tradeoffs of local-first AI agents".
-- [ ] Search across docs, release notes, blog posts, issue trackers, discussions, and expert commentary.
-- [ ] Capture publish date, author, domain, title, and claims.
-- [ ] Identify repeated themes, novel insights, and conflicting viewpoints.
-- [ ] Build an outline from evidence, not from generic prior knowledge.
-- [ ] Generate article sections with linked sources and open questions.
-- [ ] Produce a review-ready markdown article package.
-
-### What the current repo can already support
-
-- [x] Query planning
-- [x] Search result collection
-- [x] Article opening and page digests
-- [x] Research summary generation
-- [x] Draft generation for lighter content tasks
-
-### What must be added for this workflow to be serious
-
-- [ ] Citation tracking and source metadata
-- [ ] Better source quality ranking
-- [ ] Primary-source preference rules
-- [ ] Multi-pass synthesis instead of one-shot summarization
-- [ ] A reusable "article-research" workflow template
-
-## Target Architecture
-
-The simplest scalable shape for this repo is:
-
-### 1. Job layer
-
-- [ ] `Job`: one user request, one budget, one lifecycle
-- [ ] `Workflow`: reusable template that defines stages
-- [ ] `RunStep`: one execution unit with status, timing, retries, and artifacts
-
-### 2. Research layer
-
-- [ ] `SearchSource`: DuckDuckGo, GitHub, Google Play, docs sites, forums, news, blogs
-- [ ] `SearchResult`: normalized search candidate with rank and metadata
-- [ ] `FetchedDocument`: raw HTML, text extract, screenshot, checksum, canonical URL
-- [ ] `Extraction`: entities, facts, quotes, themes, sentiment, complaints, opportunities
-
-### 3. Storage layer
-
-- [ ] database for jobs, sources, documents, extracted facts, and outputs
-- [ ] filesystem artifact store for HTML snapshots, JSON extracts, screenshots, and markdown reports
-- [ ] cache invalidation and freshness rules
-
-### 4. Analysis layer
-
-- [ ] deduplication
-- [ ] clustering
-- [x] contradiction detection
-- [ ] ranking
-- [ ] trend scoring
-- [ ] evidence-backed summarization
-
-### 5. Output layer
-
-- [ ] report generator
-- [ ] markdown brief generator
-- [ ] article draft generator
-- [ ] opportunity memo generator
-- [ ] dataset export
-
-## Proposed CLI Evolution
-
-The first workflow commands now exist, and this section shows the intended operator-facing UX.
+## Main Commands
 
 ```bash
-# Research an Android app niche deeply
-npm run start -- workflow run android-opportunity \
-  --topic "ai study planner" \
-  --max-results 30 \
-  --max-runtime-hours 8
-
-# Build a technical article research package
-npm run start -- workflow run article-research \
-  --topic "browser automation with Lightpanda and CDP" \
-  --max-results 25
-
-# Continue a stopped job
-npm run start -- workflow enqueue article-research \
-  --topic "browser automation with Lightpanda and CDP"
-
-# Process queued work
-npm run start -- worker run --once
-
-# Inspect evidence collected for a job
-npm run start -- job inspect --id 20260320_ab12cd
-```
-
-## Roadmap
-
-This is the execution checklist. Items already present in the repo are marked `[x]`. Planned work remains `[ ]`.
-
-### Phase 0: Preserve And Clarify The Existing Foundation
-
-- [x] Keep the Lightpanda-based CDP automation core
-- [x] Keep resumable JSON checkpoints in `.cache/`
-- [x] Keep artifact-oriented output under `reports/`
-- [ ] Rename "agent" concepts so they describe staged research more explicitly
-- [ ] Make README, examples, and CLI help align with the real current behavior
-- [ ] Add a single architecture diagram to the docs
-
-### Phase 1: Introduce A Real Job Model
-
-- [x] Add a normalized `Job` model with id, status, timestamps, budget, and workflow type
-- [x] Add `RunStep` records for each stage: plan, search, fetch, extract, analyze, write
-- [x] Record retry counts, failure reasons, and durations per step
-- [x] Make resume operate at the step level instead of only task-level snapshots
-- [ ] Add stable artifact manifests so downstream tools can inspect outputs
-
-### Phase 2: Add Durable Storage
-
-- [x] Introduce SQLite first for local development simplicity
-- [x] Add tables for research queries, sources, and documents for agent web research
-- [ ] Add tables for jobs, sources, documents, extractions, and outputs
-- [x] Store canonical URL, fetched timestamp, checksum, and source type per document
-- [x] Persist raw HTML or text extracts so results can be re-analyzed without refetching
-- [ ] Support upgrading to Postgres later without redesigning the model
-
-### Phase 3: Split Search, Fetch, And Extraction
-
-- [x] Refactor `agent-runner` into composable pipeline stages
-- [x] Create a search adapter interface
-- [x] Create a fetcher interface
-- [x] Create an extractor interface
-- [ ] Create document quality checks for thin pages, blocked pages, and duplicates
-- [ ] Add source-specific extraction strategies instead of one generic page digest
-
-### Phase 4: Increase Research Depth Safely
-
-- [ ] Add configurable budgets for pages, time, domains, and parallelism
-- [x] Allow jobs to search and review far more than the current few-result limit
-- [ ] Add queue-based processing for large source lists
-- [ ] Add per-domain backoff and failure tracking
-- [ ] Add domain allowlists and blocklists
-- [x] Add incremental saves after every meaningful state transition
-
-### Phase 5: Build An Evidence Model
-
-- [x] Extract basic claims, entities, complaints, feature requests, and themes from agent research documents
-- [x] Link persisted extraction items back to source documents
-- [x] Store confidence and extraction method metadata
-- [x] Deduplicate repeated findings across sources
-- [x] Make research summaries cite supporting evidence ids or links
-
-### Phase 6: Improve Analysis Quality
-
-- [ ] Add clustering of sources by topic and intent
-- [ ] Add trend scoring from repeated signals across recent sources
-- [x] Add contradiction detection between sources
-- [x] Add source quality scoring with bias toward primary sources when available
-- [x] Add freshness awareness for time-sensitive workflows
-- [x] Add structured synthesis prompts that consume evidence, not raw page dumps
-
-### Phase 7: Productize The First Two Workflows
-
-- [x] Implement `android-opportunity` workflow template
-- [x] Implement `article-research` workflow template
-- [x] Define workflow inputs, outputs, budgets, and review gates
-- [ ] Produce a consistent final folder layout for each workflow
-- [ ] Add example reports for both workflows
-
-### Phase 8: Add Interfaces For Real Use
-
-- [x] Add a local HTTP API for submitting and monitoring jobs
-- [x] Add a minimal dashboard for job status, logs, evidence, and reports
-- [ ] Add live streaming logs for long-running runs
-- [ ] Add job pause, resume, cancel, and rerun
-- [ ] Add workflow presets and saved configurations
-
-### Phase 9: Quality, Testing, And Trust
-
-- [ ] Add unit tests for cache, run-state transitions, and LLM JSON normalization
-- [ ] Add fixture-based tests for scraping and extraction logic
-- [ ] Add golden-file tests for report generation
-- [ ] Add failure-mode tests for blocked pages and empty search results
-- [ ] Add prompt versioning and change tracking
-- [ ] Add documentation for source reliability and known limitations
-
-## Immediate Build Order
-
-If we start implementation after validating this roadmap, the highest-leverage order is:
-
-- [ ] Create the job and step schema
-- [ ] Add SQLite persistence
-- [x] Refactor `agent-runner` into staged pipeline modules
-- [ ] Save fetched documents and extracted page records
-- [ ] Build the first reusable workflow template: `android-opportunity`
-- [ ] Add evidence-backed report generation
-- [ ] Add API endpoints and a basic monitor UI
-
-## Definition Of "Amazing" For V1
-
-We should consider the first serious version complete when this repo can do all of the following:
-
-- [ ] Run for 30 to 120 minutes without losing state
-- [ ] Collect and store at least 100 useful source pages in one job
-- [ ] Reuse previously fetched sources across runs
-- [ ] Produce a report whose key conclusions are backed by saved evidence
-- [ ] Support at least two polished reusable workflows
-- [ ] Resume safely after interruption without restarting from zero
-- [ ] Let a user inspect what was searched, what was fetched, what was extracted, and what was concluded
-
-## Current Commands
-
-These are the commands that exist today.
-
-```bash
-cp .env.example .env
+# Install and start Lightpanda
 npm install
-
-# Start Lightpanda
 npm run lightpanda:start
 
-# GitHub repository scanning
-npm run start -- github \
-  --url 'https://github.com/search?q=language%3ATypescript&type=repositories' \
-  --pages 10 \
-  --criteria 'Interesting repos with unusual engineering depth'
-
-# Google Play market analysis
-npm run start -- playstore \
-  --query 'gratitude journal' \
-  --analyze-top 10
-
-# Lightweight browser research + drafting
+# General research job
 npm run start -- agent run \
-  "Research cheerful campaign ideas for our product, draft one launch post, and write 5 community comments"
+  "Research cheerful launch ideas for our product and write one evidence-backed post"
+
+# Built-in workflow templates
+npm run start -- workflow list
+npm run start -- workflow run android-opportunity \
+  --topic "ai study planner"
+npm run start -- workflow run article-research \
+  --topic "browser automation with Lightpanda and CDP"
+
+# Queue long jobs
+npm run start -- workflow enqueue android-opportunity \
+  --topic "budgeting app for couples"
+npm run start -- queue list
+npm run start -- worker run --once
+
+# Monitoring API and dashboard
+npm run start -- server run --port 4317
 ```
+
+## Quick Start
+
+1. Copy the environment file and fill in your API key.
+2. Install dependencies.
+3. Start Lightpanda.
+4. Run either a direct `agent run` job or a `workflow run` template.
+5. Start the local dashboard if you want to inspect jobs and queue state in the browser.
+
+## Current System Shape
+
+The project currently has these main layers:
+
+- Browser automation with Lightpanda over CDP.
+- Task orchestration for `github`, `playstore`, and long-form `agent` research.
+- Durable storage in `.data/web-task-agent.sqlite`.
+- Artifact output in `reports/`.
+- Resumable local state in `.cache/`.
+- Queue and worker execution for long-running jobs.
+- Local management API and dashboard.
+
+## Monitoring Surface
+
+The dashboard is served from the local management server root:
+
+- `GET /`
+- `GET /api/health`
+- `GET /api/jobs`
+- `GET /api/jobs/:id`
+- `GET /api/queue`
+- `GET /api/recoverable`
+
+## Project Layout
+
+- [src/cli.ts](/home/othmane/Downloads/web-task-agent/src/cli.ts) contains the CLI entrypoints.
+- [src/tasks/agent-runner.ts](/home/othmane/Downloads/web-task-agent/src/tasks/agent-runner.ts) orchestrates staged research jobs.
+- [src/lib/job-store.ts](/home/othmane/Downloads/web-task-agent/src/lib/job-store.ts) contains the SQLite job, evidence, and graph store.
+- [src/lib/job-queue.ts](/home/othmane/Downloads/web-task-agent/src/lib/job-queue.ts) contains queue persistence.
+- [src/tasks/queue-worker.ts](/home/othmane/Downloads/web-task-agent/src/tasks/queue-worker.ts) runs queued jobs.
+- [src/server/management-server.ts](/home/othmane/Downloads/web-task-agent/src/server/management-server.ts) serves the local API and dashboard.
+- [src/workflows/index.ts](/home/othmane/Downloads/web-task-agent/src/workflows/index.ts) defines the built-in workflow templates.
 
 ## Environment
 
@@ -383,8 +98,12 @@ ANTHROPIC_TIMEOUT_MS=90000
 WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 ```
 
-## Final Notes
+## Current Limitations
 
-- [x] The repo already solves a non-trivial browser automation problem well.
-- [x] The next major gain will come from orchestration and storage, not from adding more one-off task scripts.
-- [ ] After validating this roadmap, implementation should start with the data model and staged pipeline refactor.
+- The dashboard is currently read-focused; pause, resume, cancel, rerun, and live log streaming are not implemented yet.
+- Research quality still relies on generic heuristics in several places and needs stronger source-specific extractors.
+- Automated tests and fixture coverage are still thin compared with the size of the system.
+
+## Roadmap
+
+See [ROADMAP.md](/home/othmane/Downloads/web-task-agent/ROADMAP.md) for the simplified macro roadmap and the next priorities.
