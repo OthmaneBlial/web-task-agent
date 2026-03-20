@@ -232,6 +232,17 @@ function renderResearchSummary(summary: AgentResearchSummary): string {
   return lines.join("\n").trim();
 }
 
+function countCapturedResearchSources(research: AgentResearchResult[]): number {
+  return research.reduce((total, entry) => total + entry.results.length, 0);
+}
+
+function countCapturedResearchDocuments(research: AgentResearchResult[]): number {
+  return research.reduce(
+    (total, entry) => total + entry.results.filter((result) => Boolean(result.page)).length,
+    0
+  );
+}
+
 function renderReport(state: AgentRunState): string {
   const postDraft = readIfExists(state.outputs.postDraftPath);
   const commentsDraft = readIfExists(state.outputs.commentsDraftPath);
@@ -805,10 +816,12 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     const summarizeResearch = (): {
       researchQueriesCompleted: number;
       sourcesCaptured: number;
+      documentsCaptured: number;
       researchErrors: number;
     } => ({
       researchQueriesCompleted: state.research.length,
-      sourcesCaptured: state.research.reduce((total, entry) => total + entry.results.length, 0),
+      sourcesCaptured: countCapturedResearchSources(state.research),
+      documentsCaptured: countCapturedResearchDocuments(state.research),
       researchErrors: state.research.filter((entry) => Boolean(entry.error)).length
     });
 
@@ -981,6 +994,13 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         const researchDir = path.join(state.artifactDir, "research");
         ensureDir(researchDir);
 
+        for (const existing of state.research) {
+          jobStore.persistAgentResearchResult(existing, {
+            searchProvider: "duckduckgo_html",
+            searchUrl: this.buildSearchUrl(existing.query)
+          });
+        }
+
         if (pendingQueries.length > 0) {
           await jobStore.runStep(
             researchStep,
@@ -993,6 +1013,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                 writeJsonAtomic(rawPath, result);
                 jobStore.registerArtifact(`research_${slugify(query)}`, "research_json", rawPath, {
                   query
+                });
+                jobStore.persistAgentResearchResult(result, {
+                  searchProvider: "duckduckgo_html",
+                  searchUrl: this.buildSearchUrl(query)
                 });
                 appendNote(
                   state,

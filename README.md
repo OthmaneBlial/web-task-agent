@@ -16,6 +16,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Lightweight browser research runner in `src/tasks/agent-runner.ts`
 - [x] Markdown and JSON artifact output under `reports/`
 - [x] SQLite-backed job, step, and artifact persistence under `.data/web-task-agent.sqlite`
+- [x] Normalized agent research persistence for queries, sources, and document snapshots
 - [ ] Multi-hour job execution with automatic recovery
 - [ ] Hundreds-of-pages research per run
 - [ ] Durable database-backed source storage
@@ -238,6 +239,7 @@ This is the execution checklist. Items already present in the repo are marked `[
 ### Phase 2: Add Durable Storage
 
 - [x] Introduce SQLite first for local development simplicity
+- [x] Add tables for research queries, sources, and documents for agent web research
 - [ ] Add tables for jobs, sources, documents, extractions, and outputs
 - [ ] Store canonical URL, fetched timestamp, checksum, and source type per document
 - [ ] Persist raw HTML or text extracts so results can be re-analyzed without refetching
