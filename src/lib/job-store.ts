@@ -52,6 +52,17 @@ interface PersistAgentResearchOptions {
   searchUrl?: string | null;
 }
 
+type ExtractionKind = "entity" | "theme" | "complaint" | "feature_request" | "claim";
+
+interface ExtractionCandidate {
+  kind: ExtractionKind;
+  value: string;
+  evidenceText: string;
+  confidence: number;
+  method: string;
+  metadata?: unknown;
+}
+
 let sharedDatabase: DatabaseSync | null = null;
 let sharedDatabasePath: string | null = null;
 
@@ -61,6 +72,10 @@ function nowIso(): string {
 
 function serializeJson(value: unknown): string {
   return JSON.stringify(value ?? {});
+}
+
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function normalizeError(error: unknown): string {
@@ -136,7 +151,7 @@ function hostnameOf(rawUrl: string): string | null {
 function buildDigestText(result: AgentSearchResult): string {
   const page = result.page;
   if (!page) {
-    return [result.title, result.snippet].join("\n").trim();
+    return normalizeText([result.title, result.snippet].join("\n"));
   }
 
   return [
@@ -149,6 +164,217 @@ function buildDigestText(result: AgentSearchResult): string {
     .join("\n")
     .replace(/\n{2,}/g, "\n")
     .trim();
+}
+
+function splitSentences(text: string): string[] {
+  return normalizeText(text)
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => normalizeText(sentence))
+    .filter((sentence) => sentence.length >= 20);
+}
+
+function clampConfidence(value: number): number {
+  return Math.max(0, Math.min(1, Number(value.toFixed(2))));
+}
+
+function normalizeExtractionValue(value: string): string {
+  return normalizeText(value).toLowerCase();
+}
+
+function selectUniqueExtractions(
+  candidates: ExtractionCandidate[],
+  limitPerKind: number = 8
+): ExtractionCandidate[] {
+  const seen = new Set<string>();
+  const counts = new Map<ExtractionKind, number>();
+  const selected: ExtractionCandidate[] = [];
+
+  for (const candidate of candidates) {
+    const normalizedValue = normalizeExtractionValue(candidate.value);
+    if (!normalizedValue) {
+      continue;
+    }
+
+    const count = counts.get(candidate.kind) ?? 0;
+    if (count >= limitPerKind) {
+      continue;
+    }
+
+    const key = `${candidate.kind}:${normalizedValue}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    counts.set(candidate.kind, count + 1);
+    selected.push(candidate);
+  }
+
+  return selected;
+}
+
+function extractCandidateEntities(text: string): string[] {
+  const matches = text.match(/\b(?:[A-Z][a-z0-9]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z0-9]+|[A-Z]{2,})){0,3}\b/g) ?? [];
+  const blocked = new Set([
+    "The",
+    "This",
+    "That",
+    "These",
+    "Those",
+    "And",
+    "But",
+    "For",
+    "With",
+    "From",
+    "Into",
+    "About"
+  ]);
+
+  return matches
+    .map((match) => normalizeText(match))
+    .filter((match) => match.length >= 3 && match.length <= 80)
+    .filter((match) => !blocked.has(match))
+    .slice(0, 12);
+}
+
+function extractThemePhrases(result: AgentSearchResult): string[] {
+  const candidates = [
+    result.page?.h1 ?? "",
+    result.title,
+    ...(result.page?.headings ?? [])
+  ];
+
+  return candidates
+    .map((value) => normalizeText(value))
+    .filter((value) => value.length >= 6 && value.length <= 90)
+    .slice(0, 10);
+}
+
+function extractSentencesByTerms(sentences: string[], terms: string[]): string[] {
+  return sentences.filter((sentence) => {
+    const lower = sentence.toLowerCase();
+    return terms.some((term) => lower.includes(term));
+  });
+}
+
+function buildExtractionCandidates(result: AgentSearchResult): ExtractionCandidate[] {
+  const combinedText = buildDigestText(result);
+  const sentences = splitSentences(
+    [
+      result.snippet,
+      result.page?.description ?? "",
+      ...(result.page?.paragraphs ?? [])
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  const claimSentences = splitSentences(
+    [
+      result.snippet,
+      result.page?.description ?? "",
+      ...(result.page?.paragraphs ?? [])
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  const titleText = normalizeText(
+    [
+      result.title,
+      result.page?.title ?? "",
+      result.page?.h1 ?? ""
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  const candidates: ExtractionCandidate[] = [];
+
+  for (const entity of extractCandidateEntities(titleText)) {
+    candidates.push({
+      kind: "entity",
+      value: entity,
+      evidenceText: titleText,
+      confidence: 0.72,
+      method: "heuristic_capitalized_phrase",
+      metadata: {
+        source: "title"
+      }
+    });
+  }
+
+  for (const theme of extractThemePhrases(result)) {
+    candidates.push({
+      kind: "theme",
+      value: theme,
+      evidenceText: theme,
+      confidence: 0.68,
+      method: "heuristic_heading_theme",
+      metadata: {
+        source: "headings"
+      }
+    });
+  }
+
+  for (const complaint of extractSentencesByTerms(sentences, [
+    "problem",
+    "issue",
+    "pain",
+    "difficult",
+    "hard",
+    "slow",
+    "broken",
+    "lack",
+    "missing",
+    "frustrat",
+    "complain",
+    "error",
+    "challenge",
+    "expensive"
+  ])) {
+    candidates.push({
+      kind: "complaint",
+      value: complaint,
+      evidenceText: complaint,
+      confidence: 0.77,
+      method: "heuristic_negative_sentence"
+    });
+  }
+
+  for (const request of extractSentencesByTerms(sentences, [
+    "should",
+    "could",
+    "wish",
+    "needs to",
+    "need to",
+    "needs more",
+    "want",
+    "would like",
+    "missing",
+    "feature request",
+    "roadmap"
+  ])) {
+    candidates.push({
+      kind: "feature_request",
+      value: request,
+      evidenceText: request,
+      confidence: 0.79,
+      method: "heuristic_request_sentence"
+    });
+  }
+
+  for (const claim of extractSentencesByTerms(
+    claimSentences.length > 0 ? claimSentences : splitSentences(combinedText),
+    [" is ", " are ", " can ", " helps ", " lets ", " uses ", " supports ", " enables ", " offers "]
+  )) {
+    candidates.push({
+      kind: "claim",
+      value: claim,
+      evidenceText: claim,
+      confidence: 0.66,
+      method: "heuristic_claim_sentence"
+    });
+  }
+
+  return selectUniqueExtractions(candidates);
 }
 
 function ensureParentDir(filePath: string): void {
@@ -295,6 +521,28 @@ function initializeSchema(database: DatabaseSync): void {
       UNIQUE(source_id, checksum_sha256)
     );
 
+    CREATE TABLE IF NOT EXISTS extractions (
+      id TEXT PRIMARY KEY,
+      job_id TEXT,
+      query_id TEXT,
+      source_id TEXT NOT NULL,
+      document_id TEXT,
+      kind TEXT NOT NULL,
+      value TEXT NOT NULL,
+      normalized_value TEXT NOT NULL,
+      evidence_text TEXT,
+      confidence REAL NOT NULL,
+      method TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE SET NULL,
+      FOREIGN KEY(query_id) REFERENCES research_queries(id) ON DELETE SET NULL,
+      FOREIGN KEY(source_id) REFERENCES sources(id) ON DELETE CASCADE,
+      FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE,
+      UNIQUE(source_id, document_id, kind, normalized_value)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
     CREATE INDEX IF NOT EXISTS idx_jobs_task_type ON jobs(task_type);
     CREATE INDEX IF NOT EXISTS idx_job_steps_job_id ON job_steps(job_id, position);
@@ -304,6 +552,9 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_job_sources_job_id ON job_sources(job_id, rank);
     CREATE INDEX IF NOT EXISTS idx_documents_source_id ON documents(source_id, captured_at);
     CREATE INDEX IF NOT EXISTS idx_documents_canonical_url ON documents(canonical_url);
+    CREATE INDEX IF NOT EXISTS idx_extractions_job_id ON extractions(job_id, kind);
+    CREATE INDEX IF NOT EXISTS idx_extractions_source_id ON extractions(source_id, kind);
+    CREATE INDEX IF NOT EXISTS idx_extractions_document_id ON extractions(document_id);
   `);
 }
 
@@ -546,7 +797,7 @@ export class JobStore {
   persistAgentResearchResult(
     research: AgentResearchResult,
     options?: PersistAgentResearchOptions
-  ): { queryId: string; sourceCount: number; documentCount: number } {
+  ): { queryId: string; sourceCount: number; documentCount: number; extractionCount: number } {
     const timestamp = nowIso();
     const queryId = `${this.jobId}:query:${hashValue(research.query.toLowerCase()).slice(0, 16)}`;
     const queryStatus =
@@ -589,6 +840,7 @@ export class JobStore {
     );
 
     let documentCount = 0;
+    let extractionCount = 0;
 
     research.results.forEach((result, index) => {
       const pageUrl = result.page?.url ?? result.url;
@@ -672,10 +924,11 @@ export class JobStore {
         timestamp
       );
 
+      let documentId: string | null = null;
       if (result.page) {
         const contentText = buildDigestText(result);
         const checksum = hashValue(contentText);
-        const documentId = `doc_${hashValue(`${sourceId}:${checksum}`).slice(0, 24)}`;
+        documentId = `doc_${hashValue(`${sourceId}:${checksum}`).slice(0, 24)}`;
 
         this.db.prepare(`
           INSERT INTO documents (
@@ -722,12 +975,58 @@ export class JobStore {
 
         documentCount += 1;
       }
+
+      const extractionCandidates = buildExtractionCandidates(result);
+      extractionCandidates.forEach((candidate) => {
+        const normalizedValue = normalizeExtractionValue(candidate.value);
+        const extractionId = `ext_${hashValue(
+          `${sourceId}:${documentId ?? "none"}:${candidate.kind}:${normalizedValue}`
+        ).slice(0, 24)}`;
+
+        this.db.prepare(`
+          INSERT INTO extractions (
+            id, job_id, query_id, source_id, document_id, kind, value, normalized_value,
+            evidence_text, confidence, method, metadata_json, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            job_id = excluded.job_id,
+            query_id = excluded.query_id,
+            source_id = excluded.source_id,
+            document_id = excluded.document_id,
+            kind = excluded.kind,
+            value = excluded.value,
+            normalized_value = excluded.normalized_value,
+            evidence_text = excluded.evidence_text,
+            confidence = excluded.confidence,
+            method = excluded.method,
+            metadata_json = excluded.metadata_json,
+            updated_at = excluded.updated_at
+        `).run(
+          extractionId,
+          this.jobId,
+          queryId,
+          sourceId,
+          documentId,
+          candidate.kind,
+          candidate.value,
+          normalizedValue,
+          candidate.evidenceText,
+          clampConfidence(candidate.confidence),
+          candidate.method,
+          serializeJson(candidate.metadata),
+          timestamp,
+          timestamp
+        );
+
+        extractionCount += 1;
+      });
     });
 
     return {
       queryId,
       sourceCount: research.results.length,
-      documentCount
+      documentCount,
+      extractionCount
     };
   }
 

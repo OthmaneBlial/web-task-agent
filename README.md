@@ -17,6 +17,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Markdown and JSON artifact output under `reports/`
 - [x] SQLite-backed job, step, and artifact persistence under `.data/web-task-agent.sqlite`
 - [x] Normalized agent research persistence for queries, sources, and document snapshots
+- [x] Basic extraction persistence for entities, themes, complaints, feature requests, and claims
 - [ ] Multi-hour job execution with automatic recovery
 - [ ] Hundreds-of-pages research per run
 - [ ] Durable database-backed source storage
@@ -265,9 +266,9 @@ This is the execution checklist. Items already present in the repo are marked `[
 
 ### Phase 5: Build An Evidence Model
 
-- [ ] Extract claims, entities, complaints, feature requests, competitors, and themes
-- [ ] Link every extracted item back to source documents
-- [ ] Store confidence and extraction method metadata
+- [x] Extract basic claims, entities, complaints, feature requests, and themes from agent research documents
+- [x] Link persisted extraction items back to source documents
+- [x] Store confidence and extraction method metadata
 - [ ] Deduplicate repeated findings across sources
 - [ ] Make research summaries cite supporting evidence ids or links
 
