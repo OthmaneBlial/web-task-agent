@@ -16,6 +16,7 @@ export interface AgentExtractStageResult {
   sourceCount: number;
   documentCount: number;
   extractionCount: number;
+  snapshotCount: number;
 }
 
 interface PersistResearchMetadata {
@@ -82,7 +83,8 @@ export class AgentExtractStage {
       rawPath,
       sourceCount: persisted.sourceCount,
       documentCount: persisted.documentCount,
-      extractionCount: persisted.extractionCount
+      extractionCount: persisted.extractionCount,
+      snapshotCount: persisted.snapshotCount
     };
   }
 }

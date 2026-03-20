@@ -858,6 +858,27 @@ function initializeSchema(database: DatabaseSync): void {
       UNIQUE(source_id, checksum_sha256)
     );
 
+    CREATE TABLE IF NOT EXISTS source_snapshots (
+      id TEXT PRIMARY KEY,
+      source_id TEXT NOT NULL,
+      job_id TEXT,
+      query_id TEXT,
+      document_id TEXT,
+      snapshot_kind TEXT NOT NULL,
+      checksum_sha256 TEXT NOT NULL,
+      content_text TEXT NOT NULL DEFAULT '',
+      content_json TEXT NOT NULL DEFAULT '{}',
+      captured_at TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(source_id) REFERENCES sources(id) ON DELETE CASCADE,
+      FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE SET NULL,
+      FOREIGN KEY(query_id) REFERENCES research_queries(id) ON DELETE SET NULL,
+      FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE SET NULL,
+      UNIQUE(source_id, snapshot_kind, checksum_sha256)
+    );
+
     CREATE TABLE IF NOT EXISTS extractions (
       id TEXT PRIMARY KEY,
       job_id TEXT,
@@ -899,6 +920,8 @@ function initializeSchema(database: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_job_sources_job_id ON job_sources(job_id, rank);
     CREATE INDEX IF NOT EXISTS idx_documents_source_id ON documents(source_id, captured_at);
     CREATE INDEX IF NOT EXISTS idx_documents_canonical_url ON documents(canonical_url);
+    CREATE INDEX IF NOT EXISTS idx_source_snapshots_source_id ON source_snapshots(source_id, captured_at);
+    CREATE INDEX IF NOT EXISTS idx_source_snapshots_job_id ON source_snapshots(job_id, snapshot_kind);
     CREATE INDEX IF NOT EXISTS idx_extractions_job_id ON extractions(job_id, kind);
     CREATE INDEX IF NOT EXISTS idx_extractions_source_id ON extractions(source_id, kind);
     CREATE INDEX IF NOT EXISTS idx_extractions_document_id ON extractions(document_id);
@@ -1444,7 +1467,13 @@ export class JobStore {
   persistAgentResearchResult(
     research: AgentResearchResult,
     options?: PersistAgentResearchOptions
-  ): { queryId: string; sourceCount: number; documentCount: number; extractionCount: number } {
+  ): {
+    queryId: string;
+    sourceCount: number;
+    documentCount: number;
+    extractionCount: number;
+    snapshotCount: number;
+  } {
     const timestamp = nowIso();
     const queryId = `${this.jobId}:query:${hashValue(research.query.toLowerCase()).slice(0, 16)}`;
     const queryStatus =
@@ -1488,6 +1517,7 @@ export class JobStore {
 
     let documentCount = 0;
     let extractionCount = 0;
+    let snapshotCount = 0;
 
     research.results.forEach((result, index) => {
       const pageUrl = result.page?.url ?? result.url;
@@ -1571,6 +1601,54 @@ export class JobStore {
         timestamp
       );
 
+      const searchSnapshotJson = {
+        title: result.title,
+        url: result.url,
+        snippet: result.snippet,
+        site,
+        pageUrl: result.page?.url ?? null
+      };
+      const searchSnapshotChecksum = hashValue(serializeJson(searchSnapshotJson));
+      const searchSnapshotId = `snap_${hashValue(
+        `${sourceId}:search_result:${searchSnapshotChecksum}`
+      ).slice(0, 24)}`;
+
+      this.db.prepare(`
+        INSERT INTO source_snapshots (
+          id, source_id, job_id, query_id, document_id, snapshot_kind, checksum_sha256,
+          content_text, content_json, captured_at, metadata_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source_id, snapshot_kind, checksum_sha256) DO UPDATE SET
+          job_id = excluded.job_id,
+          query_id = excluded.query_id,
+          document_id = excluded.document_id,
+          content_text = excluded.content_text,
+          content_json = excluded.content_json,
+          captured_at = excluded.captured_at,
+          metadata_json = excluded.metadata_json,
+          updated_at = excluded.updated_at
+      `).run(
+        searchSnapshotId,
+        sourceId,
+        this.jobId,
+        queryId,
+        null,
+        "search_result",
+        searchSnapshotChecksum,
+        normalizeText([result.title, result.snippet].join("\n")),
+        serializeJson(searchSnapshotJson),
+        research.searchedAt,
+        serializeJson({
+          rank: index + 1,
+          searchProvider,
+          reviewStatus: result.reviewStatus ?? null
+        }),
+        research.searchedAt,
+        timestamp
+      );
+
+      snapshotCount += 1;
+
       let documentId: string | null = null;
       if (result.page) {
         const contentText = buildDigestText(result);
@@ -1621,6 +1699,55 @@ export class JobStore {
         );
 
         documentCount += 1;
+
+        const pageSnapshotJson = {
+          url: result.page.url,
+          title: result.page.title,
+          description: result.page.description,
+          h1: result.page.h1,
+          headings: result.page.headings,
+          paragraphs: result.page.paragraphs
+        };
+        const pageSnapshotChecksum = hashValue(serializeJson(pageSnapshotJson));
+        const pageSnapshotId = `snap_${hashValue(
+          `${sourceId}:page_digest:${pageSnapshotChecksum}`
+        ).slice(0, 24)}`;
+
+        this.db.prepare(`
+          INSERT INTO source_snapshots (
+            id, source_id, job_id, query_id, document_id, snapshot_kind, checksum_sha256,
+            content_text, content_json, captured_at, metadata_json, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(source_id, snapshot_kind, checksum_sha256) DO UPDATE SET
+            job_id = excluded.job_id,
+            query_id = excluded.query_id,
+            document_id = excluded.document_id,
+            content_text = excluded.content_text,
+            content_json = excluded.content_json,
+            captured_at = excluded.captured_at,
+            metadata_json = excluded.metadata_json,
+            updated_at = excluded.updated_at
+        `).run(
+          pageSnapshotId,
+          sourceId,
+          this.jobId,
+          queryId,
+          documentId,
+          "page_digest",
+          pageSnapshotChecksum,
+          contentText,
+          serializeJson(pageSnapshotJson),
+          result.page.capturedAt,
+          serializeJson({
+            reviewStatus: result.reviewStatus ?? null,
+            dwellSeconds: result.dwellSeconds ?? null,
+            skipReason: result.skipReason ?? null
+          }),
+          result.page.capturedAt,
+          timestamp
+        );
+
+        snapshotCount += 1;
       }
 
       const extractionCandidates =
@@ -1674,7 +1801,8 @@ export class JobStore {
       queryId,
       sourceCount: research.results.length,
       documentCount,
-      extractionCount
+      extractionCount,
+      snapshotCount
     };
   }
 

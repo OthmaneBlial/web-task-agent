@@ -763,7 +763,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                     rawPath: result.rawPath,
                     sourceCount: result.sourceCount,
                     documentCount: result.documentCount,
-                    extractionCount: result.extractionCount
+                    extractionCount: result.extractionCount,
+                    snapshotCount: result.snapshotCount
                   })
                 }
               );

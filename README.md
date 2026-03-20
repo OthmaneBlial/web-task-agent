@@ -30,7 +30,7 @@ This repository already has a solid browser automation core. What it does not ye
 - [x] Extractor interface with a heuristic default extractor implementation
 - [x] Multi-hour job execution with automatic recovery
 - [x] Hundreds-of-pages research per run
-- [ ] Durable database-backed source storage
+- [x] Durable database-backed source storage
 - [ ] Source deduplication and canonicalization across runs
 - [ ] Evidence graph linking sources, claims, entities, and outputs
 - [ ] Workflow templates for real business research jobs
@@ -252,8 +252,8 @@ This is the execution checklist. Items already present in the repo are marked `[
 - [x] Introduce SQLite first for local development simplicity
 - [x] Add tables for research queries, sources, and documents for agent web research
 - [ ] Add tables for jobs, sources, documents, extractions, and outputs
-- [ ] Store canonical URL, fetched timestamp, checksum, and source type per document
-- [ ] Persist raw HTML or text extracts so results can be re-analyzed without refetching
+- [x] Store canonical URL, fetched timestamp, checksum, and source type per document
+- [x] Persist raw HTML or text extracts so results can be re-analyzed without refetching
 - [ ] Support upgrading to Postgres later without redesigning the model
 
 ### Phase 3: Split Search, Fetch, And Extraction
