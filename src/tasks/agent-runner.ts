@@ -28,6 +28,7 @@ import {
   AgentFetchStage,
   summarizeFetchedResults
 } from "./agent/fetch-stage";
+import { createDefaultAgentFetcher } from "./agent/fetchers/browser-fetcher";
 import {
   applyExtractSuccess,
   applyFetchFailure,
@@ -261,7 +262,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
     const searchAdapter = createDefaultAgentSearchAdapter((message) => this.log(message));
     const searchStage = new AgentSearchStage(searchAdapter);
-    const fetchStage = new AgentFetchStage((message) => this.log(message));
+    const fetcher = createDefaultAgentFetcher((message) => this.log(message));
+    const fetchStage = new AgentFetchStage(fetcher);
     const extractStage = new AgentExtractStage(
       jobStore,
       state.artifactDir,
