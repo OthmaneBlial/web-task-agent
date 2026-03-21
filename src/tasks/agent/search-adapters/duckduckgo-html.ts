@@ -6,6 +6,7 @@ import {
   createPageSession,
   evaluateInBrowser,
   sleep,
+  withLightpandaRecovery,
   waitForAnySelector,
   waitForLoadEvent,
   waitForNetworkIdle
@@ -228,17 +229,42 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
     let pagesVisited = 0;
 
     while (nextPageUrl && aggregated.length < maxResultsPerQuery && pagesVisited < pagesTarget) {
-      let client: CDPClient | null = null;
-
       try {
-        client = await createPageSession(nextPageUrl);
-        await this.waitForSearchResults(client);
-        await this.scanSearchResultsPage(client, query);
+        const page = await withLightpandaRecovery({
+          label: `search query "${query}"`,
+          onRetry: async (_attempt, error) => {
+            this.log(
+              `Lightpanda session dropped while searching "${query}". Restarting browser and retrying once. (${error instanceof Error ? error.message : String(error)})`
+            );
+          },
+          task: async () => {
+            let client: CDPClient | null = null;
+            try {
+              client = await createPageSession(nextPageUrl!);
+              await this.waitForSearchResults(client);
+              await this.scanSearchResultsPage(client, query);
 
-        const page = await this.scrapeSearchResults(
-          client,
-          Math.max(1, maxResultsPerQuery - aggregated.length)
-        );
+              return await this.scrapeSearchResults(
+                client,
+                Math.max(1, maxResultsPerQuery - aggregated.length)
+              );
+            } catch (error) {
+              if (client) {
+                const screenshotPath = path.join("/tmp", `agent-research-${Date.now()}.png`);
+                try {
+                  await captureScreenshot(client, screenshotPath);
+                } catch {
+                  // Ignore screenshot failures.
+                }
+              }
+              throw error;
+            } finally {
+              if (client) {
+                await closePageSession(client);
+              }
+            }
+          }
+        });
         for (const result of page.results) {
           if (seenUrls.has(result.url)) {
             continue;
@@ -253,20 +279,7 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
         pagesVisited += 1;
         nextPageUrl = page.nextPageUrl;
       } catch (error) {
-        if (client) {
-          const screenshotPath = path.join("/tmp", `agent-research-${Date.now()}.png`);
-          try {
-            await captureScreenshot(client, screenshotPath);
-          } catch {
-            // Ignore screenshot failures.
-          }
-        }
-
         throw error;
-      } finally {
-        if (client) {
-          await closePageSession(client);
-        }
       }
     }
 

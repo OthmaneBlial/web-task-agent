@@ -182,12 +182,13 @@ case "${ACTION}" in
 
   --help|-h)
     cat <<'EOF'
-Usage: ./scripts/start-lightpanda.sh [start|stop|status|update]
+Usage: ./scripts/start-lightpanda.sh [start|stop|restart|status|update]
 
 Commands:
   start   Download (if needed) and start the Lightpanda CDP server (default)
           Automatically kills Chrome/other browsers if they occupy the port.
   stop    Stop the Lightpanda process
+  restart Stop and start the Lightpanda process
   status  Check if the CDP server is reachable and what browser is running
   update  Re-download the latest nightly binary
 
@@ -201,9 +202,14 @@ EOF
     exit 0
     ;;
 
+  restart)
+    "$0" stop
+    "$0" start
+    ;;
+
   *)
     echo "unknown action: ${ACTION}" >&2
-    echo "usage: $0 [start|stop|status|update|--help]" >&2
+    echo "usage: $0 [start|stop|restart|status|update|--help]" >&2
     exit 1
     ;;
 esac

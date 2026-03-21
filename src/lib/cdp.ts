@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 import CDP = require("chrome-remote-interface");
 
@@ -11,6 +13,24 @@ import type {
 } from "../types";
 
 export const DEBUG_PORT = Number(process.env.CDP_PORT ?? process.env.CHROME_PORT ?? "9222");
+const execFileAsync = promisify(execFile);
+const LIGHTPANDA_START_SCRIPT = path.resolve(process.cwd(), "scripts", "start-lightpanda.sh");
+
+type LightpandaCommandAction = "start" | "restart";
+type LightpandaCommandRunner = (action: LightpandaCommandAction) => Promise<void>;
+
+let lightpandaCommandRunner: LightpandaCommandRunner = async (action) => {
+  if (!fs.existsSync(LIGHTPANDA_START_SCRIPT)) {
+    throw new Error(`missing Lightpanda start script: ${LIGHTPANDA_START_SCRIPT}`);
+  }
+
+  await execFileAsync(LIGHTPANDA_START_SCRIPT, [action], {
+    env: process.env,
+    timeout: 180_000,
+    maxBuffer: 4 * 1024 * 1024
+  });
+};
+let activeLightpandaCommand: Promise<void> | null = null;
 
 function randomInt(min: number, max: number): number {
   const lower = Math.ceil(Math.min(min, max));
@@ -24,26 +44,145 @@ export async function sleep(ms: number, jitterRatio: number = 0.18): Promise<voi
   await new Promise((resolve) => setTimeout(resolve, actualMs));
 }
 
+function logLightpandaSupervisor(message: string): void {
+  const stamp = new Date().toISOString();
+  console.log(`[${stamp}] ${message}`);
+}
+
+async function isDebuggerReachable(timeoutMs: number = 1_500): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`, {
+      signal: controller.signal
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runLightpandaCommand(action: LightpandaCommandAction, reason?: string): Promise<void> {
+  if (!activeLightpandaCommand) {
+    activeLightpandaCommand = (async () => {
+      if (reason) {
+        logLightpandaSupervisor(
+          `${action === "restart" ? "restarting" : "starting"} Lightpanda automatically: ${reason}`
+        );
+      } else {
+        logLightpandaSupervisor(
+          `${action === "restart" ? "restarting" : "starting"} Lightpanda automatically`
+        );
+      }
+      await lightpandaCommandRunner(action);
+    })().finally(() => {
+      activeLightpandaCommand = null;
+    });
+  }
+
+  await activeLightpandaCommand;
+}
+
+export function configureLightpandaCommandRunnerForTests(
+  runner: LightpandaCommandRunner | null
+): void {
+  lightpandaCommandRunner =
+    runner ??
+    (async (action) => {
+      if (!fs.existsSync(LIGHTPANDA_START_SCRIPT)) {
+        throw new Error(`missing Lightpanda start script: ${LIGHTPANDA_START_SCRIPT}`);
+      }
+
+      await execFileAsync(LIGHTPANDA_START_SCRIPT, [action], {
+        env: process.env,
+        timeout: 180_000,
+        maxBuffer: 4 * 1024 * 1024
+      });
+    });
+  activeLightpandaCommand = null;
+}
+
+export function isRecoverableCdpError(error: unknown): boolean {
+  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ""}` : String(error);
+  return [
+    /websocket connection closed/i,
+    /websocket is not open/i,
+    /cdp server not reachable/i,
+    /failed to get json\/version/i,
+    /fetch failed/i,
+    /target closed/i,
+    /session closed/i,
+    /inspector\.detached/i,
+    /socket hang up/i,
+    /econnrefused/i,
+    /econnreset/i,
+    /err_connection_refused/i
+  ].some((pattern) => pattern.test(message));
+}
+
+export async function withLightpandaRecovery<T>(input: {
+  label: string;
+  task: () => Promise<T>;
+  maxAttempts?: number;
+  onRetry?: (attempt: number, error: unknown) => void | Promise<void>;
+}): Promise<T> {
+  const maxAttempts = Math.max(1, input.maxAttempts ?? 2);
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    try {
+      return await input.task();
+    } catch (error) {
+      attempt += 1;
+      const canRetry = attempt < maxAttempts && isRecoverableCdpError(error);
+      if (!canRetry) {
+        throw error;
+      }
+
+      await input.onRetry?.(attempt, error);
+      await ensureDebuggerReady({
+        forceRestart: true,
+        reason: `${input.label} failed with a recoverable CDP error`
+      });
+    }
+  }
+
+  throw new Error(`Lightpanda recovery exhausted for ${input.label}`);
+}
+
 /**
  * Verify the Lightpanda CDP server is reachable.
  */
-export async function ensureDebuggerReady(): Promise<void> {
-  const url = `http://127.0.0.1:${DEBUG_PORT}/json/version`;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
+export async function ensureDebuggerReady(options?: {
+  forceRestart?: boolean;
+  reason?: string;
+}): Promise<void> {
+  if (!options?.forceRestart) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (await isDebuggerReachable()) {
         return;
       }
-    } catch {
-      // Server not ready yet; retry.
-    }
-    if (attempt < 2) {
-      await sleep(500, 0.05);
+      if (attempt < 2) {
+        await sleep(500, 0.05);
+      }
     }
   }
+
+  await runLightpandaCommand(options?.forceRestart ? "restart" : "start", options?.reason);
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (await isDebuggerReachable()) {
+      return;
+    }
+    await sleep(250, 0.05);
+  }
+
   throw new Error(
-    `lightpanda CDP server not reachable on 127.0.0.1:${DEBUG_PORT}. run ./scripts/start-lightpanda.sh first`
+    `lightpanda CDP server not reachable on 127.0.0.1:${DEBUG_PORT} after automatic ${
+      options?.forceRestart ? "restart" : "start"
+    }`
   );
 }
 

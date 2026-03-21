@@ -2,7 +2,8 @@ import {
   closePageSession,
   createPageSession,
   evaluateInBrowser,
-  sleep
+  sleep,
+  withLightpandaRecovery
 } from "../../../lib/cdp";
 import { humanScroll } from "../../../lib/humanizer";
 import type {
@@ -146,22 +147,39 @@ export class BrowserPageFetcher implements AgentFetcher {
         continue;
       }
 
-      let client: CDPClient | null = null;
-
       try {
-        this.log(`opening article: ${result.title}`);
-        client = await createPageSession(result.url);
-        result.page = await this.scrapePageDigest(client);
-        Object.assign(result, await this.readOpenedPage(client, result, result.page));
+        const fetched = await withLightpandaRecovery({
+          label: `fetch article "${result.title}"`,
+          onRetry: async (_attempt, error) => {
+            this.log(
+              `Lightpanda session dropped while fetching ${result.title}. Restarting browser and retrying once. (${error instanceof Error ? error.message : String(error)})`
+            );
+          },
+          task: async () => {
+            let client: CDPClient | null = null;
+            try {
+              this.log(`opening article: ${result.title}`);
+              client = await createPageSession(result.url);
+              const page = await this.scrapePageDigest(client);
+              const review = await this.readOpenedPage(client, result, page);
+              return {
+                page,
+                review
+              };
+            } finally {
+              if (client) {
+                await closePageSession(client);
+              }
+            }
+          }
+        });
+        result.page = fetched.page;
+        Object.assign(result, fetched.review);
       } catch (error) {
         result.page = undefined;
         result.reviewStatus = "error";
         result.skipReason = error instanceof Error ? error.message : String(error);
         this.log(`failed article: ${result.title} (${result.skipReason})`);
-      } finally {
-        if (client) {
-          await closePageSession(client);
-        }
       }
 
       enriched.push(result);
