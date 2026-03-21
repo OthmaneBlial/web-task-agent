@@ -29,12 +29,47 @@ import type {
   AgentSearchAdapter,
   AgentSearchStageResult
 } from "../search-adapter";
+import { createBingRssSearchAdapter } from "./bing-rss";
+import { createResilientSearchAdapter } from "./resilient-search";
 
 export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
   readonly id = DUCKDUCKGO_SEARCH_PROVIDER;
   readonly label = "DuckDuckGo HTML";
 
   constructor(private readonly log: (message: string) => void) {}
+
+  private async describeLoadedPage(client: CDPClient): Promise<{
+    title: string;
+    url: string;
+    bodyStart: string;
+  }> {
+    return evaluateInBrowser<{
+      title: string;
+      url: string;
+      bodyStart: string;
+    }>(
+      client,
+      `() => ({
+        title: document.title || "",
+        url: window.location.href,
+        bodyStart: (document.body?.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 240)
+      })`
+    );
+  }
+
+  private isChallengePage(pageContext: {
+    title: string;
+    url: string;
+    bodyStart: string;
+  }): boolean {
+    const haystack = [pageContext.title, pageContext.url, pageContext.bodyStart].join(" ").toLowerCase();
+    return (
+      haystack.includes("bots use duckduckgo too") ||
+      haystack.includes("complete the following challenge") ||
+      haystack.includes("select all squares containing a duck") ||
+      haystack.includes("captcha")
+    );
+  }
 
   buildSearchUrl(query: string): string {
     return `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
@@ -61,18 +96,13 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
       });
       await this.softWaitForNetworkIdle(client);
     } catch (error) {
-      const pageContext = await evaluateInBrowser<{
-        title: string;
-        url: string;
-        bodyStart: string;
-      }>(
-        client,
-        `() => ({
-          title: document.title || "",
-          url: window.location.href,
-          bodyStart: (document.body?.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 240)
-        })`
-      );
+      const pageContext = await this.describeLoadedPage(client);
+
+      if (this.isChallengePage(pageContext)) {
+        throw new Error(
+          `duckduckgo challenge page detected | loaded page: ${pageContext.title} | ${pageContext.url} | ${pageContext.bodyStart}`
+        );
+      }
 
       throw new Error(
         `${error instanceof Error ? error.message : String(error)
@@ -298,5 +328,8 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
 export function createDefaultAgentSearchAdapter(
   log: (message: string) => void
 ): AgentSearchAdapter {
-  return new DuckDuckGoHtmlSearchAdapter(log);
+  return createResilientSearchAdapter(log, [
+    new DuckDuckGoHtmlSearchAdapter(log),
+    createBingRssSearchAdapter(log)
+  ]);
 }

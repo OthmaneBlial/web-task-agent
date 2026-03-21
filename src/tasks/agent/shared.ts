@@ -7,6 +7,7 @@ import type {
 } from "../../types";
 
 export const DUCKDUCKGO_SEARCH_PROVIDER = "duckduckgo_html";
+export const BING_RSS_SEARCH_PROVIDER = "bing_rss";
 export const QUERY_SCAN_MIN_MS = 4_000;
 export const QUERY_SCAN_MAX_MS = 8_000;
 export const ARTICLE_READ_MIN_MS = 10_000;
