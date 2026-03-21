@@ -54,7 +54,8 @@ import {
   enrichProvidedSourceSeedResult,
   buildProvidedSourceQueryLabel,
   buildProvidedSourceSeedResult,
-  extractInstructionUrls
+  extractInstructionUrls,
+  isPlayStoreAppUrl
 } from "./agent/direct-source";
 import { createDefaultAgentSearchAdapter } from "./agent/search-adapters/duckduckgo-html";
 import { AgentSearchStage } from "./agent/search-stage";
@@ -734,9 +735,12 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
             for (const url of uncapturedUrls) {
               this.log(`reviewing provided source first: ${url}`);
-              let seededResult = (
-                await fetchStage.fetchResults([buildProvidedSourceSeedResult(url)])
-              )[0] ?? buildProvidedSourceSeedResult(url);
+              let seededResult = buildProvidedSourceSeedResult(url);
+              if (!isPlayStoreAppUrl(url)) {
+                seededResult = (
+                  await fetchStage.fetchResults([seededResult])
+                )[0] ?? seededResult;
+              }
               seededResult = await enrichProvidedSourceSeedResult(seededResult);
               const directResearchResult: AgentResearchResult = {
                 query: buildProvidedSourceQueryLabel(url),
@@ -771,6 +775,12 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             appendNote(
               state,
               `Direct-source research queries applied from ${directInstructionUrls.length} provided URL${directInstructionUrls.length === 1 ? "" : "s"}.`
+            );
+          } else if (directInstructionUrls.some((url) => isPlayStoreAppUrl(url))) {
+            state.plan.researchQueries = [];
+            appendNote(
+              state,
+              "Used direct Play Store listing evidence and skipped noisy generic web search for the provided app URL."
             );
           } else if (workflowQueries.length > 0) {
             state.plan.researchQueries = workflowQueries;

@@ -10,6 +10,7 @@ import { AgentExtractStage } from "../tasks/agent/extract-stage";
 import {
   buildDirectSourceResearchQueries,
   buildProvidedSourceSeedResult,
+  enrichProvidedSourceSeedResult,
   extractInstructionUrls
 } from "../tasks/agent/direct-source";
 import { createDefaultAgentExtractor } from "../tasks/agent/extractors/heuristic-extractor";
@@ -303,11 +304,7 @@ test("direct source helper extracts urls and builds targeted play store queries"
     maxQueries: 5
   });
 
-  assert.equal(queries.length, 5);
-  assert.ok(queries.every((query) => query.includes('"NanoCV"')));
-  assert.ok(queries.some((query) => query.includes('"com.nanocv.app"')));
-  assert.ok(queries.some((query) => query.includes("site:play.google.com")));
-  assert.ok(queries.some((query) => query.includes("site:reddit.com")));
+  assert.equal(queries.length, 0);
 });
 
 test("direct source query builder ignores placeholder titles and falls back to package id", () => {
@@ -335,9 +332,23 @@ test("direct source query builder ignores placeholder titles and falls back to p
     maxQueries: 5
   });
 
-  assert.ok(queries.every((query) => !query.includes("Provided source URL: play.google.com")));
-  assert.ok(queries.some((query) => query.includes('"Nanocv"')));
-  assert.ok(queries.some((query) => query.includes('"com.nanocv.app"')));
+  assert.equal(queries.length, 0);
+});
+
+test("play store seed enrichment builds rich aso evidence without browser fetch", async () => {
+  const seeded = await enrichProvidedSourceSeedResult(
+    buildProvidedSourceSeedResult("https://play.google.com/store/apps/details?id=com.nanocv.app")
+  );
+
+  assert.equal(seeded.title, "Resume Builder Offline");
+  assert.equal(seeded.reviewStatus, "read");
+  assert.equal(seeded.contentType, "review");
+  assert.ok((seeded.qualityScore ?? 0) >= 0.85);
+  assert.ok(seeded.page);
+  assert.equal(seeded.page?.h1, "Resume Builder Offline");
+  assert.match(seeded.page?.description ?? "", /Create professional resumes offline/i);
+  assert.ok((seeded.page?.headings ?? []).some((heading: string) => /Business/i.test(heading)));
+  assert.ok((seeded.page?.paragraphs ?? []).some((paragraph: string) => /ATS/i.test(paragraph)));
 });
 
 test("extractor filters boilerplate headings from theme extraction", () => {

@@ -35,7 +35,7 @@ function hostnameOf(rawUrl: string): string {
   }
 }
 
-function parsePlayStoreAppId(rawUrl: string): string | null {
+export function parsePlayStoreAppId(rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl);
     if (!parsed.hostname.includes("play.google.com")) {
@@ -49,6 +49,10 @@ function parsePlayStoreAppId(rawUrl: string): string | null {
   } catch {
     return null;
   }
+}
+
+export function isPlayStoreAppUrl(rawUrl: string): boolean {
+  return Boolean(parsePlayStoreAppId(rawUrl));
 }
 
 function humanizePackageId(appId: string | null): string | null {
@@ -115,6 +119,7 @@ function decodeHtmlEntities(value: string): string {
 
 function normalizeHtmlText(value: string | null | undefined): string {
   return decodeHtmlEntities(String(value ?? ""))
+    .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -149,26 +154,128 @@ function extractFirstMatch(html: string, patterns: RegExp[]): string {
   return "";
 }
 
+function splitHtmlDescriptionIntoParagraphs(value: string): string[] {
+  return uniqueStrings(
+    decodeHtmlEntities(value)
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/•/g, "\n• ")
+      .split(/\n{2,}|\n(?=• )/)
+      .map((chunk) => chunk.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())
+      .filter((chunk) => chunk.length >= 40),
+    8
+  );
+}
+
+function extractRichPlayStoreDescription(html: string): string {
+  const raw =
+    html.match(/data-g-id="description">([\s\S]*?)<\/div>/i)?.[1] ??
+    html.match(/"description":"([^"]{40,4000})"/i)?.[1] ??
+    "";
+  return normalizeHtmlText(raw);
+}
+
+function extractRichPlayStoreDescriptionParagraphs(html: string): string[] {
+  const raw =
+    html.match(/data-g-id="description">([\s\S]*?)<\/div>/i)?.[1] ??
+    html.match(/"description":"([^"]{40,4000})"/i)?.[1] ??
+    "";
+  return splitHtmlDescriptionIntoParagraphs(raw);
+}
+
+function extractPlayStoreCategory(html: string): string {
+  return (
+    extractFirstMatch(html, [
+      /"applicationCategory":"([^"]{1,120})"/i,
+      /itemprop="genre"[\s\S]{0,200}?aria-hidden="true">([^<]{1,120})</i
+    ]) || ""
+  );
+}
+
+function extractPlayStoreDeveloper(html: string): string {
+  return extractFirstMatch(html, [
+    /"author":\{"@type":"Person","name":"([^"]+)"/i
+  ]);
+}
+
+function buildAsoAuditNotes(input: {
+  appName: string;
+  appId: string | null;
+  shortDescription: string;
+  longDescription: string;
+  category: string;
+  developer: string;
+}): string[] {
+  const titleKeywords = input.appName
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter((token) => token.length >= 3 && !["offline", "online", "free", "app"].includes(token))
+    .slice(0, 3);
+  const keywordNote =
+    titleKeywords.length > 0
+      ? `Primary title keywords detected from the current listing: ${titleKeywords.join(", ")}.`
+      : "";
+  const shortDescriptionNote = input.shortDescription
+    ? `Current short description: ${input.shortDescription}`
+    : "";
+  const positioningNote = input.longDescription
+    ? `The long description currently emphasizes: ${input.longDescription
+        .split(".")
+        .map((chunk) => chunk.trim())
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(". ")}.`
+    : "";
+  const metadataNote = [
+    input.category ? `Category: ${input.category}.` : "",
+    input.developer ? `Developer: ${input.developer}.` : "",
+    input.appId ? `Package ID: ${input.appId}.` : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return uniqueStrings(
+    [shortDescriptionNote, keywordNote, positioningNote, metadataNote].filter(Boolean),
+    6
+  );
+}
+
 function buildPlayStoreFallbackPage(input: {
   url: string;
   appName: string;
   fullTitle: string;
-  description: string;
+  shortDescription: string;
+  longDescription: string;
+  category: string;
+  developer: string;
+  appId: string | null;
 }): AgentPageDigest {
+  const auditNotes = buildAsoAuditNotes({
+    appName: input.appName,
+    appId: input.appId,
+    shortDescription: input.shortDescription,
+    longDescription: input.longDescription,
+    category: input.category,
+    developer: input.developer
+  });
+  const descriptionParagraphs = splitHtmlDescriptionIntoParagraphs(input.longDescription);
   const paragraphs = uniqueStrings(
     [
-      input.description,
-      `Google Play listing for ${input.appName}. Package ID: ${parsePlayStoreAppId(input.url) ?? "unknown"}.`
-    ].filter((value) => value.length >= 40),
-    3
+      input.shortDescription,
+      ...descriptionParagraphs.slice(0, 4),
+      ...auditNotes
+    ].filter((value) => value.length >= 35),
+    8
   );
 
   return {
     title: input.fullTitle || input.appName,
     url: normalizePlayStoreUrl(input.url),
-    description: input.description,
+    description: input.shortDescription,
     h1: input.appName || null,
-    headings: uniqueStrings(["About this app", "Google Play listing"], 4),
+    headings: uniqueStrings(
+      ["About this app", input.category, input.developer, "Current ASO audit"].filter(Boolean),
+      6
+    ),
     paragraphs,
     capturedAt: new Date().toISOString()
   };
@@ -177,7 +284,11 @@ function buildPlayStoreFallbackPage(input: {
 async function fetchPlayStoreAppMetadata(url: string): Promise<{
   appName: string;
   fullTitle: string;
-  description: string;
+  shortDescription: string;
+  longDescription: string;
+  category: string;
+  developer: string;
+  appId: string | null;
   normalizedUrl: string;
 } | null> {
   const normalizedUrl = normalizePlayStoreUrl(url);
@@ -211,25 +322,31 @@ async function fetchPlayStoreAppMetadata(url: string): Promise<{
     const h1 = extractFirstMatch(html, [
       /<h1[^>]*>([\s\S]*?)<\/h1>/i
     ]);
-    const description = extractFirstMatch(html, [
+    const shortDescription = extractFirstMatch(html, [
       /<meta[^>]+name="description"[^>]+content="([\s\S]*?)"/i,
-      /<meta[^>]+property="og:description"[^>]+content="([\s\S]*?)"/i,
-      /"description":"([^"]{20,800})"/i
+      /<meta[^>]+property="og:description"[^>]+content="([\s\S]*?)"/i
     ]);
+    const longDescription = extractRichPlayStoreDescription(html);
+    const category = extractPlayStoreCategory(html);
+    const developer = extractPlayStoreDeveloper(html);
     const appName =
       cleanAppTitle(h1) ||
       cleanAppTitle(fullTitle) ||
       humanizePackageId(appId) ||
       "";
 
-    if (!appName && !description) {
+    if (!appName && !shortDescription && !longDescription) {
       return null;
     }
 
     return {
       appName,
       fullTitle,
-      description,
+      shortDescription,
+      longDescription,
+      category,
+      developer,
+      appId,
       normalizedUrl
     };
   } catch {
@@ -357,16 +474,31 @@ export async function enrichProvidedSourceSeedResult(
   }
 
   result.title = metadata.appName || cleanAppTitle(metadata.fullTitle) || result.title;
-  result.snippet = metadata.description || result.snippet;
+  result.snippet = metadata.shortDescription || metadata.longDescription || result.snippet;
   result.page = buildPlayStoreFallbackPage({
     url: metadata.normalizedUrl,
     appName: metadata.appName || humanizePackageId(appId) || result.title,
     fullTitle: metadata.fullTitle || result.title,
-    description: metadata.description
+    shortDescription: metadata.shortDescription || metadata.longDescription || result.snippet,
+    longDescription: metadata.longDescription || metadata.shortDescription || result.snippet,
+    category: metadata.category,
+    developer: metadata.developer,
+    appId: metadata.appId
   });
   result.reviewStatus = "read";
   result.dwellSeconds = Math.max(result.dwellSeconds ?? 0, 2);
   result.skipReason = undefined;
+  result.qualityScore = Math.max(result.qualityScore ?? 0, 0.85);
+  result.qualitySignals = uniqueStrings(
+    [
+      ...(result.qualitySignals ?? []),
+      "play store html fallback",
+      "direct app metadata",
+      metadata.category ? `category: ${metadata.category.toLowerCase()}` : ""
+    ].filter(Boolean),
+    8
+  );
+  result.contentType = "review";
   return result;
 }
 
@@ -383,13 +515,6 @@ export function buildDirectSourceResearchQueries(input: {
     const playStoreAppId = parsePlayStoreAppId(url);
 
     if (playStoreAppId) {
-      queries.push(
-        ...buildPlayStoreQueries({
-          url,
-          result,
-          maxQueries: input.maxQueries
-        })
-      );
       continue;
     }
 
