@@ -108,6 +108,22 @@ function appendNote(state: AgentRunState, message: string): void {
   state.notes.push(`[${nowIso()}] ${message}`);
 }
 
+function normalizeInterruptedPlanSteps(
+  plan: AgentPlan | null,
+  action: JobControlAction
+): void {
+  if (!plan) {
+    return;
+  }
+
+  const nextStatus = action === "pause" ? "pending" : "skipped";
+  for (const step of plan.steps) {
+    if (step.status === "running") {
+      step.status = nextStatus;
+    }
+  }
+}
+
 function clampWholeNumber(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, Math.round(value)));
 }
@@ -1257,6 +1273,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     } catch (error) {
       if (error instanceof JobControlSignal) {
         const nextStatus = error.action === "pause" ? "paused" : "cancelled";
+        normalizeInterruptedPlanSteps(state.plan, error.action);
         state.status = nextStatus;
         appendNote(
           state,
