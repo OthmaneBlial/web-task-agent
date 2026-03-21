@@ -8,7 +8,7 @@ import type {
 import {
   countCapturedResearchDocuments,
   nowIso,
-  rankSearchResults
+  rankSearchResultsForQuery
 } from "./shared";
 
 const AGENT_PIPELINE_VERSION = 2;
@@ -177,7 +177,7 @@ export function applySearchSuccess(
     results: AgentSearchResult[];
   }
 ): AgentPipelineWorkItem {
-  const rankedResults = rankSearchResults(input.results);
+  const rankedResults = rankSearchResultsForQuery(input.results, item.query);
   const fetchCursor = firstPendingFetchIndex(rankedResults);
   return {
     ...item,

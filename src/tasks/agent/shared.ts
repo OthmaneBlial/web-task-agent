@@ -115,6 +115,10 @@ function titleSnippetHaystack(result: Pick<AgentSearchResult, "title" | "snippet
   return [result.title, result.snippet].join(" ").toLowerCase();
 }
 
+function queryHaystack(query?: string | null): string {
+  return (query ?? "").toLowerCase();
+}
+
 function pageHaystack(page?: AgentPageDigest): string {
   if (!page) {
     return "";
@@ -270,6 +274,21 @@ export function evaluateDomainPolicy(result: AgentSearchResult): AgentDomainPoli
   }
 
   if (
+    title.includes("sign in") ||
+    title.includes("log in") ||
+    title.includes("login to") ||
+    title.includes("sign into") ||
+    title.includes("account login")
+  ) {
+    signals.push("auth-like title");
+    return {
+      action: "skip",
+      reason: "blocked by domain policy: auth-like page title",
+      signals
+    };
+  }
+
+  if (
     pathname.includes("/search") ||
     pathname.includes("/tag/") ||
     pathname.includes("/tags/") ||
@@ -327,7 +346,8 @@ export function evaluateDomainPolicy(result: AgentSearchResult): AgentDomainPoli
 
 export function scoreSearchResultPriority(
   result: AgentSearchResult,
-  rankHint: number = 0
+  rankHint: number = 0,
+  query?: string
 ): {
   score: number;
   signals: string[];
@@ -339,6 +359,8 @@ export function scoreSearchResultPriority(
   const pathname = pathnameOf(result.url);
   const contentType = result.contentType ?? classifyResearchContentType(result);
   const scoreSignals = [`content type: ${contentType}`];
+  const resultHaystack = `${titleSnippetHaystack(result)} ${pathname}`;
+  const queryText = queryHaystack(query);
   let score = 0.4;
 
   if (policy.action === "allow") {
@@ -400,6 +422,80 @@ export function scoreSearchResultPriority(
     scoreSignals.push("index-like result");
   }
 
+  if (queryText.includes("site:play.google.com")) {
+    if (hostname.includes("play.google.com")) {
+      score += 0.28;
+      scoreSignals.push("matches requested play store site");
+    } else if (hostname.includes("apps.apple.com")) {
+      score += 0.08;
+      scoreSignals.push("adjacent app store result");
+    } else {
+      score -= 0.24;
+      scoreSignals.push("misses requested play store site");
+    }
+  }
+
+  if (queryText.includes("reddit")) {
+    if (hostname.includes("reddit.com")) {
+      score += 0.18;
+      scoreSignals.push("matches requested reddit source");
+    } else if (contentType === "forum") {
+      score += 0.1;
+      scoreSignals.push("forum alternative to reddit");
+    } else {
+      score -= 0.08;
+      scoreSignals.push("misses requested community source");
+    }
+  }
+
+  if (queryText.includes("forum")) {
+    if (contentType === "forum") {
+      score += 0.12;
+      scoreSignals.push("matches forum intent");
+    } else {
+      score -= 0.05;
+      scoreSignals.push("misses forum intent");
+    }
+  }
+
+  if (
+    queryText.includes("android") ||
+    /\bapp\b/.test(queryText) ||
+    queryText.includes("mobile")
+  ) {
+    const hasAppSignals =
+      resultHaystack.includes("android") ||
+      resultHaystack.includes("app store") ||
+      resultHaystack.includes("google play") ||
+      resultHaystack.includes("play store") ||
+      resultHaystack.includes("mobile") ||
+      resultHaystack.includes(" apk") ||
+      /\bapp\b/.test(resultHaystack) ||
+      /\bapps\b/.test(resultHaystack);
+
+    if (hasAppSignals) {
+      score += 0.08;
+      scoreSignals.push("matches app/mobile intent");
+    } else {
+      score -= 0.1;
+      scoreSignals.push("misses app/mobile intent");
+    }
+  }
+
+  if (queryText.includes("complaint")) {
+    if (
+      resultHaystack.includes("complaint") ||
+      resultHaystack.includes("review") ||
+      resultHaystack.includes("issue") ||
+      resultHaystack.includes("problem") ||
+      resultHaystack.includes("subscription") ||
+      resultHaystack.includes("limit")
+    ) {
+      score += 0.06;
+      scoreSignals.push("matches complaint intent");
+    }
+  }
+
   if (typeof result.qualityScore === "number") {
     score += (result.qualityScore - 0.5) * 0.24;
     scoreSignals.push("quality-informed score");
@@ -431,6 +527,30 @@ export function rankSearchResults(results: AgentSearchResult[]): AgentSearchResu
   return results
     .map((result, index) => {
       const priority = scoreSearchResultPriority(result, index);
+      return {
+        ...result,
+        contentType: priority.contentType,
+        policyAction: result.policyAction ?? priority.policy.action,
+        policyReason: result.policyReason ?? priority.policy.reason,
+        rankingScore: Number(priority.score.toFixed(2)),
+        rankingSignals: priority.signals
+      };
+    })
+    .sort((left, right) => {
+      const rightScore = right.rankingScore ?? 0;
+      const leftScore = left.rankingScore ?? 0;
+
+      if (rightScore !== leftScore) {
+        return rightScore - leftScore;
+      }
+      return left.title.localeCompare(right.title);
+    });
+}
+
+export function rankSearchResultsForQuery(results: AgentSearchResult[], query: string): AgentSearchResult[] {
+  return results
+    .map((result, index) => {
+      const priority = scoreSearchResultPriority(result, index, query);
       return {
         ...result,
         contentType: priority.contentType,

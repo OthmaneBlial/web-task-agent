@@ -11,7 +11,8 @@ import { createDefaultAgentExtractor } from "../tasks/agent/extractors/heuristic
 import {
   assessDocumentQuality,
   evaluateDomainPolicy,
-  rankSearchResults
+  rankSearchResults,
+  rankSearchResultsForQuery
 } from "../tasks/agent/shared";
 import type { AgentResearchResult, AgentSearchResult } from "../types";
 
@@ -183,6 +184,15 @@ test("domain policy and document quality identify weak research pages", () => {
   assert.equal(adRedirectPolicy.action, "skip");
   assert.match(adRedirectPolicy.reason, /ad redirect/i);
 
+  const authTitlePolicy = evaluateDomainPolicy({
+    title: "Acrobat online sign in | Login to Acrobat | Adobe Acrobat",
+    url: "https://www.adobe.com/acrobat/online/sign-in.html",
+    snippet: "Login to Acrobat to continue.",
+    site: "adobe.com"
+  });
+  assert.equal(authTitlePolicy.action, "skip");
+  assert.match(authTitlePolicy.reason, /auth/i);
+
   const quality = assessDocumentQuality(
     {
       title: "Category: CSV exports",
@@ -213,6 +223,46 @@ test("search ranking prioritizes higher-signal research pages", () => {
   assert.ok((ranked[0]?.rankingScore ?? 0) >= (ranked[1]?.rankingScore ?? 0));
   assert.equal(ranked.at(-1)?.policyAction, "deprioritize");
   assert.ok((ranked[0]?.rankingSignals?.length ?? 0) > 0);
+});
+
+test("query-aware ranking prefers store and community sources for android app research", () => {
+  const playStoreRanked = rankSearchResultsForQuery(
+    [
+      {
+        title: "Easy to use Online PDF editor - Sejda",
+        url: "https://www.sejda.com/pdf-editor",
+        snippet: "Edit PDF files online for free.",
+        site: "sejda.com"
+      },
+      {
+        title: "PDF Editor - Apps on Google Play",
+        url: "https://play.google.com/store/apps/details?id=com.example.pdfeditor",
+        snippet: "Ratings, reviews, and app details for PDF Editor.",
+        site: "play.google.com"
+      }
+    ],
+    'site:play.google.com "pdf editor" app reviews complaints'
+  );
+  assert.equal(playStoreRanked[0]?.site, "play.google.com");
+
+  const redditRanked = rankSearchResultsForQuery(
+    [
+      {
+        title: "iLovePDF | Online PDF tools for PDF lovers",
+        url: "https://www.ilovepdf.com/",
+        snippet: "All the tools you need for PDF editing online.",
+        site: "ilovepdf.com"
+      },
+      {
+        title: "Best PDF editor for Android? : r/AndroidApps - Reddit",
+        url: "https://www.reddit.com/r/AndroidApps/comments/example/best_pdf_editor/",
+        snippet: "Users discuss complaints, subscriptions, and app alternatives.",
+        site: "reddit.com"
+      }
+    ],
+    '"pdf editor" android app reddit complaints'
+  );
+  assert.equal(redditRanked[0]?.site, "reddit.com");
 });
 
 test("extractor filters boilerplate headings from theme extraction", () => {
