@@ -8,6 +8,7 @@ import { buildHeuristicExtractionCandidates } from "../lib/extraction-heuristics
 import { closeSharedJobDatabase, JobStore } from "../lib/job-store";
 import { AgentExtractStage } from "../tasks/agent/extract-stage";
 import {
+  buildDirectAppBenchmarkResearch,
   buildDirectSourceResearchQueries,
   buildProvidedSourceSeedResult,
   enrichProvidedSourceSeedResult,
@@ -380,6 +381,23 @@ test("appbrain direct links resolve app ids and use the direct app audit path", 
   });
 
   assert.equal(queries.length, 0);
+});
+
+test("direct app benchmark research finds market visibility and competitors", async () => {
+  const seeded = await enrichProvidedSourceSeedResult(
+    buildProvidedSourceSeedResult("https://www.appbrain.com/app/nanocv-offline-resume-builder/com.nanocv.app")
+  );
+  const benchmark = await buildDirectAppBenchmarkResearch(seeded);
+
+  assert.ok(benchmark);
+  assert.match(benchmark?.query ?? "", /Play Store benchmark/i);
+  assert.ok((benchmark?.results.length ?? 0) >= 2);
+  assert.match(benchmark?.results[0]?.title ?? "", /Play Store benchmark/i);
+  assert.ok(
+    (benchmark?.results[0]?.page?.paragraphs ?? []).some((paragraph: string) =>
+      /top visible competitors|not found|appears at play store search rank/i.test(paragraph)
+    )
+  );
 });
 
 test("extractor filters boilerplate headings from theme extraction", () => {

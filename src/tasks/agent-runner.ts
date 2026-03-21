@@ -50,6 +50,7 @@ import {
   upsertWorkItem
 } from "./agent/pipeline-state";
 import {
+  buildDirectAppBenchmarkResearch,
   buildDirectSourceResearchQueries,
   enrichProvidedSourceSeedResult,
   buildProvidedSourceQueryLabel,
@@ -753,6 +754,15 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                 searchProvider: "direct_url",
                 searchUrl: url
               });
+              const benchmarkResearch = await buildDirectAppBenchmarkResearch(seededResult);
+              if (benchmarkResearch) {
+                this.log(`benchmarking market visibility: ${benchmarkResearch.query}`);
+                state.research = upsertResearchResult(state.research, benchmarkResearch);
+                extractStage.persistQueryResult(benchmarkResearch, {
+                  searchProvider: "direct_app_benchmark",
+                  searchUrl: benchmarkResearch.results[0]?.url ?? url
+                });
+              }
               appendNote(state, `Seeded provided source before planning: ${url}`);
               this.saveState(cachePath, state);
               this.syncArtifacts(jobStore, state);

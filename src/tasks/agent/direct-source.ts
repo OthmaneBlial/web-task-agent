@@ -195,6 +195,10 @@ function normalizePlayStoreUrl(rawUrl: string): string {
   }
 }
 
+function buildPlayStoreSearchUrl(query: string): string {
+  return `https://play.google.com/store/search?q=${encodeURIComponent(query)}&c=apps&hl=en&gl=us`;
+}
+
 function extractFirstMatch(html: string, patterns: RegExp[]): string {
   for (const pattern of patterns) {
     const match = html.match(pattern)?.[1];
@@ -216,6 +220,55 @@ function splitHtmlDescriptionIntoParagraphs(value: string): string[] {
       .filter((chunk) => chunk.length >= 40),
     8
   );
+}
+
+function cleanKeywordToken(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function derivePrimaryMarketKeyword(appName: string): string {
+  const stopWords = new Set([
+    "offline",
+    "online",
+    "free",
+    "pro",
+    "plus",
+    "app",
+    "apps"
+  ]);
+  const words = appName
+    .split(/[^a-z0-9]+/i)
+    .map((word) => word.trim())
+    .filter(Boolean)
+    .filter((word) => !stopWords.has(cleanKeywordToken(word)));
+
+  if (words.length >= 2) {
+    return `${words[0]} ${words[1]}`.toLowerCase();
+  }
+  if (words.length === 1) {
+    return words[0]!.toLowerCase();
+  }
+
+  return cleanAppTitle(appName).toLowerCase();
+}
+
+function extractPlayStoreSearchAppIds(html: string, limit: number = 24): string[] {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+
+  for (const match of html.matchAll(/\/store\/apps\/details\?id=([a-z0-9._]+)/ig)) {
+    const appId = String(match[1] ?? "").trim();
+    if (!looksLikeAndroidAppId(appId) || seen.has(appId)) {
+      continue;
+    }
+    seen.add(appId);
+    ids.push(appId);
+    if (ids.length >= limit) {
+      break;
+    }
+  }
+
+  return ids;
 }
 
 function extractRichPlayStoreDescription(html: string): string {
@@ -406,6 +459,27 @@ async function fetchPlayStoreAppMetadata(url: string): Promise<{
   }
 }
 
+async function fetchPlayStoreSearchAppIds(query: string, limit: number = 24): Promise<string[]> {
+  try {
+    const response = await fetch(buildPlayStoreSearchUrl(query), {
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "accept-language": "en-US,en;q=0.9"
+      },
+      redirect: "follow"
+    });
+    if (!response.ok) {
+      return [];
+    }
+
+    const html = await response.text();
+    return extractPlayStoreSearchAppIds(html, limit);
+  } catch {
+    return [];
+  }
+}
+
 function pickMeaningfulSourceTitle(result?: AgentSearchResult): string {
   const pageH1 = cleanAppTitle(result?.page?.h1);
   if (pageH1) {
@@ -552,6 +626,112 @@ export async function enrichProvidedSourceSeedResult(
   );
   result.contentType = "review";
   return result;
+}
+
+export async function buildDirectAppBenchmarkResearch(
+  result: AgentSearchResult
+): Promise<AgentResearchResult | null> {
+  const appId = parseDirectAppId(result.url);
+  const appName = pickMeaningfulSourceTitle(result);
+  if (!appId || !appName) {
+    return null;
+  }
+
+  const keyword = derivePrimaryMarketKeyword(appName);
+  if (!keyword) {
+    return null;
+  }
+
+  const rankedAppIds = await fetchPlayStoreSearchAppIds(keyword, 24);
+  if (rankedAppIds.length === 0) {
+    return null;
+  }
+
+  const targetRank = rankedAppIds.findIndex((candidate) => candidate === appId);
+  const competitorIds = rankedAppIds.filter((candidate) => candidate !== appId).slice(0, 5);
+  const competitorResults: AgentSearchResult[] = [];
+
+  for (let index = 0; index < competitorIds.length; index += 1) {
+    const competitorId = competitorIds[index]!;
+    const metadata = await fetchPlayStoreAppMetadata(buildPlayStoreDetailsUrl(competitorId));
+    if (!metadata) {
+      continue;
+    }
+
+    competitorResults.push({
+      title: metadata.appName || cleanAppTitle(metadata.fullTitle) || competitorId,
+      url: metadata.normalizedUrl,
+      snippet: `Play Store search rank #${index + 1} for keyword "${keyword}". ${metadata.shortDescription || metadata.longDescription}`.trim(),
+      site: "play.google.com",
+      reviewStatus: "read",
+      dwellSeconds: 2,
+      qualityScore: 0.88,
+      qualitySignals: uniqueStrings(
+        [
+          "play store benchmark result",
+          `benchmark rank ${index + 1}`,
+          metadata.category ? `category: ${metadata.category.toLowerCase()}` : ""
+        ].filter(Boolean),
+        8
+      ),
+      contentType: "review",
+      page: buildPlayStoreFallbackPage({
+        url: metadata.normalizedUrl,
+        appName: metadata.appName || competitorId,
+        fullTitle: metadata.fullTitle || competitorId,
+        shortDescription: metadata.shortDescription || metadata.longDescription || "",
+        longDescription: metadata.longDescription || metadata.shortDescription || "",
+        category: metadata.category,
+        developer: metadata.developer,
+        appId: metadata.appId
+      })
+    });
+  }
+
+  const visibilitySummary = targetRank === -1
+    ? `${appName} (${appId}) was not found in the top ${rankedAppIds.length} Play Store search results for "${keyword}".`
+    : `${appName} (${appId}) appears at Play Store search rank #${targetRank + 1} for "${keyword}".`;
+  const competitorSummary = competitorResults.length > 0
+    ? `Top visible competitors for this keyword include ${competitorResults.slice(0, 3).map((entry) => entry.title).join(", ")}.`
+    : "No competitor details could be fetched from Play Store search results.";
+
+  const benchmarkSummary: AgentSearchResult = {
+    title: `Play Store benchmark for "${keyword}"`,
+    url: buildPlayStoreSearchUrl(keyword),
+    snippet: `${visibilitySummary} ${competitorSummary}`.trim(),
+    site: "play.google.com",
+    reviewStatus: "read",
+    dwellSeconds: 2,
+    qualityScore: 0.9,
+    qualitySignals: ["play store benchmark summary", "direct app audit"],
+    contentType: "review",
+    page: {
+      title: `Play Store benchmark for "${keyword}"`,
+      url: buildPlayStoreSearchUrl(keyword),
+      description: visibilitySummary,
+      h1: `Benchmark keyword: ${keyword}`,
+      headings: ["Search visibility", "Top competitors"],
+      paragraphs: uniqueStrings(
+        [
+          visibilitySummary,
+          competitorSummary,
+          `This benchmark was derived from Play Store search results for the primary market keyword "${keyword}".`,
+          competitorResults
+            .slice(0, 5)
+            .map((entry, index) => `Rank #${index + 1}: ${entry.title}. ${entry.snippet}`)
+            .join(" ")
+        ].filter((value) => value.length >= 30),
+        6
+      ),
+      capturedAt: new Date().toISOString()
+    }
+  };
+
+  return {
+    query: `Play Store benchmark: ${keyword}`,
+    searchedAt: new Date().toISOString(),
+    results: [benchmarkSummary, ...competitorResults]
+  };
 }
 
 export function buildDirectSourceResearchQueries(input: {
