@@ -7,6 +7,11 @@ import test from "node:test";
 import { buildHeuristicExtractionCandidates } from "../lib/extraction-heuristics";
 import { closeSharedJobDatabase, JobStore } from "../lib/job-store";
 import { AgentExtractStage } from "../tasks/agent/extract-stage";
+import {
+  buildDirectSourceResearchQueries,
+  buildProvidedSourceSeedResult,
+  extractInstructionUrls
+} from "../tasks/agent/direct-source";
 import { createDefaultAgentExtractor } from "../tasks/agent/extractors/heuristic-extractor";
 import {
   assessDocumentQuality,
@@ -263,6 +268,46 @@ test("query-aware ranking prefers store and community sources for android app re
     '"pdf editor" android app reddit complaints'
   );
   assert.equal(redditRanked[0]?.site, "reddit.com");
+});
+
+test("direct source helper extracts urls and builds targeted play store queries", () => {
+  const instruction =
+    'Why this app is getting practically 0 downloads? Rewrite its ASO: https://play.google.com/store/apps/details?id=com.nanocv.app.';
+  const urls = extractInstructionUrls(instruction);
+
+  assert.deepEqual(urls, ["https://play.google.com/store/apps/details?id=com.nanocv.app"]);
+
+  const seed = buildProvidedSourceSeedResult(urls[0]!);
+  seed.title = "NanoCV - Apps on Google Play";
+  seed.page = {
+    title: "NanoCV - Apps on Google Play",
+    url: urls[0]!,
+    description: "NanoCV helps users build and manage CVs from mobile.",
+    h1: "NanoCV",
+    headings: ["About this app"],
+    paragraphs: [
+      "NanoCV helps users create a CV, edit profile sections, and export resumes from Android."
+    ],
+    capturedAt: "2026-03-21T11:00:00.000Z"
+  };
+
+  const queries = buildDirectSourceResearchQueries({
+    instruction,
+    directResearch: [
+      {
+        query: `Provided source: ${urls[0]!}`,
+        searchedAt: "2026-03-21T11:00:00.000Z",
+        results: [seed]
+      }
+    ],
+    maxQueries: 5
+  });
+
+  assert.equal(queries.length, 5);
+  assert.ok(queries.every((query) => query.includes('"NanoCV"')));
+  assert.ok(queries.some((query) => query.includes('"com.nanocv.app"')));
+  assert.ok(queries.some((query) => query.includes("site:play.google.com")));
+  assert.ok(queries.some((query) => query.includes("site:reddit.com")));
 });
 
 test("extractor filters boilerplate headings from theme extraction", () => {

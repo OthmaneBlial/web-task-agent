@@ -49,6 +49,12 @@ import {
   upsertResearchResult,
   upsertWorkItem
 } from "./agent/pipeline-state";
+import {
+  buildDirectSourceResearchQueries,
+  buildProvidedSourceQueryLabel,
+  buildProvidedSourceSeedResult,
+  extractInstructionUrls
+} from "./agent/direct-source";
 import { createDefaultAgentSearchAdapter } from "./agent/search-adapters/duckduckgo-html";
 import { AgentSearchStage } from "./agent/search-stage";
 import {
@@ -275,6 +281,12 @@ function buildWorkflowQueryOverrides(state: AgentRunState): string[] {
     context: state.input.workflowInputs?.context ?? null,
     maxQueries: state.input.maxQueries
   });
+}
+
+function hasCapturedResearchForUrl(state: AgentRunState, url: string): boolean {
+  return state.research.some((research) =>
+    research.results.some((result) => result.url === url || result.page?.url === url)
+  );
 }
 
 export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> {
@@ -713,13 +725,52 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         jobStore.startStep(planStep);
 
         try {
+          const directInstructionUrls = extractInstructionUrls(state.input.instruction);
+          if (directInstructionUrls.length > 0) {
+            const uncapturedUrls = directInstructionUrls.filter(
+              (url) => !hasCapturedResearchForUrl(state, url)
+            );
+
+            for (const url of uncapturedUrls) {
+              this.log(`reviewing provided source first: ${url}`);
+              const seededResult = (
+                await fetchStage.fetchResults([buildProvidedSourceSeedResult(url)])
+              )[0] ?? buildProvidedSourceSeedResult(url);
+              const directResearchResult: AgentResearchResult = {
+                query: buildProvidedSourceQueryLabel(url),
+                searchedAt: nowIso(),
+                results: [seededResult]
+              };
+
+              state.research = upsertResearchResult(state.research, directResearchResult);
+              extractStage.persistQueryResult(directResearchResult, {
+                searchProvider: "direct_url",
+                searchUrl: url
+              });
+              appendNote(state, `Seeded provided source before planning: ${url}`);
+              this.saveState(cachePath, state);
+              this.syncArtifacts(jobStore, state);
+            }
+          }
+
           state.plan = await this.llm.planAgentJob({
             instruction: state.input.instruction,
             memory: memory?.content,
             maxQueries: state.input.maxQueries
           });
+          const directSourceQueries = buildDirectSourceResearchQueries({
+            instruction: state.input.instruction,
+            directResearch: state.research,
+            maxQueries: state.input.maxQueries
+          });
           const workflowQueries = buildWorkflowQueryOverrides(state);
-          if (workflowQueries.length > 0) {
+          if (directSourceQueries.length > 0) {
+            state.plan.researchQueries = directSourceQueries;
+            appendNote(
+              state,
+              `Direct-source research queries applied from ${directInstructionUrls.length} provided URL${directInstructionUrls.length === 1 ? "" : "s"}.`
+            );
+          } else if (workflowQueries.length > 0) {
             state.plan.researchQueries = workflowQueries;
             appendNote(
               state,
