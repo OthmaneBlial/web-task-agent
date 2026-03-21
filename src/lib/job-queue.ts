@@ -159,16 +159,17 @@ function getQueueDatabase(customPath?: string): { db: DatabaseSync; databasePath
       updated_at TEXT NOT NULL,
       completed_at TEXT
     );
-
-    CREATE INDEX IF NOT EXISTS idx_queued_jobs_status ON queued_jobs(status, run_after);
-    CREATE INDEX IF NOT EXISTS idx_queued_jobs_lease_expires_at ON queued_jobs(lease_expires_at);
-    CREATE INDEX IF NOT EXISTS idx_queued_jobs_job_id ON queued_jobs(job_id, updated_at);
   `);
   ensureTableColumns(db, "queued_jobs", [
     { name: "job_id", definition: "TEXT" },
     { name: "control_action", definition: "TEXT" },
     { name: "control_requested_at", definition: "TEXT" }
   ]);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_queued_jobs_status ON queued_jobs(status, run_after);
+    CREATE INDEX IF NOT EXISTS idx_queued_jobs_lease_expires_at ON queued_jobs(lease_expires_at);
+    CREATE INDEX IF NOT EXISTS idx_queued_jobs_job_id ON queued_jobs(job_id, updated_at);
+  `);
 
   return {
     db,

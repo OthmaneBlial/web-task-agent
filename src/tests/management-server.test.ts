@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
+import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import test from "node:test";
 
-import { enqueueQueuedAgentJob } from "../lib/job-queue";
+import { enqueueQueuedAgentJob, listQueuedJobs } from "../lib/job-queue";
 import { JobStore } from "../lib/job-store";
 import { createManagementServer } from "../server/management-server";
 
@@ -139,6 +140,79 @@ test("management server exposes controls and log endpoints", async () => {
     await reader?.cancel();
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("legacy queued_jobs schema migrates before queue listing", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-migrate-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const db = new DatabaseSync(databasePath);
+
+  try {
+    db.exec(`
+      CREATE TABLE queued_jobs (
+        id TEXT PRIMARY KEY,
+        task_type TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        label TEXT NOT NULL,
+        status TEXT NOT NULL,
+        priority INTEGER NOT NULL DEFAULT 100,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 3,
+        run_after TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        result_json TEXT NOT NULL DEFAULT '{}',
+        last_error TEXT,
+        leased_by TEXT,
+        leased_at TEXT,
+        lease_expires_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        completed_at TEXT
+      );
+    `);
+    db.prepare(`
+      INSERT INTO queued_jobs (
+        id, task_type, mode, label, status, priority, attempts, max_attempts,
+        run_after, payload_json, result_json, last_error, leased_by, leased_at,
+        lease_expires_at, created_at, updated_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', NULL, NULL, NULL, NULL, ?, ?, NULL)
+    `).run(
+      "queue_legacy",
+      "agent",
+      "workflow",
+      "Legacy queue row",
+      "queued",
+      100,
+      0,
+      3,
+      "2026-03-20T10:00:00.000Z",
+      JSON.stringify({
+        taskType: "agent",
+        mode: "workflow",
+        label: "Legacy queue row",
+        options: {
+          instruction: "Legacy queue migration",
+          resume: false
+        }
+      }),
+      "2026-03-20T10:00:00.000Z",
+      "2026-03-20T10:00:00.000Z"
+    );
+  } finally {
+    db.close();
+  }
+
+  try {
+    const rows = listQueuedJobs({
+      databasePath
+    });
+
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.queueId, "queue_legacy");
+    assert.equal(rows[0]?.jobId, null);
+  } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });

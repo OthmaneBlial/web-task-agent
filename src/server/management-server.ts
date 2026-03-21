@@ -669,14 +669,28 @@ function dashboardHtml(): string {
     }
 
     async function refresh() {
+      const loadJson = async (url, fallback, label) => {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.message || payload.error || ('request failed for ' + label));
+          }
+          return await response.json();
+        } catch (error) {
+          flash(label + ' refresh failed: ' + (error instanceof Error ? error.message : String(error)), 'warning');
+          return fallback;
+        }
+      };
+
       const [jobs, queue, recoverable] = await Promise.all([
-        fetch('/api/jobs').then((res) => res.json()),
-        fetch('/api/queue').then((res) => res.json()),
-        fetch('/api/recoverable').then((res) => res.json())
+        loadJson('/api/jobs', state.jobs, 'jobs'),
+        loadJson('/api/queue', state.queue, 'queue'),
+        loadJson('/api/recoverable', state.recoverable, 'recoverable runs')
       ]);
-      state.jobs = jobs;
-      state.queue = queue;
-      state.recoverable = recoverable;
+      state.jobs = Array.isArray(jobs) ? jobs : state.jobs;
+      state.queue = Array.isArray(queue) ? queue : state.queue;
+      state.recoverable = Array.isArray(recoverable) ? recoverable : state.recoverable;
       renderStats();
       renderJobs();
       renderQueue();
