@@ -103,17 +103,16 @@ function buildAndroidOpportunityResearchQueries(input: {
   maxQueries: number;
 }): string[] {
   const topic = input.topic.trim();
-  const broadTopic = topic.toLowerCase().includes("study planner") ? topic : `${topic} study planner`;
 
   return uniqueQueries(
     [
-      `"${broadTopic}" android app reddit complaints`,
-      `site:play.google.com "${broadTopic}" reviews complaints`,
-      `"${broadTopic}" students feature requests reddit forum`,
-      `"study planner" app alternatives motion sunsama akiflow reddit students`,
-      `"${broadTopic}" subscription complaints students`,
-      `"${broadTopic}" time blocking student app pain points`,
-      `"${broadTopic}" exam planner app review reddit`
+      `"${topic}" android app reddit complaints`,
+      `site:play.google.com "${topic}" app reviews complaints`,
+      `"${topic}" app feature requests reddit forum`,
+      `"${topic}" android app alternatives reddit`,
+      `"${topic}" app subscription complaints`,
+      `"${topic}" app missing features users want`,
+      `"${topic}" app review reddit`
     ],
     Math.max(1, Math.min(5, input.maxQueries))
   );
@@ -159,7 +158,7 @@ const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
       const lines = [
         `Research Android app opportunities around "${input.topic}".`,
         "Search broadly across product pages, app reviews, competitor writeups, forums, Reddit-style discussions, and technical/product communities.",
-        "Prefer actual study-planner apps, Play Store or App Store pages, student communities, and user-review threads over enterprise scheduler vendors, generic AI competitor-analysis tools, and thin SEO listicles.",
+        "Prefer actual apps in this category, Play Store or App Store pages, user-review threads, and practitioner communities over enterprise SaaS vendors, unrelated verticals, generic competitor-analysis tools, and thin SEO listicles.",
         "Focus on recurring complaints, feature gaps, monetization signals, retention hooks, and opportunities that could spread quickly.",
         "The final report must include: market summary, repeated user pains, competitor gaps, a shortlist of app concepts, MVP features, monetization ideas, risks, and evidence-backed launch hooks."
       ];

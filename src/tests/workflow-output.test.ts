@@ -206,16 +206,26 @@ test("workflow run options use preset budgets and topic-based output paths", () 
 });
 
 test("android opportunity workflow uses focused research queries", () => {
-  const queries = buildWorkflowResearchQueries({
+  const studyPlannerQueries = buildWorkflowResearchQueries({
     templateId: "android-opportunity",
     topic: "ai study planner",
     maxQueries: 5
   });
+  const pdfEditorQueries = buildWorkflowResearchQueries({
+    templateId: "android-opportunity",
+    topic: "pdf editor",
+    maxQueries: 5
+  });
 
-  assert.equal(queries.length, 5);
-  assert.ok(queries.some((query) => query.includes("site:play.google.com")));
-  assert.ok(queries.some((query) => query.includes("motion sunsama akiflow")));
-  assert.ok(queries.every((query) => !/competitor analysis tools/i.test(query)));
+  assert.equal(studyPlannerQueries.length, 5);
+  assert.ok(studyPlannerQueries.some((query) => query.includes("site:play.google.com")));
+  assert.ok(studyPlannerQueries.every((query) => query.includes("study planner")));
+  assert.ok(studyPlannerQueries.every((query) => !/competitor analysis tools/i.test(query)));
+
+  assert.equal(pdfEditorQueries.length, 5);
+  assert.ok(pdfEditorQueries.some((query) => query.includes("site:play.google.com")));
+  assert.ok(pdfEditorQueries.every((query) => query.includes("pdf editor")));
+  assert.ok(pdfEditorQueries.every((query) => !query.includes("study planner")));
 });
 
 test("workflow package writer creates polished handoff files", () => {
