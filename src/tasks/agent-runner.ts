@@ -51,6 +51,7 @@ import {
 } from "./agent/pipeline-state";
 import {
   buildDirectSourceResearchQueries,
+  enrichProvidedSourceSeedResult,
   buildProvidedSourceQueryLabel,
   buildProvidedSourceSeedResult,
   extractInstructionUrls
@@ -733,9 +734,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
             for (const url of uncapturedUrls) {
               this.log(`reviewing provided source first: ${url}`);
-              const seededResult = (
+              let seededResult = (
                 await fetchStage.fetchResults([buildProvidedSourceSeedResult(url)])
               )[0] ?? buildProvidedSourceSeedResult(url);
+              seededResult = await enrichProvidedSourceSeedResult(seededResult);
               const directResearchResult: AgentResearchResult = {
                 query: buildProvidedSourceQueryLabel(url),
                 searchedAt: nowIso(),
