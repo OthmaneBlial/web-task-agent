@@ -35,6 +35,11 @@ function hostnameOf(rawUrl: string): string {
   }
 }
 
+function looksLikeAndroidAppId(value: string | null | undefined): value is string {
+  const normalized = String(value ?? "").trim();
+  return /^[a-z0-9_]+(?:\.[a-z0-9_]+){2,}$/i.test(normalized);
+}
+
 export function parsePlayStoreAppId(rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl);
@@ -51,8 +56,50 @@ export function parsePlayStoreAppId(rawUrl: string): string | null {
   }
 }
 
+export function parseAppBrainAppId(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl);
+    if (!parsed.hostname.includes("appbrain.com")) {
+      return null;
+    }
+
+    const queryAppId = parsed.searchParams.get("q")?.trim();
+    if (looksLikeAndroidAppId(queryAppId)) {
+      return queryAppId;
+    }
+
+    const segments = parsed.pathname
+      .split("/")
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    for (let index = segments.length - 1; index >= 0; index -= 1) {
+      const segment = segments[index];
+      if (looksLikeAndroidAppId(segment)) {
+        return segment;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function parseDirectAppId(rawUrl: string): string | null {
+  return parsePlayStoreAppId(rawUrl) ?? parseAppBrainAppId(rawUrl);
+}
+
+function buildPlayStoreDetailsUrl(appId: string): string {
+  return `https://play.google.com/store/apps/details?id=${encodeURIComponent(appId)}&hl=en&gl=us`;
+}
+
+export function isDirectAppUrl(rawUrl: string): boolean {
+  return Boolean(parseDirectAppId(rawUrl));
+}
+
 export function isPlayStoreAppUrl(rawUrl: string): boolean {
-  return Boolean(parsePlayStoreAppId(rawUrl));
+  return Boolean(parseDirectAppId(rawUrl));
 }
 
 function humanizePackageId(appId: string | null): string | null {
@@ -127,6 +174,11 @@ function normalizeHtmlText(value: string | null | undefined): string {
 
 function normalizePlayStoreUrl(rawUrl: string): string {
   try {
+    const directAppId = parseDirectAppId(rawUrl);
+    if (directAppId && !rawUrl.includes("play.google.com/store/apps/details")) {
+      return buildPlayStoreDetailsUrl(directAppId);
+    }
+
     const parsed = new URL(rawUrl);
     if (!parsed.hostname.includes("play.google.com")) {
       return rawUrl;
@@ -457,12 +509,12 @@ export function buildProvidedSourceSeedResult(url: string): AgentSearchResult {
 export async function enrichProvidedSourceSeedResult(
   result: AgentSearchResult
 ): Promise<AgentSearchResult> {
-  const appId = parsePlayStoreAppId(result.url);
+  const appId = parseDirectAppId(result.url);
   if (!appId) {
     return result;
   }
 
-  const metadata = await fetchPlayStoreAppMetadata(result.url);
+  const metadata = await fetchPlayStoreAppMetadata(normalizePlayStoreUrl(result.url));
   if (!metadata) {
     if (isPlaceholderProvidedSourceTitle(result.title)) {
       const fallbackTitle = humanizePackageId(appId);
@@ -512,9 +564,9 @@ export function buildDirectSourceResearchQueries(input: {
 
   for (const url of urls) {
     const result = findDirectSourceResultForUrl(input.directResearch, url);
-    const playStoreAppId = parsePlayStoreAppId(url);
+    const directAppId = parseDirectAppId(url);
 
-    if (playStoreAppId) {
+    if (directAppId) {
       continue;
     }
 

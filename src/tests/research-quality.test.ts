@@ -11,6 +11,8 @@ import {
   buildDirectSourceResearchQueries,
   buildProvidedSourceSeedResult,
   enrichProvidedSourceSeedResult,
+  isDirectAppUrl,
+  parseAppBrainAppId,
   extractInstructionUrls
 } from "../tasks/agent/direct-source";
 import { createDefaultAgentExtractor } from "../tasks/agent/extractors/heuristic-extractor";
@@ -349,6 +351,35 @@ test("play store seed enrichment builds rich aso evidence without browser fetch"
   assert.match(seeded.page?.description ?? "", /Create professional resumes offline/i);
   assert.ok((seeded.page?.headings ?? []).some((heading: string) => /Business/i.test(heading)));
   assert.ok((seeded.page?.paragraphs ?? []).some((paragraph: string) => /ATS/i.test(paragraph)));
+});
+
+test("appbrain direct links resolve app ids and use the direct app audit path", async () => {
+  const appBrainUrl = "https://www.appbrain.com/app/nanocv-offline-resume-builder/com.nanocv.app";
+  assert.equal(parseAppBrainAppId(appBrainUrl), "com.nanocv.app");
+  assert.equal(isDirectAppUrl(appBrainUrl), true);
+
+  const seeded = await enrichProvidedSourceSeedResult(
+    buildProvidedSourceSeedResult(appBrainUrl)
+  );
+
+  assert.equal(seeded.title, "Resume Builder Offline");
+  assert.equal(seeded.reviewStatus, "read");
+  assert.equal(seeded.contentType, "review");
+  assert.ok((seeded.page?.paragraphs ?? []).some((paragraph: string) => /NanoCV/i.test(paragraph)));
+
+  const queries = buildDirectSourceResearchQueries({
+    instruction: `Audit this app URL: ${appBrainUrl}`,
+    directResearch: [
+      {
+        query: `Provided source: ${appBrainUrl}`,
+        searchedAt: "2026-03-21T13:00:00.000Z",
+        results: [seeded]
+      }
+    ],
+    maxQueries: 5
+  });
+
+  assert.equal(queries.length, 0);
 });
 
 test("extractor filters boilerplate headings from theme extraction", () => {
