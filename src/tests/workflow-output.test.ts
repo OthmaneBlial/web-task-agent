@@ -13,7 +13,7 @@ import {
   buildAgentOutputPaths,
   writeWorkflowPackageArtifacts
 } from "../workflows/output-package";
-import { renderResearchSummary } from "../tasks/agent/synthesis-stage";
+import { renderReport, renderResearchSummary } from "../tasks/agent/synthesis-stage";
 import type {
   AgentEvidenceBundle,
   AgentRunState
@@ -273,6 +273,100 @@ test("workflow package writer creates polished handoff files", () => {
         )
       )
     );
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("report renders a dedicated ASO audit section for direct app runs", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-aso-report-"));
+
+  try {
+    const state = createWorkflowState(tempDir, "android-opportunity");
+    state.input.instruction =
+      "Why this app is getting practically 0 downloads? Rewrite its ASO: https://www.appbrain.com/app/nanocv-offline-resume-builder/com.nanocv.app";
+    state.reportPath = path.join(tempDir, "report.md");
+    state.research = [
+      {
+        query: "Provided source: https://www.appbrain.com/app/nanocv-offline-resume-builder/com.nanocv.app",
+        searchedAt: "2026-03-21T13:00:00.000Z",
+        results: [
+          {
+            title: "Resume Builder Offline",
+            url: "https://www.appbrain.com/app/nanocv-offline-resume-builder/com.nanocv.app",
+            snippet: "Create professional resumes offline. 100% private, no signup.",
+            site: "appbrain.com",
+            reviewStatus: "read",
+            dwellSeconds: 2,
+            qualityScore: 0.9,
+            contentType: "review",
+            page: {
+              title: "Resume Builder Offline - Apps on Google Play",
+              url: "https://play.google.com/store/apps/details?id=com.nanocv.app&hl=en&gl=us",
+              description: "Create professional resumes offline. 100% private, no signup.",
+              h1: "Resume Builder Offline",
+              headings: ["About this app", "BUSINESS", "Stack Attack", "Current ASO audit"],
+              paragraphs: [
+                "Create professional resumes offline. 100% private, no signup.",
+                "Build a job-winning resume in minutes with NanoCV, the secure offline resume builder."
+              ],
+              capturedAt: "2026-03-21T13:00:00.000Z"
+            }
+          }
+        ]
+      },
+      {
+        query: "Play Store benchmark: resume builder",
+        searchedAt: "2026-03-21T13:01:00.000Z",
+        results: [
+          {
+            title: 'Play Store benchmark for "resume builder"',
+            url: "https://play.google.com/store/search?q=resume%20builder&c=apps&hl=en&gl=us",
+            snippet: 'Resume Builder Offline (com.nanocv.app) appears at Play Store search rank #17 for "resume builder".',
+            site: "play.google.com",
+            reviewStatus: "read",
+            dwellSeconds: 2,
+            qualityScore: 0.9,
+            contentType: "review",
+            page: {
+              title: 'Play Store benchmark for "resume builder"',
+              url: "https://play.google.com/store/search?q=resume%20builder&c=apps&hl=en&gl=us",
+              description: 'Resume Builder Offline (com.nanocv.app) appears at Play Store search rank #17 for "resume builder".',
+              h1: "Benchmark keyword: resume builder",
+              headings: ["Search visibility", "Top competitors"],
+              paragraphs: [
+                'Resume Builder Offline (com.nanocv.app) appears at Play Store search rank #17 for "resume builder".',
+                "Top visible competitors for this keyword include Resume Builder - CV Maker, Resume Builder Pro with AI, Resume - Intelligent CV maker."
+              ],
+              capturedAt: "2026-03-21T13:01:00.000Z"
+            }
+          },
+          {
+            title: "Resume Builder - CV Maker",
+            url: "https://play.google.com/store/apps/details?id=com.example.a",
+            snippet: 'Play Store search rank #1 for keyword "resume builder". AI resume templates and PDF export.',
+            site: "play.google.com",
+            reviewStatus: "read"
+          },
+          {
+            title: "Resume Builder Pro with AI",
+            url: "https://play.google.com/store/apps/details?id=com.example.b",
+            snippet: 'Play Store search rank #2 for keyword "resume builder". AI resume builder with templates.',
+            site: "play.google.com",
+            reviewStatus: "read"
+          }
+        ]
+      }
+    ];
+
+    const report = renderReport(state, createSampleEvidence());
+    assert.match(report, /## ASO Audit/);
+    assert.match(report, /### Current Listing/);
+    assert.match(report, /Title: Resume Builder Offline/);
+    assert.match(report, /Play Store search rank #17/i);
+    assert.match(report, /### Rewritten ASO Proposal/);
+    assert.match(report, /Proposed Title:/);
+    assert.match(report, /Input Source: AppBrain URL provided/i);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

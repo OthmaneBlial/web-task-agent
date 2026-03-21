@@ -50,7 +50,7 @@ import {
   upsertWorkItem
 } from "./agent/pipeline-state";
 import {
-  buildDirectAppBenchmarkResearch,
+  buildDirectAppBenchmarkResearches,
   buildDirectSourceResearchQueries,
   enrichProvidedSourceSeedResult,
   buildProvidedSourceQueryLabel,
@@ -754,8 +754,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                 searchProvider: "direct_url",
                 searchUrl: url
               });
-              const benchmarkResearch = await buildDirectAppBenchmarkResearch(seededResult);
-              if (benchmarkResearch) {
+              const benchmarkResearches = await buildDirectAppBenchmarkResearches(seededResult, {
+                maxKeywords: Math.min(4, Math.max(2, state.input.maxQueries))
+              });
+              for (const benchmarkResearch of benchmarkResearches) {
                 this.log(`benchmarking market visibility: ${benchmarkResearch.query}`);
                 state.research = upsertResearchResult(state.research, benchmarkResearch);
                 extractStage.persistQueryResult(benchmarkResearch, {
@@ -784,13 +786,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             state.plan.researchQueries = directSourceQueries;
             appendNote(
               state,
-              `Direct-source research queries applied from ${directInstructionUrls.length} provided URL${directInstructionUrls.length === 1 ? "" : "s"}.`
-            );
-          } else if (directInstructionUrls.some((url) => isDirectAppUrl(url))) {
-            state.plan.researchQueries = [];
-            appendNote(
-              state,
-              "Used direct app listing evidence and skipped noisy generic web search for the provided app URL."
+              `Direct-source research queries applied from ${directInstructionUrls.length} provided URL${directInstructionUrls.length === 1 ? "" : "s"}, including targeted direct-app audit queries when available.`
             );
           } else if (workflowQueries.length > 0) {
             state.plan.researchQueries = workflowQueries;

@@ -5,9 +5,12 @@ import { JobStore } from "../../lib/job-store";
 import { LlmService } from "../../lib/llm";
 import type {
   AgentEvidenceBundle,
+  AgentResearchResult,
   AgentResearchSummary,
+  AgentSearchResult,
   AgentRunState
 } from "../../types";
+import { parseDirectAppId } from "./direct-source";
 import { computeElapsedMinutes, nowIso } from "./shared";
 
 function readIfExists(filePath: string | null): string | null {
@@ -29,6 +32,326 @@ function isTerminalStatus(status: AgentRunState["status"]): boolean {
 
 function formatMinutes(minutes: number): string {
   return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
+const ASO_STOP_WORDS = new Set([
+  "android",
+  "app",
+  "apps",
+  "best",
+  "build",
+  "builder",
+  "create",
+  "download",
+  "editor",
+  "fast",
+  "for",
+  "free",
+  "from",
+  "google",
+  "maker",
+  "offline",
+  "online",
+  "play",
+  "private",
+  "professional",
+  "signup",
+  "store",
+  "the",
+  "with",
+  "your"
+]);
+
+function uniqueStrings(values: string[], limit?: number): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const value of values) {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      continue;
+    }
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    output.push(normalized);
+    if (typeof limit === "number" && output.length >= limit) {
+      break;
+    }
+  }
+
+  return output;
+}
+
+function safeHostname(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function extractMeaningfulWords(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .map((word) => word.trim())
+    .filter((word) => word.length >= 3)
+    .filter((word) => /[a-z]/i.test(word))
+    .filter((word) => !ASO_STOP_WORDS.has(word));
+}
+
+function titleCasePhrase(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function normalizeWordStem(value: string): string {
+  const normalized = value.toLowerCase();
+  return normalized.endsWith("s") ? normalized.slice(0, -1) : normalized;
+}
+
+function findDirectAppSeedResult(state: AgentRunState): AgentSearchResult | null {
+  for (const entry of state.research) {
+    if (!entry.query.startsWith("Provided source: ")) {
+      continue;
+    }
+    const result = entry.results[0];
+    if (result && parseDirectAppId(result.url)) {
+      return result;
+    }
+  }
+
+  return null;
+}
+
+function findDirectAppBenchmarkResults(state: AgentRunState): AgentResearchResult[] {
+  return state.research.filter((entry) => entry.query.startsWith("Play Store benchmark: "));
+}
+
+function parseDirectAppRank(value: string): number | null {
+  const match = value.match(/rank #(\d+)/i);
+  if (!match) {
+    return null;
+  }
+
+  const rank = Number(match[1]);
+  return Number.isFinite(rank) ? rank : null;
+}
+
+function deriveAsoCurrentListing(seed: AgentSearchResult): {
+  title: string;
+  shortDescription: string;
+  longDescription: string;
+  category: string | null;
+  developer: string | null;
+  appId: string | null;
+} {
+  const headings = (seed.page?.headings ?? []).filter(
+    (heading) => !/^about this app$/i.test(heading) && !/^current aso audit$/i.test(heading)
+  );
+  const paragraphs = seed.page?.paragraphs ?? [];
+  const shortDescription = seed.page?.description || seed.snippet || "";
+  const longDescription =
+    paragraphs.find(
+      (paragraph) =>
+        paragraph !== shortDescription &&
+        !/^Current short description:/i.test(paragraph) &&
+        !/^Primary title keywords detected/i.test(paragraph) &&
+        !/^Category:/i.test(paragraph)
+    ) ?? "";
+
+  return {
+    title: seed.page?.h1 || seed.title,
+    shortDescription,
+    longDescription,
+    category: headings[0] ?? null,
+    developer: headings[1] ?? null,
+    appId: parseDirectAppId(seed.url)
+  };
+}
+
+function derivePrimaryBenchmarkKeyword(benchmarks: AgentResearchResult[], fallbackTitle: string): string {
+  const firstBenchmark = benchmarks[0]?.query.match(/^Play Store benchmark:\s*(.+)$/i)?.[1]?.trim();
+  if (firstBenchmark) {
+    return firstBenchmark;
+  }
+
+  const words = extractMeaningfulWords(fallbackTitle).slice(0, 2);
+  return words.join(" ") || fallbackTitle.toLowerCase();
+}
+
+function buildCompetitorTokenSummary(
+  listing: ReturnType<typeof deriveAsoCurrentListing>,
+  competitors: AgentSearchResult[]
+): string[] {
+  const currentTokens = new Set(
+    extractMeaningfulWords(`${listing.title} ${listing.shortDescription}`).map(normalizeWordStem)
+  );
+  const counts = new Map<string, number>();
+
+  for (const competitor of competitors) {
+    const fields = [competitor.title, competitor.snippet, competitor.page?.description ?? ""];
+    for (const token of uniqueStrings(fields.flatMap((field) => extractMeaningfulWords(field)))) {
+      if (currentTokens.has(normalizeWordStem(token))) {
+        continue;
+      }
+      counts.set(token, (counts.get(token) ?? 0) + 1);
+    }
+  }
+
+  return Array.from(counts.entries())
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, 4)
+    .map(([token]) => token);
+}
+
+function buildAsoTitleProposal(primaryKeyword: string, listing: ReturnType<typeof deriveAsoCurrentListing>): string {
+  const base = titleCasePhrase(primaryKeyword);
+  const primaryTokens = new Set(extractMeaningfulWords(primaryKeyword).map(normalizeWordStem));
+  const descriptorWords = extractMeaningfulWords(listing.shortDescription)
+    .filter((word) => !primaryTokens.has(normalizeWordStem(word)))
+    .slice(0, 2)
+    .map((word) => titleCasePhrase(word));
+  const variants = [
+    `${base}: ${descriptorWords.join(" ")}`.trim().replace(/:\s*$/, ""),
+    `${base} ${descriptorWords.join(" ")}`.trim(),
+    base
+  ];
+
+  return (
+    variants.find((variant) => variant.length >= 8 && variant.length <= 30) ??
+    variants.find((variant) => variant.length >= 8) ??
+    listing.title
+  );
+}
+
+function buildAsoShortDescriptionProposal(
+  primaryKeyword: string,
+  listing: ReturnType<typeof deriveAsoCurrentListing>,
+  missingTerms: string[]
+): string {
+  const primaryTokens = new Set(extractMeaningfulWords(primaryKeyword).map(normalizeWordStem));
+  const differentiator = uniqueStrings(
+    [
+      ...extractMeaningfulWords(listing.shortDescription).filter(
+        (word) => !primaryTokens.has(normalizeWordStem(word))
+      ),
+      ...missingTerms
+    ],
+    3
+  )
+    .slice(0, 3)
+    .join(", ");
+
+  const candidate = differentiator
+    ? `Create ${primaryKeyword} faster with ${differentiator} and clearer mobile workflows.`
+    : `Create ${primaryKeyword} faster with a clearer mobile workflow and stronger value messaging.`;
+
+  return candidate.length <= 80 ? candidate : `${candidate.slice(0, 77).trimEnd()}.`;
+}
+
+function renderAsoAuditSection(state: AgentRunState): string {
+  const seed = findDirectAppSeedResult(state);
+  if (!seed?.page) {
+    return "";
+  }
+
+  const benchmarks = findDirectAppBenchmarkResults(state);
+  if (benchmarks.length === 0) {
+    return "";
+  }
+
+  const listing = deriveAsoCurrentListing(seed);
+  const benchmarkSummaries = uniqueStrings(
+    benchmarks.flatMap((benchmark) => benchmark.results[0]?.page?.paragraphs.slice(0, 2) ?? [benchmark.results[0]?.snippet ?? ""]),
+    6
+  );
+  const competitors = uniqueStrings(
+    benchmarks
+      .flatMap((benchmark) => benchmark.results.slice(1))
+      .map((result) => result.title),
+    6
+  );
+  const competitorResults = benchmarks.flatMap((benchmark) => benchmark.results.slice(1));
+  const missingTerms = buildCompetitorTokenSummary(listing, competitorResults);
+  const primaryKeyword = derivePrimaryBenchmarkKeyword(benchmarks, listing.title);
+  const topRank =
+    benchmarkSummaries
+      .map(parseDirectAppRank)
+      .find((rank): rank is number => typeof rank === "number") ?? null;
+  const proposalTitle = buildAsoTitleProposal(primaryKeyword, listing);
+  const proposalShortDescription = buildAsoShortDescriptionProposal(
+    primaryKeyword,
+    listing,
+    missingTerms
+  );
+  const competitorGapNotes = uniqueStrings(
+    [
+      topRank && topRank > 10
+        ? `The app is buried at roughly rank #${topRank} for its main visible keyword, which usually means the listing is not matching the terms users search first.`
+        : topRank
+          ? `The app is visible around rank #${topRank}, so the title and description still need stronger differentiation against nearby competitors.`
+          : "",
+      missingTerms.length > 0
+        ? `Top competitors repeatedly surface terms like ${missingTerms.join(", ")}, while the current listing underuses those demand signals.`
+        : "",
+      competitors.length > 0
+        ? `The current market leaders around this keyword include ${competitors.slice(0, 4).join(", ")}.`
+        : "",
+      listing.shortDescription.length < 55
+        ? "The current short description is concise, but it leaves ranking and conversion room on the table because it does not stack enough concrete search intent and benefit language."
+        : ""
+    ].filter(Boolean),
+    4
+  );
+
+  const lines = ["## ASO Audit", "", "### Current Listing", ""];
+  lines.push(`- Title: ${listing.title}`);
+  lines.push(`- Short Description: ${listing.shortDescription || "n/a"}`);
+  if (listing.category) {
+    lines.push(`- Category: ${listing.category}`);
+  }
+  if (listing.developer) {
+    lines.push(`- Developer: ${listing.developer}`);
+  }
+  if (listing.appId) {
+    lines.push(`- Package ID: ${listing.appId}`);
+  }
+  if (safeHostname(seed.url).includes("appbrain.com")) {
+    lines.push("- Input Source: AppBrain URL provided; listing metadata was normalized from Google Play because AppBrain pages can be verification-protected during automated runs.");
+  }
+  if (listing.longDescription) {
+    lines.push(`- Listing Angle: ${listing.longDescription}`);
+  }
+
+  lines.push("", "### Keyword Visibility", "");
+  for (const summary of benchmarkSummaries.slice(0, 4)) {
+    lines.push(`- ${summary}`);
+  }
+
+  lines.push("", "### Competitor Gap Analysis", "");
+  for (const note of competitorGapNotes) {
+    lines.push(`- ${note}`);
+  }
+
+  lines.push("", "### Rewritten ASO Proposal", "");
+  lines.push(`- Proposed Title: ${proposalTitle}`);
+  lines.push(`- Proposed Short Description: ${proposalShortDescription}`);
+  lines.push(
+    `- Positioning Direction: Lead with "${titleCasePhrase(primaryKeyword)}" first, then emphasize the clearest differentiator from the current listing instead of generic filler language.`
+  );
+  if (missingTerms.length > 0) {
+    lines.push(`- Terms To Test: ${missingTerms.join(", ")}`);
+  }
+  lines.push("");
+
+  return lines.join("\n");
 }
 
 function buildEvidenceLabelMap(
@@ -416,6 +739,11 @@ export function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundl
     lines.push(renderResearchSummary(state.researchSummary, evidence), "");
   } else if (evidence && evidence.counts.sources > 0) {
     lines.push(renderEvidenceSection(evidence), "");
+  }
+
+  const asoAuditSection = renderAsoAuditSection(state);
+  if (asoAuditSection) {
+    lines.push(asoAuditSection, "");
   }
 
   if (quality) {

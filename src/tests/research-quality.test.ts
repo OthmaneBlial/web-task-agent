@@ -282,15 +282,16 @@ test("direct source helper extracts urls and builds targeted play store queries"
   assert.deepEqual(urls, ["https://play.google.com/store/apps/details?id=com.nanocv.app"]);
 
   const seed = buildProvidedSourceSeedResult(urls[0]!);
-  seed.title = "NanoCV - Apps on Google Play";
+  seed.title = "Resume Builder Offline";
   seed.page = {
-    title: "NanoCV - Apps on Google Play",
+    title: "Resume Builder Offline - Apps on Google Play",
     url: urls[0]!,
-    description: "NanoCV helps users build and manage CVs from mobile.",
-    h1: "NanoCV",
-    headings: ["About this app"],
+    description: "Create professional resumes offline. 100% private, no signup.",
+    h1: "Resume Builder Offline",
+    headings: ["About this app", "BUSINESS", "Stack Attack", "Current ASO audit"],
     paragraphs: [
-      "NanoCV helps users create a CV, edit profile sections, and export resumes from Android."
+      "Create professional resumes offline. 100% private, no signup.",
+      "Build a job-winning resume in minutes with NanoCV, the secure offline resume builder."
     ],
     capturedAt: "2026-03-21T11:00:00.000Z"
   };
@@ -307,7 +308,10 @@ test("direct source helper extracts urls and builds targeted play store queries"
     maxQueries: 5
   });
 
-  assert.equal(queries.length, 0);
+  assert.ok(queries.length >= 10);
+  assert.ok(queries.some((query) => /resume builder/i.test(query)));
+  assert.ok(queries.some((query) => /site:play\.google\.com/i.test(query)));
+  assert.ok(queries.some((query) => /site:reddit\.com/i.test(query)));
 });
 
 test("direct source query builder ignores placeholder titles and falls back to package id", () => {
@@ -335,7 +339,8 @@ test("direct source query builder ignores placeholder titles and falls back to p
     maxQueries: 5
   });
 
-  assert.equal(queries.length, 0);
+  assert.ok(queries.length >= 6);
+  assert.ok(queries.some((query) => query.includes("com.nanocv.app")));
 });
 
 test("play store seed enrichment builds rich aso evidence without browser fetch", async () => {
@@ -380,7 +385,8 @@ test("appbrain direct links resolve app ids and use the direct app audit path", 
     maxQueries: 5
   });
 
-  assert.equal(queries.length, 0);
+  assert.ok(queries.length >= 6);
+  assert.ok(queries.some((query) => /resume builder/i.test(query)));
 });
 
 test("direct app benchmark research finds market visibility and competitors", async () => {
