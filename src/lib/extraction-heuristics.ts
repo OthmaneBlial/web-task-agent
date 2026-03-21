@@ -37,6 +37,49 @@ function normalizeExtractionValue(value: string): string {
   return normalizeText(value).toLowerCase();
 }
 
+const BOILERPLATE_THEME_VALUES = new Set([
+  "introduction",
+  "conclusion",
+  "top posts",
+  "view post in",
+  "comparison table",
+  "quick comparison",
+  "key takeaways",
+  "older posts",
+  "related posts",
+  "major ai breakthroughs",
+  "practical applications",
+  "request discussion guidelines",
+  "welcome to the r/artificialintelligence gateway"
+]);
+
+function isBoilerplateTheme(value: string): boolean {
+  const normalized = normalizeExtractionValue(value);
+  if (!normalized) {
+    return true;
+  }
+
+  if (BOILERPLATE_THEME_VALUES.has(normalized)) {
+    return true;
+  }
+
+  if (
+    normalized.startsWith("view post in") ||
+    normalized.startsWith("top posts") ||
+    normalized.startsWith("related posts") ||
+    normalized.startsWith("older posts") ||
+    normalized.startsWith("welcome to")
+  ) {
+    return true;
+  }
+
+  if (/^\d+[\).\s:-]+[a-z0-9].{0,40}$/i.test(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
 export function selectUniqueExtractions(
   candidates: AgentExtractionCandidate[],
   limitPerKind: number = 8
@@ -48,6 +91,10 @@ export function selectUniqueExtractions(
   for (const candidate of candidates) {
     const normalizedValue = normalizeExtractionValue(candidate.value);
     if (!normalizedValue) {
+      continue;
+    }
+
+    if (candidate.kind === "theme" && isBoilerplateTheme(normalizedValue)) {
       continue;
     }
 
@@ -99,6 +146,7 @@ function extractThemePhrases(result: AgentSearchResult): string[] {
 
   return candidates
     .map((value) => normalizeText(value))
+    .filter((value) => !isBoilerplateTheme(value))
     .filter((value) => value.length >= 6 && value.length <= 90)
     .slice(0, 10);
 }

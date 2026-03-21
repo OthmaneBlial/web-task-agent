@@ -57,6 +57,7 @@ import {
 } from "./agent/synthesis-stage";
 import {
   addHoursToIso,
+  computeElapsedMinutes,
   DEFAULT_AGENT_MAX_RUNTIME_HOURS,
   DEFAULT_FETCH_BATCH_SIZE,
   DEFAULT_JOB_HEARTBEAT_INTERVAL_SECONDS,
@@ -74,13 +75,15 @@ import {
   buildAgentOutputPaths,
   writeWorkflowPackageArtifacts
 } from "../workflows/output-package";
+import { buildWorkflowResearchQueries } from "../workflows";
 
 interface AgentTaskResult extends TaskJobInfo {
   cachePath: string;
   reportPath: string;
   artifactDir: string;
   status: AgentRunState["status"];
-  estimatedMinutes: number;
+  expectedMinutes: number;
+  elapsedMinutes: number;
 }
 
 class JobControlSignal extends Error {
@@ -98,8 +101,8 @@ function updateStepStatus(
   kind: AgentStepKind,
   status: "pending" | "running" | "completed" | "failed" | "skipped"
 ): void {
-  const step = plan?.steps.find((candidate) => candidate.kind === kind);
-  if (step) {
+  const steps = plan?.steps.filter((candidate) => candidate.kind === kind) ?? [];
+  for (const step of steps) {
     step.status = status;
   }
 }
@@ -257,6 +260,21 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
 
 function hasStep(plan: AgentPlan | null, kind: AgentStepKind): boolean {
   return Boolean(plan?.steps.some((step) => step.kind === kind));
+}
+
+function buildWorkflowQueryOverrides(state: AgentRunState): string[] {
+  const topic = String(state.input.workflowInputs?.topic ?? "").trim();
+  if (!topic) {
+    return [];
+  }
+
+  return buildWorkflowResearchQueries({
+    templateId: state.input.workflowTemplateId,
+    topic,
+    audience: state.input.workflowInputs?.audience ?? null,
+    context: state.input.workflowInputs?.context ?? null,
+    maxQueries: state.input.maxQueries
+  });
 }
 
 export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> {
@@ -527,6 +545,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
     const buildJobOutput = (): Record<string, unknown> => ({
       estimatedMinutes: state.plan?.estimatedMinutes ?? null,
+      elapsedMinutes:
+        state.status === "planning" || state.status === "running"
+          ? null
+          : computeElapsedMinutes(state.startedAt, state.updatedAt),
       runtime: {
         leaseOwnerId: state.runtime.leaseOwnerId,
         heartbeatAt: state.runtime.heartbeatAt,
@@ -696,6 +718,14 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             memory: memory?.content,
             maxQueries: state.input.maxQueries
           });
+          const workflowQueries = buildWorkflowQueryOverrides(state);
+          if (workflowQueries.length > 0) {
+            state.plan.researchQueries = workflowQueries;
+            appendNote(
+              state,
+              `Workflow-specific research queries applied for ${state.input.workflowTemplateId}.`
+            );
+          }
           state.plan.estimatedMinutes = computeExecutionEstimateMinutes(
             state.plan,
             state.input.maxResultsPerQuery
@@ -1200,6 +1230,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           ? "Drafts are ready and waiting for review."
           : "Job completed."
       );
+      this.saveState(cachePath, state);
 
       await jobStore.runStep(
         reportStep,
@@ -1268,7 +1299,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         reportPath: state.reportPath,
         artifactDir: state.artifactDir,
         status: state.status,
-        estimatedMinutes: state.plan.estimatedMinutes
+        expectedMinutes: state.plan.estimatedMinutes,
+        elapsedMinutes: computeElapsedMinutes(state.startedAt, state.updatedAt)
       };
     } catch (error) {
       if (error instanceof JobControlSignal) {
@@ -1305,7 +1337,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           reportPath: state.reportPath,
           artifactDir: state.artifactDir,
           status: state.status,
-          estimatedMinutes: state.plan?.estimatedMinutes ?? 0
+          expectedMinutes: state.plan?.estimatedMinutes ?? 0,
+          elapsedMinutes: computeElapsedMinutes(state.startedAt, state.updatedAt)
         };
       }
 

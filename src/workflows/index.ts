@@ -33,6 +33,12 @@ export interface WorkflowTemplateDefinition {
     audience?: string | null;
     context?: string | null;
   }): string;
+  buildResearchQueries?(input: {
+    topic: string;
+    audience?: string | null;
+    context?: string | null;
+    maxQueries: number;
+  }): string[];
 }
 
 function slugifyPathSegment(value: string): string {
@@ -69,6 +75,48 @@ function buildPresetSet(input: {
       options: input.deep
     }
   ];
+}
+
+function uniqueQueries(values: string[], limit: number): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const value of values) {
+    const query = value.replace(/\s+/g, " ").trim();
+    const key = query.toLowerCase();
+    if (!query || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(query);
+    if (normalized.length >= limit) {
+      break;
+    }
+  }
+
+  return normalized;
+}
+
+function buildAndroidOpportunityResearchQueries(input: {
+  topic: string;
+  maxQueries: number;
+}): string[] {
+  const topic = input.topic.trim();
+  const broadTopic = topic.toLowerCase().includes("study planner") ? topic : `${topic} study planner`;
+
+  return uniqueQueries(
+    [
+      `"${broadTopic}" android app reddit complaints`,
+      `site:play.google.com "${broadTopic}" reviews complaints`,
+      `"${broadTopic}" students feature requests reddit forum`,
+      `"study planner" app alternatives motion sunsama akiflow reddit students`,
+      `"${broadTopic}" subscription complaints students`,
+      `"${broadTopic}" time blocking student app pain points`,
+      `"${broadTopic}" exam planner app review reddit`
+    ],
+    Math.max(1, Math.min(5, input.maxQueries))
+  );
 }
 
 const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
@@ -111,6 +159,7 @@ const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
       const lines = [
         `Research Android app opportunities around "${input.topic}".`,
         "Search broadly across product pages, app reviews, competitor writeups, forums, Reddit-style discussions, and technical/product communities.",
+        "Prefer actual study-planner apps, Play Store or App Store pages, student communities, and user-review threads over enterprise scheduler vendors, generic AI competitor-analysis tools, and thin SEO listicles.",
         "Focus on recurring complaints, feature gaps, monetization signals, retention hooks, and opportunities that could spread quickly.",
         "The final report must include: market summary, repeated user pains, competitor gaps, a shortlist of app concepts, MVP features, monetization ideas, risks, and evidence-backed launch hooks."
       ];
@@ -121,6 +170,12 @@ const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
         lines.push(`Extra context: ${input.context}.`);
       }
       return lines.join("\n");
+    },
+    buildResearchQueries(input) {
+      return buildAndroidOpportunityResearchQueries({
+        topic: input.topic,
+        maxQueries: input.maxQueries
+      });
     }
   },
   {
@@ -275,4 +330,28 @@ export function buildWorkflowRunOptions(input: {
     },
     jobTitle: `${template.title}: ${input.topic}`
   };
+}
+
+export function buildWorkflowResearchQueries(input: {
+  templateId: string | null | undefined;
+  topic: string;
+  audience?: string | null;
+  context?: string | null;
+  maxQueries?: number;
+}): string[] {
+  if (!input.templateId) {
+    return [];
+  }
+
+  const template = getWorkflowTemplate(input.templateId);
+  if (!template?.buildResearchQueries) {
+    return [];
+  }
+
+  return template.buildResearchQueries({
+    topic: input.topic,
+    audience: input.audience ?? null,
+    context: input.context ?? null,
+    maxQueries: Math.max(1, Math.min(5, input.maxQueries ?? 5))
+  });
 }

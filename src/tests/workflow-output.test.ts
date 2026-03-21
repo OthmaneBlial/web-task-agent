@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  buildWorkflowResearchQueries,
   buildWorkflowRunOptions,
   getWorkflowTemplate
 } from "../workflows";
@@ -12,6 +13,7 @@ import {
   buildAgentOutputPaths,
   writeWorkflowPackageArtifacts
 } from "../workflows/output-package";
+import { renderResearchSummary } from "../tasks/agent/synthesis-stage";
 import type {
   AgentEvidenceBundle,
   AgentRunState
@@ -203,6 +205,19 @@ test("workflow run options use preset budgets and topic-based output paths", () 
   assert.equal(options.maxResultsPerQuery, 45);
 });
 
+test("android opportunity workflow uses focused research queries", () => {
+  const queries = buildWorkflowResearchQueries({
+    templateId: "android-opportunity",
+    topic: "ai study planner",
+    maxQueries: 5
+  });
+
+  assert.equal(queries.length, 5);
+  assert.ok(queries.some((query) => query.includes("site:play.google.com")));
+  assert.ok(queries.some((query) => query.includes("motion sunsama akiflow")));
+  assert.ok(queries.every((query) => !/competitor analysis tools/i.test(query)));
+});
+
 test("workflow package writer creates polished handoff files", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-workflow-package-"));
 
@@ -251,4 +266,56 @@ test("workflow package writer creates polished handoff files", () => {
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test("research summary renders human-readable evidence references", () => {
+  const summary = {
+    executiveSummary: "Research summary.",
+    keyFindings: ["Users want less manual setup."],
+    contentAngles: ["Position the product as zero-friction."],
+    keyFindingDetails: [
+      {
+        text: "Users want less manual setup.",
+        evidenceIds: ["ext_alpha"]
+      }
+    ],
+    contentAngleDetails: [
+      {
+        text: "Position the product as zero-friction.",
+        evidenceIds: ["src_beta"]
+      }
+    ],
+    referencedEvidence: [
+      {
+        id: "ext_alpha",
+        sourceId: "src_beta",
+        query: "ai study planner friction",
+        sourceTitle: "Forum thread",
+        sourceUrl: "https://example.com/forum-thread",
+        kind: "feature_request" as const,
+        value: "I just want to throw my tasks in and get a plan",
+        confidence: 0.86,
+        overallScore: 0.82
+      },
+      {
+        id: "src_beta",
+        sourceId: "src_beta",
+        query: "ai study planner friction",
+        sourceTitle: "Forum thread",
+        sourceUrl: "https://example.com/forum-thread",
+        kind: "source" as const,
+        value: "Forum thread",
+        overallScore: 0.82
+      }
+    ]
+  };
+
+  const rendered = renderResearchSummary(summary);
+
+  assert.match(rendered, /Evidence: E1/);
+  assert.match(rendered, /Evidence: S1/);
+  assert.match(rendered, /\[E1\] feature_request/);
+  assert.match(rendered, /\[S1\] source/);
+  assert.ok(!rendered.includes("ext_alpha"));
+  assert.ok(!rendered.includes("src_beta"));
 });

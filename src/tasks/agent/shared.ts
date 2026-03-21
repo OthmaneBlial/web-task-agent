@@ -37,6 +37,7 @@ export interface AgentDocumentQualityAssessment {
 
 const AVERAGE_ARTICLE_READ_MS = Math.round((ARTICLE_READ_MIN_MS + ARTICLE_READ_MAX_MS) / 2);
 const AVERAGE_QUERY_SCAN_MS = Math.round((QUERY_SCAN_MIN_MS + QUERY_SCAN_MAX_MS) / 2);
+const AVERAGE_QUICK_SKIP_MS = Math.round((QUICK_SKIP_MIN_MS + QUICK_SKIP_MAX_MS) / 2);
 
 export function nowIso(): string {
   return new Date().toISOString();
@@ -48,6 +49,16 @@ export function addSecondsToIso(input: string, seconds: number): string {
 
 export function addHoursToIso(input: string, hours: number): string {
   return addSecondsToIso(input, Math.round(hours * 60 * 60));
+}
+
+export function computeElapsedMinutes(startedAt: string, endedAt: string): number {
+  const startedMs = Date.parse(startedAt);
+  const endedMs = Date.parse(endedAt);
+  if (!Number.isFinite(startedMs) || !Number.isFinite(endedMs)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round((endedMs - startedMs) / 60_000));
 }
 
 export function slugify(value: string): string {
@@ -206,6 +217,21 @@ export function evaluateDomainPolicy(result: AgentSearchResult): AgentDomainPoli
   const pathname = pathnameOf(result.url);
   const title = [result.title, result.snippet].join(" ").toLowerCase();
   const signals: string[] = [];
+
+  if (
+    hostname === "duckduckgo.com" &&
+    (pathname === "/y.js" ||
+      result.url.includes("ad_provider=") ||
+      result.url.includes("ad_domain=") ||
+      result.url.includes("click_metadata="))
+  ) {
+    signals.push("search ad redirect");
+    return {
+      action: "skip",
+      reason: "blocked by domain policy: search ad redirect",
+      signals
+    };
+  }
 
   if (
     hostname === "x.com" ||
@@ -544,11 +570,19 @@ export function estimateArticleReadMs(page: AgentPageDigest): number {
 
 export function computeExecutionEstimateMinutes(plan: AgentPlan, maxResultsPerQuery: number): number {
   const queries = plan.researchQueries.length;
-  const visitedArticlesPerQuery = Math.max(1, maxResultsPerQuery);
+  const expectedFetchedResultsPerQuery = clamp(
+    Math.round(Math.min(maxResultsPerQuery, Math.max(6, maxResultsPerQuery * 0.25))),
+    4,
+    12
+  );
+  const expectedReadResultsPerQuery = Math.max(1, Math.round(expectedFetchedResultsPerQuery * 0.65));
+  const expectedQuickSkipsPerQuery = Math.max(0, expectedFetchedResultsPerQuery - expectedReadResultsPerQuery);
+  const expectedSearchScansPerQuery = Math.max(1, Math.min(3, Math.ceil(maxResultsPerQuery / 15)));
   const researchMs =
-    queries * AVERAGE_QUERY_SCAN_MS +
-    queries * visitedArticlesPerQuery * AVERAGE_ARTICLE_READ_MS +
-    queries * 4_000;
+    queries * expectedSearchScansPerQuery * AVERAGE_QUERY_SCAN_MS +
+    queries * expectedReadResultsPerQuery * AVERAGE_ARTICLE_READ_MS +
+    queries * expectedQuickSkipsPerQuery * AVERAGE_QUICK_SKIP_MS +
+    queries * 2_000;
   const draftingMs =
     (plan.steps.some((step) => step.kind === "draft_post") ? 30_000 : 0) +
     (plan.steps.some((step) => step.kind === "draft_comments") ? 20_000 : 0) +

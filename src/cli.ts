@@ -154,7 +154,8 @@ async function main(): Promise<void> {
       const result = await task.run();
       console.log(`Agent job update.`);
       console.log(`Status: ${result.status}`);
-      console.log(`Estimated time: ${result.estimatedMinutes} minutes`);
+      console.log(`Expected time: ${result.expectedMinutes} minutes`);
+      console.log(`Actual runtime: ${result.elapsedMinutes} minutes`);
       console.log(`Job ID: ${result.jobId}`);
       console.log(`Job DB: ${result.databasePath}`);
       console.log(`Cache: ${result.cachePath}`);
@@ -321,7 +322,8 @@ async function main(): Promise<void> {
       console.log(`Template: ${template.id}`);
       console.log(`Preset: ${String(options.preset).toLowerCase()}`);
       console.log(`Status: ${result.status}`);
-      console.log(`Estimated time: ${result.estimatedMinutes} minutes`);
+      console.log(`Expected time: ${result.expectedMinutes} minutes`);
+      console.log(`Actual runtime: ${result.elapsedMinutes} minutes`);
       console.log(`Job ID: ${result.jobId}`);
       console.log(`Job DB: ${result.databasePath}`);
       console.log(`Cache: ${result.cachePath}`);

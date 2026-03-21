@@ -174,6 +174,15 @@ test("domain policy and document quality identify weak research pages", () => {
   assert.equal(socialPolicy.action, "skip");
   assert.match(socialPolicy.reason, /domain policy/i);
 
+  const adRedirectPolicy = evaluateDomainPolicy({
+    title: "#1 AI competitor tool",
+    url: "https://duckduckgo.com/y.js?ad_provider=bing&ad_domain=example.com",
+    snippet: "Sponsored result",
+    site: "duckduckgo.com"
+  });
+  assert.equal(adRedirectPolicy.action, "skip");
+  assert.match(adRedirectPolicy.reason, /ad redirect/i);
+
   const quality = assessDocumentQuality(
     {
       title: "Category: CSV exports",
@@ -204,6 +213,39 @@ test("search ranking prioritizes higher-signal research pages", () => {
   assert.ok((ranked[0]?.rankingScore ?? 0) >= (ranked[1]?.rankingScore ?? 0));
   assert.equal(ranked.at(-1)?.policyAction, "deprioritize");
   assert.ok((ranked[0]?.rankingSignals?.length ?? 0) > 0);
+});
+
+test("extractor filters boilerplate headings from theme extraction", () => {
+  const candidates = buildHeuristicExtractionCandidates({
+    title: "What apps do students use?",
+    url: "https://reddit.com/r/study/comments/example",
+    snippet: "Students discuss planning apps and time-blocking habits.",
+    site: "reddit.com",
+    reviewStatus: "read",
+    qualityScore: 0.84,
+    page: {
+      title: "What apps do students use?",
+      url: "https://reddit.com/r/study/comments/example",
+      description: "A forum thread about study planner apps.",
+      h1: "What apps do students use?",
+      headings: ["View Post in", "Top Posts", "Conclusion", "1. Todoist", "Requested workflow improvements"],
+      paragraphs: [
+        "Students say they want an app that can throw tasks into a time-blocked day automatically.",
+        "Many replies ask for free alternatives and less manual setup."
+      ],
+      capturedAt: "2026-03-20T12:30:00.000Z"
+    }
+  });
+
+  const themeValues = candidates
+    .filter((candidate) => candidate.kind === "theme")
+    .map((candidate) => candidate.value.toLowerCase());
+
+  assert.ok(!themeValues.includes("view post in"));
+  assert.ok(!themeValues.includes("top posts"));
+  assert.ok(!themeValues.includes("conclusion"));
+  assert.ok(!themeValues.includes("1. todoist"));
+  assert.ok(themeValues.includes("requested workflow improvements"));
 });
 
 test("default extractor uses source-specific heuristics for docs forums and reviews", () => {

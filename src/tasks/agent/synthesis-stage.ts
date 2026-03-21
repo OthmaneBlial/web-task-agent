@@ -8,13 +8,169 @@ import type {
   AgentResearchSummary,
   AgentRunState
 } from "../../types";
-import { nowIso } from "./shared";
+import { computeElapsedMinutes, nowIso } from "./shared";
 
 function readIfExists(filePath: string | null): string | null {
   if (!filePath || !fs.existsSync(filePath)) {
     return null;
   }
   return fs.readFileSync(filePath, "utf8");
+}
+
+function isTerminalStatus(status: AgentRunState["status"]): boolean {
+  return (
+    status === "waiting_review" ||
+    status === "completed" ||
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "paused"
+  );
+}
+
+function formatMinutes(minutes: number): string {
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
+function buildEvidenceLabelMap(
+  summary: AgentResearchSummary,
+  evidence?: AgentEvidenceBundle | null
+): Map<string, string> {
+  const labels = new Map<string, string>();
+  let extractionIndex = 1;
+  let sourceIndex = 1;
+  let fallbackIndex = 1;
+
+  const register = (id: string) => {
+    if (!id || labels.has(id)) {
+      return;
+    }
+
+    if (id.startsWith("ext_")) {
+      labels.set(id, `E${extractionIndex}`);
+      extractionIndex += 1;
+      return;
+    }
+
+    if (id.startsWith("src_")) {
+      labels.set(id, `S${sourceIndex}`);
+      sourceIndex += 1;
+      return;
+    }
+
+    labels.set(id, `R${fallbackIndex}`);
+    fallbackIndex += 1;
+  };
+
+  for (const source of evidence?.sources ?? []) {
+    register(source.sourceId);
+    for (const extraction of source.extractions) {
+      register(extraction.id);
+    }
+  }
+
+  for (const reference of summary.referencedEvidence ?? []) {
+    register(reference.id);
+  }
+
+  return labels;
+}
+
+function formatEvidenceRefs(ids: string[], labels: Map<string, string>, limit: number = 6): string[] {
+  const display = ids
+    .map((id) => labels.get(id))
+    .filter((value): value is string => Boolean(value));
+  return Array.from(new Set(display)).slice(0, limit);
+}
+
+function derivePlanLines(state: AgentRunState): string[] {
+  const plan = state.plan;
+  if (!plan) {
+    return [];
+  }
+
+  const researchDone =
+    plan.researchQueries.length === 0 ||
+    (state.pipeline.workItems.length > 0 &&
+      state.pipeline.workItems.every((item) => item.nextStage === "completed"));
+
+  return plan.steps.map((step, index) => {
+    let status = step.status;
+
+    if (step.kind === "research" && researchDone && state.status !== "failed") {
+      status = "completed";
+    } else if (step.kind === "report" && (state.status === "waiting_review" || state.status === "completed")) {
+      status = "completed";
+    } else if (step.kind === "review") {
+      if (state.status === "waiting_review") {
+        status = "pending";
+      } else if (state.status === "completed") {
+        status = "completed";
+      } else if (state.status === "cancelled" || state.status === "failed") {
+        status = "skipped";
+      }
+    }
+
+    return `${index + 1}. ${step.title} [${step.kind}] - ${status}`;
+  });
+}
+
+function assessRunQuality(
+  state: AgentRunState,
+  evidence?: AgentEvidenceBundle | null
+): {
+  score: number;
+  label: string;
+  notes: string[];
+} | null {
+  if (!evidence || evidence.counts.sources === 0) {
+    return null;
+  }
+
+  const results = state.research.flatMap((entry) => entry.results);
+  const visited = results.filter((result) => Boolean(result.reviewStatus)).length;
+  const read = results.filter((result) => result.reviewStatus === "read").length;
+  const errors = results.filter((result) => result.reviewStatus === "error").length;
+  const highSignalSources = evidence.sources.filter((source) => source.overallScore >= 0.7).length;
+  const averageSourceScore =
+    evidence.sources.reduce((total, source) => total + source.overallScore, 0) /
+    Math.max(1, evidence.sources.length);
+  const fetchReliability = visited > 0 ? 1 - errors / visited : 0.7;
+  const readRatio = visited > 0 ? read / visited : 0.6;
+  const documentCoverage = Math.min(1, evidence.counts.documents / 24);
+  const extractionDepth = Math.min(1, evidence.counts.extractions / 180);
+  const highSignalRatio = highSignalSources / Math.max(1, evidence.sources.length);
+
+  const score = Math.max(
+    0,
+    Math.min(
+      10,
+      Number(
+        (
+          documentCoverage * 2.1 +
+          extractionDepth * 1.9 +
+          averageSourceScore * 2.1 +
+          highSignalRatio * 1.4 +
+          fetchReliability * 1.4 +
+          readRatio * 1.1
+        ).toFixed(1)
+      )
+    )
+  );
+
+  const label =
+    score >= 8.5 ? "strong" : score >= 7 ? "good" : score >= 5.5 ? "usable" : "thin";
+
+  return {
+    score,
+    label,
+    notes: [
+      `${evidence.counts.documents} readable documents captured from ${evidence.counts.sources} discovered sources`,
+      `${highSignalSources} sources scored at or above 70% overall quality`,
+      visited > 0
+        ? `${errors} fetch errors across ${visited} visited results`
+        : "No fetched result telemetry was recorded"
+    ]
+  };
 }
 
 function renderEvidenceSection(evidence: AgentEvidenceBundle): string {
@@ -65,7 +221,7 @@ function renderEvidenceSection(evidence: AgentEvidenceBundle): string {
   return lines.join("\n").trim();
 }
 
-function renderClusterSection(evidence: AgentEvidenceBundle): string {
+function renderClusterSection(evidence: AgentEvidenceBundle, labels?: Map<string, string>): string {
   if (evidence.clusters.length === 0) {
     return "";
   }
@@ -80,8 +236,9 @@ function renderClusterSection(evidence: AgentEvidenceBundle): string {
     if (cluster.supportingValues.length > 0) {
       lines.push(`  Variants: ${cluster.supportingValues.slice(0, 3).join(" | ")}`);
     }
-    if (cluster.evidenceIds.length > 0) {
-      lines.push(`  Evidence IDs: ${cluster.evidenceIds.slice(0, 4).join(", ")}`);
+    const refs = labels ? formatEvidenceRefs(cluster.evidenceIds, labels, 4) : [];
+    if (refs.length > 0) {
+      lines.push(`  Evidence: ${refs.join(", ")}`);
     }
   }
 
@@ -89,7 +246,7 @@ function renderClusterSection(evidence: AgentEvidenceBundle): string {
   return lines.join("\n").trim();
 }
 
-function renderContradictionSection(evidence: AgentEvidenceBundle): string {
+function renderContradictionSection(evidence: AgentEvidenceBundle, labels?: Map<string, string>): string {
   if (evidence.contradictions.length === 0) {
     return "";
   }
@@ -107,8 +264,9 @@ function renderContradictionSection(evidence: AgentEvidenceBundle): string {
     if (contradiction.queries.length > 0) {
       lines.push(`  Queries: ${contradiction.queries.slice(0, 3).join(" | ")}`);
     }
-    if (contradiction.evidenceIds.length > 0) {
-      lines.push(`  Evidence IDs: ${contradiction.evidenceIds.slice(0, 6).join(", ")}`);
+    const refs = labels ? formatEvidenceRefs(contradiction.evidenceIds, labels, 6) : [];
+    if (refs.length > 0) {
+      lines.push(`  Evidence: ${refs.join(", ")}`);
     }
   }
 
@@ -116,12 +274,16 @@ function renderContradictionSection(evidence: AgentEvidenceBundle): string {
   return lines.join("\n").trim();
 }
 
-function renderSummaryReferenceCatalog(summary: AgentResearchSummary): string {
+function renderSummaryReferenceCatalog(
+  summary: AgentResearchSummary,
+  evidence?: AgentEvidenceBundle | null
+): string {
   const referencedEvidence = summary.referencedEvidence ?? [];
   if (referencedEvidence.length === 0) {
     return "";
   }
 
+  const labels = buildEvidenceLabelMap(summary, evidence);
   const lines = ["### Evidence References", ""];
 
   for (const reference of referencedEvidence) {
@@ -129,8 +291,9 @@ function renderSummaryReferenceCatalog(summary: AgentResearchSummary): string {
       typeof reference.confidence === "number" ? ` | confidence ${(reference.confidence * 100).toFixed(0)}%` : "";
     const score =
       typeof reference.overallScore === "number" ? ` | score ${(reference.overallScore * 100).toFixed(0)}%` : "";
+    const label = labels.get(reference.id) ?? reference.id;
     lines.push(
-      `- [${reference.id}] ${reference.kind} | ${reference.sourceTitle} | ${reference.value}${confidence}${score}`
+      `- [${label}] ${reference.kind} | ${reference.sourceTitle} | ${reference.value}${confidence}${score}`
     );
     lines.push(`  Query: ${reference.query} | URL: ${reference.sourceUrl}`);
   }
@@ -140,6 +303,7 @@ function renderSummaryReferenceCatalog(summary: AgentResearchSummary): string {
 }
 
 export function renderResearchSummary(summary: AgentResearchSummary, evidence?: AgentEvidenceBundle | null): string {
+  const labels = buildEvidenceLabelMap(summary, evidence);
   const lines = [
     "## Research Summary",
     "",
@@ -160,8 +324,9 @@ export function renderResearchSummary(summary: AgentResearchSummary, evidence?: 
     lines.push("### Key Findings", "");
     for (const finding of keyFindingDetails) {
       lines.push(`- ${finding.text}`);
-      if (finding.evidenceIds.length > 0) {
-        lines.push(`  Evidence: ${finding.evidenceIds.join(", ")}`);
+      const refs = formatEvidenceRefs(finding.evidenceIds, labels);
+      if (refs.length > 0) {
+        lines.push(`  Evidence: ${refs.join(", ")}`);
       }
     }
     lines.push("");
@@ -171,8 +336,9 @@ export function renderResearchSummary(summary: AgentResearchSummary, evidence?: 
     lines.push("### Content Angles", "");
     for (const angle of contentAngleDetails) {
       lines.push(`- ${angle.text}`);
-      if (angle.evidenceIds.length > 0) {
-        lines.push(`  Evidence: ${angle.evidenceIds.join(", ")}`);
+      const refs = formatEvidenceRefs(angle.evidenceIds, labels);
+      if (refs.length > 0) {
+        lines.push(`  Evidence: ${refs.join(", ")}`);
       }
     }
     lines.push("");
@@ -182,7 +348,7 @@ export function renderResearchSummary(summary: AgentResearchSummary, evidence?: 
     lines.push(renderEvidenceSection(evidence), "");
   }
 
-  const referenceCatalog = renderSummaryReferenceCatalog(summary);
+  const referenceCatalog = renderSummaryReferenceCatalog(summary, evidence);
   if (referenceCatalog) {
     lines.push(referenceCatalog, "");
   }
@@ -193,8 +359,21 @@ export function renderResearchSummary(summary: AgentResearchSummary, evidence?: 
 export function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundle | null): string {
   const postDraft = readIfExists(state.outputs.postDraftPath);
   const commentsDraft = readIfExists(state.outputs.commentsDraftPath);
-  const planLines =
-    state.plan?.steps.map((step, index) => `${index + 1}. ${step.title} [${step.kind}] - ${step.status}`) ?? [];
+  const planLines = derivePlanLines(state);
+  const expectedMinutes = state.plan?.estimatedMinutes ?? null;
+  const actualMinutes = isTerminalStatus(state.status)
+    ? computeElapsedMinutes(state.startedAt, state.updatedAt)
+    : null;
+  const quality = assessRunQuality(state, evidence);
+  const referenceLabels =
+    state.researchSummary || evidence ? buildEvidenceLabelMap(state.researchSummary ?? {
+      executiveSummary: "",
+      keyFindings: [],
+      contentAngles: [],
+      keyFindingDetails: [],
+      contentAngleDetails: [],
+      referencedEvidence: []
+    }, evidence) : new Map<string, string>();
 
   const lines: string[] = [
     "# Agent Job Report",
@@ -204,11 +383,13 @@ export function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundl
     `Status: ${state.status}`,
     `Instruction: ${state.input.instruction}`,
     `Artifact Directory: ${state.artifactDir}`,
-    `Estimated Time: ${state.plan?.estimatedMinutes ?? "unknown"} minutes`,
+    expectedMinutes !== null ? `Expected Time: ${formatMinutes(expectedMinutes)}` : "Expected Time: unknown",
+    actualMinutes !== null ? `Actual Runtime: ${formatMinutes(actualMinutes)}` : undefined,
+    quality ? `Run Quality: ${quality.score}/10 (${quality.label})` : undefined,
     "Browsing Policy: 10-20 seconds on readable pages, quick skip on thin/error pages",
     `Memory File: ${state.input.memoryPath ?? "none"}`,
     ""
-  ];
+  ].filter((value): value is string => Boolean(value));
 
   if (state.plan) {
     lines.push("## Plan", "", `Summary: ${state.plan.summary}`, `Tone: ${state.plan.tone}`, "");
@@ -235,6 +416,14 @@ export function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundl
     lines.push(renderResearchSummary(state.researchSummary, evidence), "");
   } else if (evidence && evidence.counts.sources > 0) {
     lines.push(renderEvidenceSection(evidence), "");
+  }
+
+  if (quality) {
+    lines.push("## Run Quality", "");
+    for (const note of quality.notes) {
+      lines.push(`- ${note}`);
+    }
+    lines.push("");
   }
 
   if (state.research.length > 0) {
@@ -312,11 +501,11 @@ export function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundl
   }
 
   if (evidence && evidence.clusters.length > 0) {
-    lines.push(renderClusterSection(evidence), "");
+    lines.push(renderClusterSection(evidence, referenceLabels), "");
   }
 
   if (evidence && evidence.contradictions.length > 0) {
-    lines.push(renderContradictionSection(evidence), "");
+    lines.push(renderContradictionSection(evidence, referenceLabels), "");
   }
 
   if (postDraft) {
