@@ -72,7 +72,7 @@ export class BingRssSearchAdapter implements AgentSearchAdapter {
 
   async search(query: string, maxResultsPerQuery: number): Promise<AgentSearchStageResult> {
     const searchUrl = this.buildSearchUrl(query);
-    this.log(`falling back to Bing RSS search for "${query}"`);
+    this.log(`searching via Bing RSS for "${query}"`);
 
     const response = await this.fetchImpl(searchUrl, {
       headers: {

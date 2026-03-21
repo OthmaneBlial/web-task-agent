@@ -73,3 +73,88 @@ test("ResilientSearchAdapter falls back when the primary provider fails", async 
   assert.ok(events.some((message) => message.includes("DuckDuckGo HTML failed")));
   assert.ok(events.some((message) => message.includes("fallback provider Bing RSS succeeded")));
 });
+
+test("ResilientSearchAdapter prefers non-DuckDuckGo providers for structured queries", async () => {
+  const calls: string[] = [];
+  const primary: AgentSearchAdapter = {
+    id: "duckduckgo_html",
+    label: "DuckDuckGo HTML",
+    buildSearchUrl: (query) => `https://primary.example/search?q=${encodeURIComponent(query)}`,
+    async search() {
+      calls.push("primary");
+      return {
+        query: "ignored",
+        searchedAt: "2026-03-21T10:00:00.000Z",
+        searchUrl: "https://primary.example",
+        searchProvider: "primary",
+        pagesVisited: 1,
+        exhausted: true,
+        results: []
+      };
+    }
+  };
+  const fallback: AgentSearchAdapter = {
+    id: "bing_rss",
+    label: "Bing RSS",
+    buildSearchUrl: (query) => `https://fallback.example/search?q=${encodeURIComponent(query)}`,
+    async search(query) {
+      calls.push("fallback");
+      return {
+        query,
+        searchedAt: "2026-03-21T10:00:00.000Z",
+        searchUrl: `https://fallback.example/search?q=${encodeURIComponent(query)}`,
+        searchProvider: "fallback",
+        pagesVisited: 1,
+        exhausted: true,
+        results: []
+      };
+    }
+  };
+
+  const adapter = new ResilientSearchAdapter(() => undefined, [primary, fallback]);
+  const result = await adapter.search('site:play.google.com "resume builder" app reviews complaints', 5);
+
+  assert.equal(result.searchProvider, "fallback");
+  assert.deepEqual(calls, ["fallback"]);
+});
+
+test("ResilientSearchAdapter demotes DuckDuckGo after a challenge is detected", async () => {
+  const events: string[] = [];
+  let primaryCalls = 0;
+  let fallbackCalls = 0;
+
+  const primary: AgentSearchAdapter = {
+    id: "duckduckgo_html",
+    label: "DuckDuckGo HTML",
+    buildSearchUrl: (query) => `https://primary.example/search?q=${encodeURIComponent(query)}`,
+    async search() {
+      primaryCalls += 1;
+      throw new Error("duckduckgo challenge page detected");
+    }
+  };
+  const fallback: AgentSearchAdapter = {
+    id: "bing_rss",
+    label: "Bing RSS",
+    buildSearchUrl: (query) => `https://fallback.example/search?q=${encodeURIComponent(query)}`,
+    async search(query) {
+      fallbackCalls += 1;
+      return {
+        query,
+        searchedAt: "2026-03-21T10:00:00.000Z",
+        searchUrl: `https://fallback.example/search?q=${encodeURIComponent(query)}`,
+        searchProvider: "fallback",
+        pagesVisited: 1,
+        exhausted: true,
+        results: []
+      };
+    }
+  };
+
+  const adapter = new ResilientSearchAdapter((message) => events.push(message), [primary, fallback]);
+  await adapter.search("pdf editor", 5);
+  await adapter.search('"resume builder" app feature requests', 5);
+
+  assert.equal(primaryCalls, 1);
+  assert.equal(fallbackCalls, 2);
+  assert.ok(events.some((message) => /preferring non-DuckDuckGo/i.test(message)));
+});
