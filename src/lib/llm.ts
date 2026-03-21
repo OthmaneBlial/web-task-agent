@@ -296,6 +296,142 @@ function extractTextContent(content: unknown): string {
     .trim();
 }
 
+function replaceSmartQuotes(value: string): string {
+  return value
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"');
+}
+
+function stripTrailingCommas(value: string): string {
+  return value.replace(/,\s*([}\]])/g, "$1");
+}
+
+function convertSingleQuotedJsonStrings(value: string): string {
+  let output = "";
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index] ?? "";
+
+    if (escaped) {
+      if (inSingleQuote && char === "'") {
+        output += "'";
+      } else if (inSingleQuote && char === '"') {
+        output += '\\"';
+      } else {
+        output += char;
+      }
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      output += "\\";
+      escaped = true;
+      continue;
+    }
+
+    if (!inSingleQuote && char === '"') {
+      inDoubleQuote = !inDoubleQuote;
+      output += char;
+      continue;
+    }
+
+    if (!inDoubleQuote && char === "'") {
+      inSingleQuote = !inSingleQuote;
+      output += '"';
+      continue;
+    }
+
+    if (inSingleQuote && char === '"') {
+      output += '\\"';
+      continue;
+    }
+
+    output += char;
+  }
+
+  return output;
+}
+
+function normalizeLooseJson(value: string): string {
+  return stripTrailingCommas(convertSingleQuotedJsonStrings(replaceSmartQuotes(value)));
+}
+
+function extractBalancedJsonSnippet(value: string): string | null {
+  const startIndex = Math.max(
+    value.indexOf("{") === -1 ? Number.POSITIVE_INFINITY : value.indexOf("{"),
+    0
+  );
+  const startBracketIndex = value.indexOf("[");
+  const firstIndex = Math.min(
+    startIndex,
+    startBracketIndex === -1 ? Number.POSITIVE_INFINITY : startBracketIndex
+  );
+  if (!Number.isFinite(firstIndex)) {
+    return null;
+  }
+
+  const opening = value[firstIndex]!;
+  const closing = opening === "{" ? "}" : "]";
+  let depth = 0;
+  let inDoubleQuote = false;
+  let inSingleQuote = false;
+  let escaped = false;
+
+  for (let index = firstIndex; index < value.length; index += 1) {
+    const char = value[index]!;
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (!inSingleQuote && char === '"') {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+
+    if (!inDoubleQuote && char === "'") {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+
+    if (inDoubleQuote || inSingleQuote) {
+      continue;
+    }
+
+    if (char === opening) {
+      depth += 1;
+      continue;
+    }
+
+    if (char === closing) {
+      depth -= 1;
+      if (depth === 0) {
+        return value.slice(firstIndex, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function tryParseJsonCandidate<T>(candidate: string): T | null {
+  try {
+    return JSON.parse(candidate) as T;
+  } catch {
+    return null;
+  }
+}
+
 function extractJsonPayload<T>(raw: string): T {
   const trimmed = raw.trim();
   if (!trimmed) {
@@ -304,17 +440,26 @@ function extractJsonPayload<T>(raw: string): T {
 
   const fencedMatch = trimmed.match(/```json\s*([\s\S]*?)```/i) ?? trimmed.match(/```\s*([\s\S]*?)```/i);
   const candidate = fencedMatch?.[1]?.trim() ?? trimmed;
+  const extracted = extractBalancedJsonSnippet(candidate);
+  const normalizedCandidate = normalizeLooseJson(candidate);
+  const normalizedExtracted = extracted ? normalizeLooseJson(extracted) : null;
 
-  try {
-    return JSON.parse(candidate) as T;
-  } catch {
-    const firstBrace = candidate.indexOf("{");
-    const lastBrace = candidate.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      return JSON.parse(candidate.slice(firstBrace, lastBrace + 1)) as T;
+  for (const attempt of [
+    candidate,
+    extracted,
+    normalizedCandidate,
+    normalizedExtracted
+  ]) {
+    if (!attempt) {
+      continue;
     }
-    throw new Error(`could not parse Claude JSON response: ${trimmed.slice(0, 240)}`);
+    const parsed = tryParseJsonCandidate<T>(attempt);
+    if (parsed !== null) {
+      return parsed;
+    }
   }
+
+  throw new Error(`could not parse Claude JSON response: ${trimmed.slice(0, 240)}`);
 }
 
 function normalizePlanSteps(steps: Array<Partial<AgentPlanStep>> | undefined): AgentPlanStep[] {
@@ -364,6 +509,147 @@ function buildFallbackPlan(instruction: string): AgentPlan {
         status: "pending"
       }
     ]
+  };
+}
+
+function pickTopFallbackSourceReferences(
+  evidence: AgentEvidenceBundle,
+  allowedIds: Set<string>,
+  limit: number
+): string[] {
+  return uniqueEvidenceIds(
+    evidence.sources
+      .slice()
+      .sort((left, right) => right.overallScore - left.overallScore)
+      .map((source) => source.sourceId),
+    allowedIds,
+    limit
+  );
+}
+
+function clusterFindingPrefix(kind: AgentEvidenceBundle["clusters"][number]["kind"]): string {
+  switch (kind) {
+    case "complaint":
+      return "Repeated complaint:";
+    case "feature_request":
+      return "Repeated feature request:";
+    case "theme":
+      return "Repeated theme:";
+    case "claim":
+      return "Repeated claim:";
+    case "entity":
+      return "Repeated entity:";
+    default:
+      return "Repeated signal:";
+  }
+}
+
+function buildFallbackEvidenceSummary(input: {
+  evidence: AgentEvidenceBundle;
+  referenceLookup: Map<string, AgentReferencedEvidence>;
+  allowedIds: Set<string>;
+}): AgentResearchSummary {
+  const rankedClusters = input.evidence.clusters
+    .slice()
+    .sort((left, right) => {
+      if (right.overallScore !== left.overallScore) {
+        return right.overallScore - left.overallScore;
+      }
+      if (right.sourceCount !== left.sourceCount) {
+        return right.sourceCount - left.sourceCount;
+      }
+      return right.evidenceCount - left.evidenceCount;
+    });
+  const rankedSources = input.evidence.sources
+    .slice()
+    .sort((left, right) => right.overallScore - left.overallScore);
+  const topLabels = rankedClusters.slice(0, 3).map((cluster) => cluster.label);
+  const contradictionTopic = input.evidence.contradictions[0]?.topic ?? null;
+  const executiveSummaryParts = [
+    `Persisted evidence across ${input.evidence.counts.sources} sources and ${input.evidence.counts.documents} documents points mainly to ${
+      topLabels.length > 0 ? topLabels.join(", ") : "the strongest stored source signals"
+    }.`
+  ];
+  if (contradictionTopic) {
+    executiveSummaryParts.push(`The evidence also shows a meaningful disagreement around ${contradictionTopic}.`);
+  }
+
+  const keyFindingDetails: AgentResearchReferenceItem[] = rankedClusters
+    .slice(0, 4)
+    .map((cluster) => ({
+      text: `${clusterFindingPrefix(cluster.kind)} ${cluster.label} (${cluster.sourceCount} sources, ${(cluster.trendScore * 100).toFixed(0)}% trend).`,
+      evidenceIds: uniqueEvidenceIds(
+        [...cluster.evidenceIds, ...cluster.sourceIds],
+        input.allowedIds,
+        3
+      )
+    }))
+    .filter((item) => item.evidenceIds.length > 0 || item.text.length > 0);
+
+  if (input.evidence.contradictions.length > 0) {
+    const contradiction = input.evidence.contradictions[0]!;
+    keyFindingDetails.push({
+      text: `Evidence is split on ${contradiction.topic}: ${contradiction.leftLabel} vs ${contradiction.rightLabel}.`,
+      evidenceIds: uniqueEvidenceIds(
+        contradiction.evidenceIds,
+        input.allowedIds,
+        3
+      )
+    });
+  }
+
+  if (keyFindingDetails.length === 0 && rankedSources.length > 0) {
+    keyFindingDetails.push({
+      text: `Top source signal: ${rankedSources[0]!.title}.`,
+      evidenceIds: pickTopFallbackSourceReferences(input.evidence, input.allowedIds, 1)
+    });
+  }
+
+  const contentAngleDetails: AgentResearchReferenceItem[] = [];
+  for (const cluster of rankedClusters.slice(0, 4)) {
+    let text = "";
+    if (cluster.kind === "complaint") {
+      text = `Why ${cluster.label} keeps surfacing across current user discussions.`;
+    } else if (cluster.kind === "feature_request") {
+      text = `The product gap around ${cluster.label} and what a builder could do with it.`;
+    } else if (cluster.kind === "theme") {
+      text = `What ${cluster.label} reveals about current demand patterns.`;
+    } else {
+      text = `How ${cluster.label} can frame an evidence-backed story angle.`;
+    }
+
+    contentAngleDetails.push({
+      text,
+      evidenceIds: uniqueEvidenceIds(
+        [...cluster.evidenceIds, ...cluster.sourceIds],
+        input.allowedIds,
+        3
+      )
+    });
+  }
+
+  if (contentAngleDetails.length === 0 && rankedSources.length > 0) {
+    contentAngleDetails.push({
+      text: `Use ${rankedSources[0]!.title} as the anchor source for a shorter evidence-backed writeup.`,
+      evidenceIds: pickTopFallbackSourceReferences(input.evidence, input.allowedIds, 1)
+    });
+  }
+
+  const referencedIds = uniqueEvidenceIds(
+    [...keyFindingDetails, ...contentAngleDetails].flatMap((item) => item.evidenceIds),
+    input.allowedIds,
+    24
+  );
+
+  return {
+    executiveSummary: executiveSummaryParts.join(" "),
+    keyFindings: uniqueStrings(keyFindingDetails.map((item) => item.text), 6),
+    contentAngles: uniqueStrings(contentAngleDetails.map((item) => item.text), 6),
+    keyFindingDetails: keyFindingDetails.slice(0, 6),
+    contentAngleDetails: contentAngleDetails.slice(0, 6),
+    referencedEvidence: referencedIds
+      .map((id) => input.referenceLookup.get(id))
+      .filter((value): value is AgentReferencedEvidence => Boolean(value))
   };
 }
 
@@ -796,61 +1082,69 @@ export class LlmService {
       JSON.stringify({ evidence: compactEvidence }, null, 2)
     ].join("\n");
 
-    const payload = await this.requestJson<AgentEvidenceSummaryResponse>({
-      operation: "agent_evidence_summary",
-      promptVersion: "agent_evidence_summary.v2",
-      system,
-      prompt,
-      maxTokens: 3_000
-    });
+    try {
+      const payload = await this.requestJson<AgentEvidenceSummaryResponse>({
+        operation: "agent_evidence_summary",
+        promptVersion: "agent_evidence_summary.v2",
+        system,
+        prompt,
+        maxTokens: 3_000
+      });
 
-    const normalizeItems = (
-      items: AgentEvidenceSummaryResponse["keyFindings"] | AgentEvidenceSummaryResponse["contentAngles"]
-    ): AgentResearchReferenceItem[] => {
-      const normalized: AgentResearchReferenceItem[] = [];
+      const normalizeItems = (
+        items: AgentEvidenceSummaryResponse["keyFindings"] | AgentEvidenceSummaryResponse["contentAngles"]
+      ): AgentResearchReferenceItem[] => {
+        const normalized: AgentResearchReferenceItem[] = [];
 
-      for (const item of items ?? []) {
-        const text = String(item?.text ?? "").replace(/\s+/g, " ").trim();
-        if (!text) {
-          continue;
+        for (const item of items ?? []) {
+          const text = String(item?.text ?? "").replace(/\s+/g, " ").trim();
+          if (!text) {
+            continue;
+          }
+
+          const explicitIds = uniqueEvidenceIds(
+            Array.isArray(item?.evidenceIds) ? item!.evidenceIds.map(String) : [],
+            allowedIds,
+            3
+          );
+          const evidenceIds =
+            explicitIds.length > 0 ? explicitIds : suggestEvidenceIdsForText(text, referenceLookup, 3);
+
+          normalized.push({
+            text,
+            evidenceIds
+          });
         }
 
-        const explicitIds = uniqueEvidenceIds(
-          Array.isArray(item?.evidenceIds) ? item!.evidenceIds.map(String) : [],
-          allowedIds,
-          3
-        );
-        const evidenceIds =
-          explicitIds.length > 0 ? explicitIds : suggestEvidenceIdsForText(text, referenceLookup, 3);
+        return normalized;
+      };
 
-        normalized.push({
-          text,
-          evidenceIds
-        });
-      }
+      const keyFindingDetails = normalizeItems(payload.keyFindings).slice(0, 6);
+      const contentAngleDetails = normalizeItems(payload.contentAngles).slice(0, 6);
+      const referencedIds = uniqueEvidenceIds(
+        [...keyFindingDetails, ...contentAngleDetails].flatMap((item) => item.evidenceIds),
+        allowedIds,
+        24
+      );
 
-      return normalized;
-    };
-
-    const keyFindingDetails = normalizeItems(payload.keyFindings).slice(0, 6);
-    const contentAngleDetails = normalizeItems(payload.contentAngles).slice(0, 6);
-    const referencedIds = uniqueEvidenceIds(
-      [...keyFindingDetails, ...contentAngleDetails].flatMap((item) => item.evidenceIds),
-      allowedIds,
-      24
-    );
-
-    return {
-      executiveSummary:
-        String(payload.executiveSummary ?? "").trim() || "Evidence gathered. Review the persisted sources below.",
-      keyFindings: uniqueStrings(keyFindingDetails.map((item) => item.text), 6),
-      contentAngles: uniqueStrings(contentAngleDetails.map((item) => item.text), 6),
-      keyFindingDetails,
-      contentAngleDetails,
-      referencedEvidence: referencedIds
-        .map((id) => referenceLookup.get(id))
-        .filter((value): value is AgentReferencedEvidence => Boolean(value))
-    };
+      return {
+        executiveSummary:
+          String(payload.executiveSummary ?? "").trim() || "Evidence gathered. Review the persisted sources below.",
+        keyFindings: uniqueStrings(keyFindingDetails.map((item) => item.text), 6),
+        contentAngles: uniqueStrings(contentAngleDetails.map((item) => item.text), 6),
+        keyFindingDetails,
+        contentAngleDetails,
+        referencedEvidence: referencedIds
+          .map((id) => referenceLookup.get(id))
+          .filter((value): value is AgentReferencedEvidence => Boolean(value))
+      };
+    } catch {
+      return buildFallbackEvidenceSummary({
+        evidence: input.evidence,
+        referenceLookup,
+        allowedIds
+      });
+    }
   }
 
   async draftAgentPost(input: {
