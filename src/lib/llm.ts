@@ -35,6 +35,10 @@ interface AgentPlanResponse {
   steps?: Array<Partial<AgentPlanStep>>;
 }
 
+interface AgentQueryExpansionResponse {
+  researchQueries?: string[];
+}
+
 interface AgentResearchSummaryResponse {
   executiveSummary?: string;
   keyFindings?: string[];
@@ -884,10 +888,13 @@ export class LlmService {
     maxQueries?: number;
   }): Promise<AgentPlan> {
     const maxQueries = Math.max(0, Math.min(5, input.maxQueries ?? 3));
+    const today = new Date().toISOString().slice(0, 10);
+    const currentYear = new Date().getUTCFullYear();
     const system = [
       "You are an execution planner for a simple browser agent.",
       "Turn a natural-language request into a small, realistic plan that can be executed in order.",
-      "Prefer simple steps, concrete deliverables, and human review before anything public-facing."
+      "Prefer simple steps, concrete deliverables, and human review before anything public-facing.",
+      `Today is ${today}. Prefer current information and modern sources.`
     ].join(" ");
 
     const prompt = [
@@ -899,6 +906,7 @@ export class LlmService {
       '{"summary":"...","tone":"...","estimatedMinutes":18,"approvalRequired":true,"deliverables":["..."],"researchQueries":["..."],"steps":[{"id":"step_1","kind":"research","title":"...","goal":"...","status":"pending"}]}',
       "Rules:",
       `- Keep researchQueries to at most ${maxQueries}.`,
+      `- If the user did not ask for historical research, prefer ${currentYear} or latest/current wording instead of stale years like 2024 or 2025.`,
       "- Allowed step kinds: research, draft_post, draft_comments, review, report.",
       "- Use review for any step that should wait for user approval.",
       "- Make the tone match the request. If the request feels joyful, keep it bright and warm instead of clinical.",
@@ -942,6 +950,93 @@ export class LlmService {
     }
 
     return normalizedPlan;
+  }
+
+  async expandAgentResearchQueries(input: {
+    instruction: string;
+    existingQueries: string[];
+    researchedSites: string[];
+    recentResearch: AgentResearchResult[];
+    evidence?: AgentEvidenceBundle | null;
+    maxQueries?: number;
+  }): Promise<string[]> {
+    const maxQueries = Math.max(1, Math.min(3, input.maxQueries ?? 1));
+    const today = new Date().toISOString().slice(0, 10);
+    const currentYear = new Date().getUTCFullYear();
+    const researchedSites = uniqueStrings(input.researchedSites, 40);
+    const recentResearch = input.recentResearch.slice(-6).map((entry) => ({
+      query: entry.query,
+      results: entry.results.slice(0, 4).map((result) => ({
+        title: result.title,
+        site: result.site,
+        url: result.url,
+        snippet: result.snippet
+      }))
+    }));
+    const evidenceSummary = input.evidence
+      ? {
+          highlights: input.evidence.highlights,
+          clusters: input.evidence.clusters.slice(0, 8).map((cluster) => ({
+            kind: cluster.kind,
+            label: cluster.label,
+            queries: cluster.queries.slice(0, 3),
+            supportingValues: cluster.supportingValues.slice(0, 3)
+          })),
+          contradictions: input.evidence.contradictions.slice(0, 4).map((item) => ({
+            topic: item.topic,
+            leftLabel: item.leftLabel,
+            rightLabel: item.rightLabel,
+            reason: item.reason
+          }))
+        }
+      : null;
+    const system = [
+      "You expand web research coverage for a browser agent.",
+      "Generate follow-up search queries that push into genuinely new websites, communities, docs, or review surfaces.",
+      "Prefer crisp, high-signal search queries over broad generic phrasing.",
+      `Today is ${today}. Favor current information and avoid stale years unless the user explicitly asked for history.`
+    ].join(" ");
+
+    const prompt = [
+      "Generate follow-up research queries.",
+      `Instruction: ${input.instruction}`,
+      "",
+      "Return strict JSON with this exact schema:",
+      '{"researchQueries":["..."]}',
+      "Rules:",
+      `- Return at most ${maxQueries} queries.`,
+      "- Each query must be materially different from the existing queries.",
+      "- Prefer uncovered websites, communities, issue trackers, docs, and review sources.",
+      `- Prefer ${currentYear}, latest, or current wording when freshness matters.`,
+      "- Avoid domains already covered when possible.",
+      "- Avoid repeating the same wording with only tiny variations.",
+      "- If coverage already looks saturated, return an empty array.",
+      "- Do not include prose outside the JSON.",
+      "",
+      JSON.stringify(
+        {
+          existingQueries: input.existingQueries,
+          researchedSites,
+          recentResearch,
+          evidenceSummary
+        },
+        null,
+        2
+      )
+    ].join("\n");
+
+    const payload = await this.requestJson<AgentQueryExpansionResponse>({
+      operation: "agent_expand_queries",
+      promptVersion: "agent_expand_queries.v1",
+      system,
+      prompt,
+      maxTokens: 2_500
+    });
+
+    return uniqueStrings(
+      Array.isArray(payload.researchQueries) ? payload.researchQueries.map(String) : [],
+      maxQueries
+    );
   }
 
   async synthesizeAgentResearch(input: {

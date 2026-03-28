@@ -21,6 +21,7 @@ import type {
   JobControlAction,
   AgentPlan,
   AgentResearchResult,
+  AgentSearchResult,
   AgentRunOptions,
   AgentRunState,
   AgentStepKind,
@@ -45,6 +46,7 @@ import {
   ensurePipelineState,
   getPendingWorkItems,
   markWorkItemStageRunning,
+  normalizeQueryKey,
   summarizePipelineQueue,
   upsertResearchResult,
   upsertWorkItem
@@ -66,6 +68,7 @@ import {
 } from "./agent/synthesis-stage";
 import {
   addHoursToIso,
+  buildForcedDurationResearchQueries,
   computeElapsedMinutes,
   DEFAULT_AGENT_MAX_RUNTIME_HOURS,
   DEFAULT_FETCH_BATCH_SIZE,
@@ -75,6 +78,8 @@ import {
   MAX_AGENT_RESULTS_PER_QUERY,
   MAX_FETCH_BATCH_SIZE,
   computeExecutionEstimateMinutes,
+  estimateMaxQueriesForDuration,
+  normalizeResearchQueryForRecency,
   countCapturedResearchDocuments,
   countCapturedResearchSources,
   nowIso
@@ -140,6 +145,99 @@ function clampWholeNumber(value: number, minimum: number, maximum: number): numb
   return Math.max(minimum, Math.min(maximum, Math.round(value)));
 }
 
+function normalizeQueryText(query: string): string {
+  return query.replace(/\s+/g, " ").trim();
+}
+
+function normalizeResearchQueriesForRecency(
+  queries: string[],
+  instruction: string
+): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const query of queries) {
+    const candidate = normalizeResearchQueryForRecency(query, instruction);
+    const key = candidate.toLowerCase();
+    if (!candidate || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push(candidate);
+  }
+
+  return normalized;
+}
+
+function normalizeDurationMinutes(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return clampWholeNumber(value, 5, 12 * 60);
+}
+
+function resolveResearchDurationMinutes(
+  options: AgentRunOptions,
+  state?: AgentRunState
+): number | null {
+  return normalizeDurationMinutes(
+    options.researchDurationMinutes ?? state?.input.researchDurationMinutes ?? null
+  );
+}
+
+function suggestedResultsPerQueryForDuration(
+  researchDurationMinutes: number | null
+): number | null {
+  if (!researchDurationMinutes) {
+    return null;
+  }
+  if (researchDurationMinutes >= 120) {
+    return 30;
+  }
+  if (researchDurationMinutes >= 60) {
+    return 24;
+  }
+  if (researchDurationMinutes >= 30) {
+    return 18;
+  }
+  if (researchDurationMinutes >= 15) {
+    return 12;
+  }
+  return 8;
+}
+
+function resolveMaxResultsPerQuery(options: AgentRunOptions, state?: AgentRunState): number {
+  const researchDurationMinutes = resolveResearchDurationMinutes(options, state);
+  const requested = clampWholeNumber(
+    options.maxResultsPerQuery ?? state?.input.maxResultsPerQuery ?? 5,
+    1,
+    MAX_AGENT_RESULTS_PER_QUERY
+  );
+  const suggested = suggestedResultsPerQueryForDuration(researchDurationMinutes);
+
+  return suggested ? Math.max(requested, suggested) : requested;
+}
+
+function resolveMaxQueries(
+  options: AgentRunOptions,
+  maxResultsPerQuery: number,
+  researchDurationMinutes: number | null,
+  state?: AgentRunState
+): number {
+  const requestedQueries = options.maxQueries ?? state?.input.maxQueries ?? 3;
+  const clampedQueries = clampWholeNumber(requestedQueries, 0, MAX_AGENT_QUERIES);
+
+  if (!researchDurationMinutes) {
+    return clampedQueries;
+  }
+
+  return Math.max(
+    clampedQueries,
+    estimateMaxQueriesForDuration(researchDurationMinutes, maxResultsPerQuery)
+  );
+}
+
 function resolveMaxRuntimeHours(options: AgentRunOptions, state?: AgentRunState): number {
   return clampWholeNumber(
     options.maxRuntimeHours ?? state?.input.maxRuntimeHours ?? DEFAULT_AGENT_MAX_RUNTIME_HOURS,
@@ -178,16 +276,22 @@ function nextLeaseOwnerId(runId: string): string {
 }
 
 function normalizeRuntimeState(state: AgentRunState, options: AgentRunOptions): void {
+  const maxResultsPerQuery = resolveMaxResultsPerQuery(options, state);
+  const researchDurationMinutes = resolveResearchDurationMinutes(options, state);
+  const maxQueries = resolveMaxQueries(
+    options,
+    maxResultsPerQuery,
+    researchDurationMinutes,
+    state
+  );
   const maxRuntimeHours = resolveMaxRuntimeHours(options, state);
   const leaseTtlSeconds = resolveLeaseTtlSeconds(options, state);
   const fetchBatchSize = resolveFetchBatchSize(options, state);
 
-  state.input.maxQueries = Math.max(0, Math.min(MAX_AGENT_QUERIES, state.input.maxQueries ?? options.maxQueries ?? 3));
-  state.input.maxResultsPerQuery = Math.max(
-    1,
-    Math.min(MAX_AGENT_RESULTS_PER_QUERY, state.input.maxResultsPerQuery ?? options.maxResultsPerQuery ?? 5)
-  );
+  state.input.maxQueries = maxQueries;
+  state.input.maxResultsPerQuery = maxResultsPerQuery;
   state.input.fetchBatchSize = fetchBatchSize;
+  state.input.researchDurationMinutes = researchDurationMinutes;
   state.input.maxRuntimeHours = maxRuntimeHours;
   state.input.workflowName = state.input.workflowName ?? options.workflowName ?? "agent-runner";
   state.input.workflowPresetId = state.input.workflowPresetId ?? options.workflowPresetId ?? null;
@@ -202,6 +306,12 @@ function normalizeRuntimeState(state: AgentRunState, options: AgentRunOptions): 
     heartbeatAt: state.runtime?.heartbeatAt ?? null,
     recoveredAt: state.runtime?.recoveredAt ?? null,
     recoveryCount: state.runtime?.recoveryCount ?? 0,
+    researchStartedAt: state.runtime?.researchStartedAt ?? null,
+    researchElapsedSeconds:
+      typeof state.runtime?.researchElapsedSeconds === "number" &&
+      Number.isFinite(state.runtime.researchElapsedSeconds)
+        ? Math.max(0, Math.round(state.runtime.researchElapsedSeconds))
+        : 0,
     executionDeadlineAt:
       state.runtime?.executionDeadlineAt ??
       addHoursToIso(state.startedAt || nowIso(), maxRuntimeHours)
@@ -213,6 +323,13 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
   const reportPath = path.resolve(options.reportPath ?? defaultReportPath(runId));
   const artifactDir = path.dirname(reportPath);
   const outputPaths = buildAgentOutputPaths(artifactDir);
+  const maxResultsPerQuery = resolveMaxResultsPerQuery(options);
+  const researchDurationMinutes = resolveResearchDurationMinutes(options);
+  const maxQueries = resolveMaxQueries(
+    options,
+    maxResultsPerQuery,
+    researchDurationMinutes
+  );
   const maxRuntimeHours = resolveMaxRuntimeHours(options);
   const leaseTtlSeconds = resolveLeaseTtlSeconds(options);
   const fetchBatchSize = resolveFetchBatchSize(options);
@@ -227,9 +344,10 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
     input: {
       instruction: options.instruction,
       memoryPath: options.memoryPath ? path.resolve(options.memoryPath) : null,
-      maxQueries: Math.max(0, Math.min(MAX_AGENT_QUERIES, options.maxQueries ?? 3)),
-      maxResultsPerQuery: Math.max(1, Math.min(MAX_AGENT_RESULTS_PER_QUERY, options.maxResultsPerQuery ?? 5)),
+      maxQueries,
+      maxResultsPerQuery,
       fetchBatchSize,
+      researchDurationMinutes,
       maxRuntimeHours,
       workflowName: options.workflowName ?? "agent-runner",
       workflowPresetId: options.workflowPresetId ?? null,
@@ -244,6 +362,8 @@ function buildInitialState(options: AgentRunOptions): AgentRunState {
       heartbeatAt: null,
       recoveredAt: null,
       recoveryCount: 0,
+      researchStartedAt: null,
+      researchElapsedSeconds: 0,
       executionDeadlineAt: addHoursToIso(timestamp, maxRuntimeHours)
     },
     reportPath,
@@ -289,6 +409,42 @@ function buildWorkflowQueryOverrides(state: AgentRunState): string[] {
 function hasCapturedResearchForUrl(state: AgentRunState, url: string): boolean {
   return state.research.some((research) =>
     research.results.some((result) => result.url === url || result.page?.url === url)
+  );
+}
+
+function comparableUrl(rawUrl: string | null | undefined): string {
+  const normalized = String(rawUrl ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return normalized.toLowerCase();
+  }
+}
+
+function siteKeyFromUrl(rawUrl: string | null | undefined): string {
+  const normalized = String(rawUrl ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  try {
+    return new URL(normalized).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return normalized.toLowerCase();
+  }
+}
+
+function siteKeyFromResult(result: AgentSearchResult): string {
+  return (
+    siteKeyFromUrl(result.page?.url) ||
+    siteKeyFromUrl(result.url) ||
+    normalizeQueryText(result.site.toLowerCase())
   );
 }
 
@@ -437,6 +593,271 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     }
   }
 
+  private getResearchBudgetSnapshot(state: AgentRunState): {
+    targetMinutes: number | null;
+    elapsedMinutes: number;
+    remainingMinutes: number | null;
+  } {
+    const targetMinutes = state.input.researchDurationMinutes;
+    const activeStartedMs = state.runtime.researchStartedAt
+      ? Date.parse(state.runtime.researchStartedAt)
+      : Number.NaN;
+    const elapsedSeconds =
+      state.runtime.researchElapsedSeconds +
+      (Number.isFinite(activeStartedMs)
+        ? Math.max(
+            0,
+            Math.round((Date.now() - activeStartedMs) / 1_000)
+          )
+        : 0);
+    const elapsedMinutes = Math.max(0, Math.ceil(elapsedSeconds / 60));
+
+    return {
+      targetMinutes,
+      elapsedMinutes,
+      remainingMinutes:
+        typeof targetMinutes === "number"
+          ? Math.max(0, targetMinutes - elapsedMinutes)
+          : null
+    };
+  }
+
+  private startResearchBudgetClock(state: AgentRunState): void {
+    if (!state.input.researchDurationMinutes || state.runtime.researchStartedAt) {
+      return;
+    }
+
+    state.runtime.researchStartedAt = nowIso();
+  }
+
+  private stopResearchBudgetClock(state: AgentRunState): void {
+    if (!state.runtime.researchStartedAt) {
+      return;
+    }
+
+    const startedMs = Date.parse(state.runtime.researchStartedAt);
+    const endedMs = Date.now();
+    if (Number.isFinite(startedMs) && endedMs >= startedMs) {
+      state.runtime.researchElapsedSeconds += Math.max(
+        0,
+        Math.round((endedMs - startedMs) / 1_000)
+      );
+    }
+    state.runtime.researchStartedAt = null;
+  }
+
+  private hasResearchTimeRemaining(state: AgentRunState): boolean {
+    const snapshot = this.getResearchBudgetSnapshot(state);
+    return snapshot.remainingMinutes === null || snapshot.remainingMinutes > 0;
+  }
+
+  private buildSeenSiteSet(state: AgentRunState, currentQueryKey?: string): Set<string> {
+    const sites = new Set<string>();
+    const addResult = (result: AgentSearchResult) => {
+      const siteKey = siteKeyFromResult(result);
+      if (siteKey) {
+        sites.add(siteKey);
+      }
+    };
+
+    for (const research of state.research) {
+      if (currentQueryKey && normalizeQueryKey(research.query) === currentQueryKey) {
+        continue;
+      }
+      for (const result of research.results) {
+        addResult(result);
+      }
+    }
+
+    for (const item of state.pipeline.workItems) {
+      if (currentQueryKey && item.queryKey === currentQueryKey) {
+        continue;
+      }
+      for (const result of item.results) {
+        addResult(result);
+      }
+    }
+
+    return sites;
+  }
+
+  private buildSeenUrlSet(state: AgentRunState, currentQueryKey?: string): Set<string> {
+    const urls = new Set<string>();
+    const addResult = (result: AgentSearchResult) => {
+      const primaryUrl = comparableUrl(result.url);
+      const pageUrl = comparableUrl(result.page?.url);
+      if (primaryUrl) {
+        urls.add(primaryUrl);
+      }
+      if (pageUrl) {
+        urls.add(pageUrl);
+      }
+    };
+
+    for (const research of state.research) {
+      if (currentQueryKey && normalizeQueryKey(research.query) === currentQueryKey) {
+        continue;
+      }
+      for (const result of research.results) {
+        addResult(result);
+      }
+    }
+
+    for (const item of state.pipeline.workItems) {
+      if (currentQueryKey && item.queryKey === currentQueryKey) {
+        continue;
+      }
+      for (const result of item.results) {
+        addResult(result);
+      }
+    }
+
+    return urls;
+  }
+
+  private filterNovelSearchResults(
+    state: AgentRunState,
+    query: string,
+    results: AgentSearchResult[]
+  ): AgentSearchResult[] {
+    if (!state.input.researchDurationMinutes) {
+      return results;
+    }
+
+    const queryKey = normalizeQueryKey(query);
+    const seenSites = this.buildSeenSiteSet(state, queryKey);
+    const seenUrls = this.buildSeenUrlSet(state, queryKey);
+    const batchSites = new Set<string>();
+    const filtered: AgentSearchResult[] = [];
+
+    for (const result of results) {
+      const siteKey = siteKeyFromResult(result);
+      const resultUrl = comparableUrl(result.url);
+      const pageUrl = comparableUrl(result.page?.url);
+
+      if ((resultUrl && seenUrls.has(resultUrl)) || (pageUrl && seenUrls.has(pageUrl))) {
+        continue;
+      }
+      if (siteKey && (seenSites.has(siteKey) || batchSites.has(siteKey))) {
+        continue;
+      }
+
+      if (siteKey) {
+        batchSites.add(siteKey);
+      }
+      if (resultUrl) {
+        seenUrls.add(resultUrl);
+      }
+      if (pageUrl) {
+        seenUrls.add(pageUrl);
+      }
+      filtered.push(result);
+    }
+
+    return filtered;
+  }
+
+  private async expandResearchQueries(
+    state: AgentRunState,
+    jobStore: JobStore,
+    cachePath: string,
+    buildJobOutput: () => Record<string, unknown>
+  ): Promise<string[]> {
+    if (!state.input.researchDurationMinutes || !this.hasResearchTimeRemaining(state)) {
+      return [];
+    }
+
+    const queryBudgetRemaining = Math.max(
+      0,
+      state.input.maxQueries - state.pipeline.workItems.length
+    );
+    if (queryBudgetRemaining <= 0) {
+      return [];
+    }
+
+    const suggestedQueries = normalizeResearchQueriesForRecency(
+      await this.llm.expandAgentResearchQueries({
+        instruction: state.input.instruction,
+        existingQueries: state.plan?.researchQueries ?? [],
+        researchedSites: Array.from(this.buildSeenSiteSet(state)),
+        recentResearch: state.research,
+        evidence: jobStore.getAgentEvidenceBundle(),
+        maxQueries: 1
+      }),
+      state.input.instruction
+    );
+    const existingKeys = new Set(
+      state.pipeline.workItems.map((item) => item.queryKey)
+    );
+    let usedFallbackQueries = false;
+    let nextQueries = suggestedQueries
+      .map(normalizeQueryText)
+      .filter((query) => query.length > 0)
+      .filter((query) => !existingKeys.has(normalizeQueryKey(query)))
+      .slice(0, queryBudgetRemaining);
+
+    if (nextQueries.length === 0) {
+      usedFallbackQueries = true;
+      nextQueries = buildForcedDurationResearchQueries({
+        instruction: state.input.instruction,
+        existingQueries: state.plan?.researchQueries ?? [],
+        researchedSites: Array.from(this.buildSeenSiteSet(state)),
+        maxQueries: Math.min(8, queryBudgetRemaining)
+      })
+        .map(normalizeQueryText)
+        .filter((query) => query.length > 0)
+        .filter((query) => !existingKeys.has(normalizeQueryKey(query)))
+        .slice(0, queryBudgetRemaining);
+    }
+
+    if (nextQueries.length === 0) {
+      return [];
+    }
+
+    state.plan = state.plan
+      ? {
+          ...state.plan,
+          researchQueries: [...state.plan.researchQueries, ...nextQueries]
+        }
+      : state.plan;
+    state.pipeline = ensurePipelineState({
+      pipeline: state.pipeline,
+      planQueries: state.plan?.researchQueries ?? nextQueries,
+      research: state.research
+    });
+    if (state.plan) {
+      state.plan.estimatedMinutes = computeExecutionEstimateMinutes(
+        state.plan,
+        state.input.maxResultsPerQuery,
+        state.input.researchDurationMinutes
+      );
+      if (state.outputs.planPath) {
+        writeJsonAtomic(state.outputs.planPath, state.plan);
+      }
+    }
+    appendNote(
+      state,
+      `Expanded research coverage with ${nextQueries.length} follow-up quer${nextQueries.length === 1 ? "y" : "ies"} before the time budget expired${usedFallbackQueries ? " using deterministic duration fallback queries" : ""}.`
+    );
+    this.saveState(cachePath, state);
+    this.syncArtifacts(jobStore, state);
+    jobStore.syncJob({
+      updatedAt: state.updatedAt,
+      input: state.input,
+      budget: {
+        maxQueries: state.input.maxQueries,
+        maxResultsPerQuery: state.input.maxResultsPerQuery,
+        fetchBatchSize: state.input.fetchBatchSize,
+        researchDurationMinutes: state.input.researchDurationMinutes,
+        maxRuntimeHours: state.input.maxRuntimeHours,
+        leaseTtlSeconds: state.runtime.leaseTtlSeconds
+      },
+      output: buildJobOutput()
+    });
+
+    return nextQueries;
+  }
+
   async run(): Promise<AgentTaskResult> {
     const { state, cachePath, resumed } = createOrResumeState<AgentRunState>({
       task: "agent",
@@ -468,6 +889,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         maxQueries: state.input.maxQueries,
         maxResultsPerQuery: state.input.maxResultsPerQuery,
         fetchBatchSize: state.input.fetchBatchSize,
+        researchDurationMinutes: state.input.researchDurationMinutes,
         maxRuntimeHours: state.input.maxRuntimeHours,
         leaseTtlSeconds: state.runtime.leaseTtlSeconds
       },
@@ -559,6 +981,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     };
 
     const buildJobOutput = (): Record<string, unknown> => ({
+      researchBudget: this.getResearchBudgetSnapshot(state),
       estimatedMinutes: state.plan?.estimatedMinutes ?? null,
       elapsedMinutes:
         state.status === "planning" || state.status === "running"
@@ -694,6 +1117,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           maxQueries: state.input.maxQueries,
           maxResultsPerQuery: state.input.maxResultsPerQuery,
           fetchBatchSize: state.input.fetchBatchSize,
+          researchDurationMinutes: state.input.researchDurationMinutes,
           maxRuntimeHours: state.input.maxRuntimeHours,
           leaseTtlSeconds: state.runtime.leaseTtlSeconds
         },
@@ -795,9 +1219,14 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
               `Workflow-specific research queries applied for ${state.input.workflowTemplateId}.`
             );
           }
+          state.plan.researchQueries = normalizeResearchQueriesForRecency(
+            state.plan.researchQueries,
+            state.input.instruction
+          );
           state.plan.estimatedMinutes = computeExecutionEstimateMinutes(
             state.plan,
-            state.input.maxResultsPerQuery
+            state.input.maxResultsPerQuery,
+            state.input.researchDurationMinutes
           );
           if (state.outputs.planPath) {
             writeJsonAtomic(state.outputs.planPath, state.plan);
@@ -839,6 +1268,11 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         throw new Error("agent plan is missing after planning");
       }
 
+      state.plan.researchQueries = normalizeResearchQueriesForRecency(
+        state.plan.researchQueries,
+        state.input.instruction
+      );
+
       state.pipeline = ensurePipelineState({
         pipeline: state.pipeline,
         planQueries: state.plan.researchQueries,
@@ -849,7 +1283,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
       const executionEstimate = computeExecutionEstimateMinutes(
         state.plan,
-        state.input.maxResultsPerQuery
+        state.input.maxResultsPerQuery,
+        state.input.researchDurationMinutes
       );
       if (state.plan.estimatedMinutes !== executionEstimate) {
         state.plan.estimatedMinutes = executionEstimate;
@@ -868,6 +1303,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         this.checkpointRequestedControl(jobStore, state, cachePath);
         state.status = "running";
         updateStepStatus(state.plan, "research", "running");
+        this.startResearchBudgetClock(state);
         this.saveState(cachePath, state);
         jobStore.syncJob({
           status: "running",
@@ -875,13 +1311,15 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           output: buildJobOutput()
         });
 
-        extractStage.persistExistingResearch(state.research);
+        try {
+          extractStage.persistExistingResearch(state.research);
 
-        const pendingWorkItems = getPendingWorkItems(state.pipeline);
+          let executedResearchThisRun = false;
+          let stoppedForResearchBudget = false;
 
-        if (pendingWorkItems.length > 0) {
-          for (const seedWorkItem of pendingWorkItems) {
+          const processWorkItem = async (seedWorkItem: typeof state.pipeline.workItems[number]) => {
             let workItem = seedWorkItem;
+            executedResearchThisRun = true;
             this.checkpointRequestedControl(jobStore, state, cachePath);
             this.log(`researching: ${workItem.query}`);
 
@@ -906,8 +1344,21 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                       })
                     }
                   );
+                  const filteredResults = this.filterNovelSearchResults(
+                    state,
+                    workItem.query,
+                    searchResult.results
+                  );
+                  if (filteredResults.length < searchResult.results.length) {
+                    this.log(
+                      `filtered ${searchResult.results.length - filteredResults.length} repeated or already-covered site result(s) for "${workItem.query}"`
+                    );
+                  }
 
-                  workItem = applySearchSuccess(workItem, searchResult);
+                  workItem = applySearchSuccess(workItem, {
+                    ...searchResult,
+                    results: filteredResults
+                  });
                 } catch (error) {
                   const errorMessage = error instanceof Error ? error.message : String(error);
                   workItem = applySearchFailure(workItem, {
@@ -1042,46 +1493,109 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                 output: buildJobOutput()
               });
             }
+          };
+
+          for (const seedWorkItem of getPendingWorkItems(state.pipeline)) {
+            if (
+              state.input.researchDurationMinutes &&
+              seedWorkItem.nextStage === "search" &&
+              !seedWorkItem.searchedAt &&
+              !this.hasResearchTimeRemaining(state)
+            ) {
+              stoppedForResearchBudget = true;
+              break;
+            }
+
+            await processWorkItem(seedWorkItem);
+          }
+
+          while (
+            !stoppedForResearchBudget &&
+            state.input.researchDurationMinutes &&
+            this.hasResearchTimeRemaining(state)
+          ) {
+            const nextQueries = await this.expandResearchQueries(
+              state,
+              jobStore,
+              cachePath,
+              buildJobOutput
+            );
+            if (nextQueries.length === 0) {
+              break;
+            }
+
+            const nextWorkItem = state.pipeline.workItems.find(
+              (item) => item.queryKey === normalizeQueryKey(nextQueries[0]!)
+            );
+            if (!nextWorkItem) {
+              break;
+            }
+
+            if (!this.hasResearchTimeRemaining(state)) {
+              stoppedForResearchBudget = true;
+              break;
+            }
+
+            await processWorkItem(nextWorkItem);
+          }
+
+          if (
+            state.input.researchDurationMinutes &&
+            !this.hasResearchTimeRemaining(state)
+          ) {
+            stoppedForResearchBudget = true;
           }
 
           const pipelineSummary = summarizePipeline();
-          jobStore.completeStep(searchStep, {
-            queries: pipelineSummary.searchedQueries,
-            sources: pipelineSummary.searchedSources,
-            errors: pipelineSummary.searchErrors
-          });
-          jobStore.completeStep(fetchStep, {
-            visitedResults: pipelineSummary.fetchedResults,
-            documentsCaptured: pipelineSummary.fetchedDocuments,
-            errorResults: pipelineSummary.fetchErrors
-          });
-          jobStore.completeStep(extractStep, {
-            queries: pipelineSummary.extractedQueries,
-            sources: pipelineSummary.extractedSources,
-            documents: pipelineSummary.extractedDocuments,
-            extractions: pipelineSummary.extractedExtractions
-          });
-        } else {
-          const pipelineSummary = summarizePipeline();
-          jobStore.completeStep(searchStep, {
-            reused: true,
-            queries: pipelineSummary.searchedQueries,
-            sources: pipelineSummary.searchedSources,
-            errors: pipelineSummary.searchErrors
-          });
-          jobStore.completeStep(fetchStep, {
-            reused: true,
-            visitedResults: pipelineSummary.fetchedResults,
-            documentsCaptured: pipelineSummary.fetchedDocuments,
-            errorResults: pipelineSummary.fetchErrors
-          });
-          jobStore.completeStep(extractStep, {
-            reused: true,
-            queries: pipelineSummary.extractedQueries,
-            sources: pipelineSummary.extractedSources,
-            documents: pipelineSummary.extractedDocuments,
-            extractions: pipelineSummary.extractedExtractions
-          });
+          if (executedResearchThisRun) {
+            jobStore.completeStep(searchStep, {
+              queries: pipelineSummary.searchedQueries,
+              sources: pipelineSummary.searchedSources,
+              errors: pipelineSummary.searchErrors
+            });
+            jobStore.completeStep(fetchStep, {
+              visitedResults: pipelineSummary.fetchedResults,
+              documentsCaptured: pipelineSummary.fetchedDocuments,
+              errorResults: pipelineSummary.fetchErrors
+            });
+            jobStore.completeStep(extractStep, {
+              queries: pipelineSummary.extractedQueries,
+              sources: pipelineSummary.extractedSources,
+              documents: pipelineSummary.extractedDocuments,
+              extractions: pipelineSummary.extractedExtractions
+            });
+          } else {
+            jobStore.completeStep(searchStep, {
+              reused: true,
+              queries: pipelineSummary.searchedQueries,
+              sources: pipelineSummary.searchedSources,
+              errors: pipelineSummary.searchErrors
+            });
+            jobStore.completeStep(fetchStep, {
+              reused: true,
+              visitedResults: pipelineSummary.fetchedResults,
+              documentsCaptured: pipelineSummary.fetchedDocuments,
+              errorResults: pipelineSummary.fetchErrors
+            });
+            jobStore.completeStep(extractStep, {
+              reused: true,
+              queries: pipelineSummary.extractedQueries,
+              sources: pipelineSummary.extractedSources,
+              documents: pipelineSummary.extractedDocuments,
+              extractions: pipelineSummary.extractedExtractions
+            });
+          }
+
+          if (stoppedForResearchBudget) {
+            const budget = this.getResearchBudgetSnapshot(state);
+            appendNote(
+              state,
+              `Research duration budget reached after ${budget.elapsedMinutes} minute${budget.elapsedMinutes === 1 ? "" : "s"}.`
+            );
+          }
+        } finally {
+          this.stopResearchBudgetClock(state);
+          this.saveState(cachePath, state);
         }
 
         evidenceBundle = jobStore.getAgentEvidenceBundle();

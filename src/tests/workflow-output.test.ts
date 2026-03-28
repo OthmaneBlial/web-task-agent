@@ -126,6 +126,7 @@ function createWorkflowState(
       maxQueries: 6,
       maxResultsPerQuery: 20,
       fetchBatchSize: 5,
+      researchDurationMinutes: null,
       maxRuntimeHours: 6,
       workflowName: templateId,
       workflowPresetId: "standard",
@@ -145,6 +146,8 @@ function createWorkflowState(
       heartbeatAt: null,
       recoveredAt: null,
       recoveryCount: 0,
+      researchStartedAt: null,
+      researchElapsedSeconds: 0,
       executionDeadlineAt: "2026-03-20T18:00:00.000Z"
     },
     reportPath: path.join(tempDir, "report.md"),
@@ -195,7 +198,10 @@ test("workflow run options use preset budgets and topic-based output paths", () 
   const options = buildWorkflowRunOptions({
     templateId: "android-opportunity",
     topic: "AI Study Planner",
-    presetId: "deep"
+    presetId: "deep",
+    overrides: {
+      researchDurationMinutes: 90
+    }
   });
 
   assert.equal(options.workflowPresetId, "deep");
@@ -203,6 +209,7 @@ test("workflow run options use preset budgets and topic-based output paths", () 
   assert.ok(options.reportPath?.endsWith(path.join("reports", "workflows", "android-opportunity", "ai-study-planner", "report.md")));
   assert.equal(options.maxQueries, 12);
   assert.equal(options.maxResultsPerQuery, 45);
+  assert.equal(options.researchDurationMinutes, 90);
 });
 
 test("android opportunity workflow uses focused research queries", () => {

@@ -75,6 +75,7 @@ function createState(input: {
       maxQueries: 3,
       maxResultsPerQuery: 8,
       fetchBatchSize: 4,
+      researchDurationMinutes: null,
       maxRuntimeHours: 4,
       workflowName: "agent-runner",
       workflowPresetId: null,
@@ -89,6 +90,8 @@ function createState(input: {
       heartbeatAt: null,
       recoveredAt: null,
       recoveryCount: 0,
+      researchStartedAt: null,
+      researchElapsedSeconds: 0,
       executionDeadlineAt: "2026-03-21T13:00:00.000Z"
     },
     reportPath: input.reportPath,

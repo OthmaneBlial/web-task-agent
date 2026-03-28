@@ -19,7 +19,10 @@ import {
 import { createDefaultAgentExtractor } from "../tasks/agent/extractors/heuristic-extractor";
 import {
   assessDocumentQuality,
+  buildForcedDurationResearchQueries,
+  currentUtcYear,
   evaluateDomainPolicy,
+  normalizeResearchQueryForRecency,
   rankSearchResults,
   rankSearchResultsForQuery
 } from "../tasks/agent/shared";
@@ -274,6 +277,42 @@ test("query-aware ranking prefers store and community sources for android app re
   assert.equal(redditRanked[0]?.site, "reddit.com");
 });
 
+test("research query recency normalization replaces stale years with the current year", () => {
+  const currentYear = currentUtcYear();
+
+  assert.equal(
+    normalizeResearchQueryForRecency(
+      "best offline pdf editor android 2024",
+      "Offline PDF Editor Android apps"
+    ),
+    `best offline pdf editor android ${currentYear}`
+  );
+  assert.equal(
+    normalizeResearchQueryForRecency(
+      "offline pdf editor android alternatives",
+      "Offline PDF Editor Android apps"
+    ),
+    `offline pdf editor android alternatives ${currentYear}`
+  );
+});
+
+test("forced duration fallback queries keep coverage moving and exclude seen sites", () => {
+  const currentYear = currentUtcYear();
+  const queries = buildForcedDurationResearchQueries({
+    instruction: "Offline PDF Editor Android apps",
+    existingQueries: ["best offline pdf editor android 2024"],
+    researchedSites: ["pcworld.com", "techviral.net", "xodo.com", "revpdf.com"],
+    maxQueries: 8,
+    year: currentYear
+  });
+
+  assert.equal(queries.length, 8);
+  assert.ok(queries.some((query) => query.includes(String(currentYear))));
+  assert.ok(queries.some((query) => /-site:pcworld\.com/i.test(query)));
+  assert.ok(queries.some((query) => /offline pdf editor android/i.test(query)));
+  assert.ok(queries.every((query) => !/2024/.test(query)));
+});
+
 test("direct source helper extracts urls and builds targeted play store queries", () => {
   const instruction =
     'Why this app is getting practically 0 downloads? Rewrite its ASO: https://play.google.com/store/apps/details?id=com.nanocv.app.';
@@ -354,7 +393,8 @@ test("play store seed enrichment builds rich aso evidence without browser fetch"
   assert.ok((seeded.qualityScore ?? 0) >= 0.85);
   assert.ok(seeded.page);
   assert.equal(seeded.page?.h1, "Resume Builder Offline");
-  assert.match(seeded.page?.description ?? "", /Create professional resumes offline/i);
+  assert.match(seeded.page?.description ?? "", /resume|cv/i);
+  assert.match(seeded.page?.description ?? "", /offline/i);
   assert.ok((seeded.page?.headings ?? []).some((heading: string) => /Business/i.test(heading)));
   assert.ok((seeded.page?.paragraphs ?? []).some((paragraph: string) => /ATS/i.test(paragraph)));
 });

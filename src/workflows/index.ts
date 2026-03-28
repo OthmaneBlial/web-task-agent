@@ -11,7 +11,11 @@ export interface WorkflowPresetDefinition {
   description: string;
   options: Pick<
     AgentRunOptions,
-    "maxQueries" | "maxResultsPerQuery" | "fetchBatchSize" | "maxRuntimeHours"
+    | "maxQueries"
+    | "maxResultsPerQuery"
+    | "fetchBatchSize"
+    | "researchDurationMinutes"
+    | "maxRuntimeHours"
   >;
 }
 
@@ -26,7 +30,11 @@ export interface WorkflowTemplateDefinition {
   presets: WorkflowPresetDefinition[];
   defaultOptions: Pick<
     AgentRunOptions,
-    "maxQueries" | "maxResultsPerQuery" | "fetchBatchSize" | "maxRuntimeHours"
+    | "maxQueries"
+    | "maxResultsPerQuery"
+    | "fetchBatchSize"
+    | "researchDurationMinutes"
+    | "maxRuntimeHours"
   >;
   buildInstruction(input: {
     topic: string;
@@ -290,6 +298,7 @@ export function buildWorkflowRunOptions(input: {
       | "maxQueries"
       | "maxResultsPerQuery"
       | "fetchBatchSize"
+      | "researchDurationMinutes"
       | "maxRuntimeHours"
       | "leaseTtlMinutes"
     >
@@ -316,6 +325,8 @@ export function buildWorkflowRunOptions(input: {
     maxResultsPerQuery:
       input.overrides?.maxResultsPerQuery ?? preset.options.maxResultsPerQuery,
     fetchBatchSize: input.overrides?.fetchBatchSize ?? preset.options.fetchBatchSize,
+    researchDurationMinutes:
+      input.overrides?.researchDurationMinutes ?? preset.options.researchDurationMinutes,
     maxRuntimeHours: input.overrides?.maxRuntimeHours ?? preset.options.maxRuntimeHours,
     leaseTtlMinutes: input.overrides?.leaseTtlMinutes,
     workflowName: template.id,

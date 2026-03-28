@@ -26,6 +26,34 @@ function parsePositiveInteger(value: string, label: string): number {
   return parsed;
 }
 
+function parseDurationMinutes(value: string, label: string): number {
+  const normalized = value.trim().toLowerCase();
+  const match = normalized.match(
+    /^(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours)?$/
+  );
+
+  if (!match) {
+    throw new Error(
+      `${label} must look like 30m, 30 minutes, 1h, or 2 hours`
+    );
+  }
+
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error(`${label} must be greater than 0`);
+  }
+
+  const unit = match[2] ?? "minutes";
+  const minutes =
+    unit.startsWith("h") ? Math.round(amount * 60) : Math.round(amount);
+
+  if (!Number.isInteger(minutes) || minutes <= 0) {
+    throw new Error(`${label} must resolve to at least 1 minute`);
+  }
+
+  return minutes;
+}
+
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -110,8 +138,7 @@ async function main(): Promise<void> {
     .option(
       "--max-queries <number>",
       "Maximum number of research queries to execute",
-      (value) => parsePositiveInteger(value, "max-queries"),
-      3
+      (value) => parsePositiveInteger(value, "max-queries")
     )
     .option(
       "--max-results <number>",
@@ -124,6 +151,11 @@ async function main(): Promise<void> {
       "How many result pages to fetch before checkpointing progress",
       (value) => parsePositiveInteger(value, "fetch-batch-size"),
       5
+    )
+    .option(
+      "--research-duration <duration>",
+      "Keep expanding research until this time budget is consumed, for example 30m or 2h",
+      (value) => parseDurationMinutes(value, "research-duration")
     )
     .option(
       "--max-runtime-hours <number>",
@@ -144,9 +176,12 @@ async function main(): Promise<void> {
         cachePath: options.cache ? path.resolve(String(options.cache)) : undefined,
         reportPath: options.report ? path.resolve(String(options.report)) : undefined,
         memoryPath: options.memory ? path.resolve(String(options.memory)) : undefined,
-        maxQueries: Number(options.maxQueries),
+        maxQueries:
+          options.maxQueries !== undefined ? Number(options.maxQueries) : undefined,
         maxResultsPerQuery: Number(options.maxResults),
         fetchBatchSize: Number(options.fetchBatchSize),
+        researchDurationMinutes:
+          options.researchDuration !== undefined ? Number(options.researchDuration) : undefined,
         maxRuntimeHours: Number(options.maxRuntimeHours),
         leaseTtlMinutes: Number(options.leaseTtlMinutes)
       });
@@ -171,8 +206,7 @@ async function main(): Promise<void> {
     .option(
       "--max-queries <number>",
       "Maximum number of research queries to execute",
-      (value) => parsePositiveInteger(value, "max-queries"),
-      3
+      (value) => parsePositiveInteger(value, "max-queries")
     )
     .option(
       "--max-results <number>",
@@ -185,6 +219,11 @@ async function main(): Promise<void> {
       "How many result pages to fetch before checkpointing progress",
       (value) => parsePositiveInteger(value, "fetch-batch-size"),
       5
+    )
+    .option(
+      "--research-duration <duration>",
+      "Keep expanding research until this time budget is consumed, for example 30m or 2h",
+      (value) => parseDurationMinutes(value, "research-duration")
     )
     .option(
       "--max-runtime-hours <number>",
@@ -216,9 +255,12 @@ async function main(): Promise<void> {
             cachePath: options.cache ? path.resolve(String(options.cache)) : undefined,
             reportPath: options.report ? path.resolve(String(options.report)) : undefined,
             memoryPath: options.memory ? path.resolve(String(options.memory)) : undefined,
-            maxQueries: Number(options.maxQueries),
+            maxQueries:
+              options.maxQueries !== undefined ? Number(options.maxQueries) : undefined,
             maxResultsPerQuery: Number(options.maxResults),
             fetchBatchSize: Number(options.fetchBatchSize),
+            researchDurationMinutes:
+              options.researchDuration !== undefined ? Number(options.researchDuration) : undefined,
             maxRuntimeHours: Number(options.maxRuntimeHours),
             leaseTtlMinutes: Number(options.leaseTtlMinutes)
           }
@@ -276,6 +318,11 @@ async function main(): Promise<void> {
       (value) => parsePositiveInteger(value, "fetch-batch-size")
     )
     .option(
+      "--research-duration <duration>",
+      "Override the template research duration budget, for example 30m or 2h",
+      (value) => parseDurationMinutes(value, "research-duration")
+    )
+    .option(
       "--max-runtime-hours <number>",
       "Override the template runtime budget",
       (value) => parsePositiveInteger(value, "max-runtime-hours")
@@ -309,6 +356,8 @@ async function main(): Promise<void> {
               options.maxResults !== undefined ? Number(options.maxResults) : undefined,
             fetchBatchSize:
               options.fetchBatchSize !== undefined ? Number(options.fetchBatchSize) : undefined,
+            researchDurationMinutes:
+              options.researchDuration !== undefined ? Number(options.researchDuration) : undefined,
             maxRuntimeHours:
               options.maxRuntimeHours !== undefined ? Number(options.maxRuntimeHours) : undefined,
             leaseTtlMinutes:
@@ -356,6 +405,11 @@ async function main(): Promise<void> {
       (value) => parsePositiveInteger(value, "fetch-batch-size")
     )
     .option(
+      "--research-duration <duration>",
+      "Override the template research duration budget, for example 30m or 2h",
+      (value) => parseDurationMinutes(value, "research-duration")
+    )
+    .option(
       "--max-runtime-hours <number>",
       "Override the template runtime budget",
       (value) => parsePositiveInteger(value, "max-runtime-hours")
@@ -394,6 +448,8 @@ async function main(): Promise<void> {
             options.maxResults !== undefined ? Number(options.maxResults) : undefined,
           fetchBatchSize:
             options.fetchBatchSize !== undefined ? Number(options.fetchBatchSize) : undefined,
+          researchDurationMinutes:
+            options.researchDuration !== undefined ? Number(options.researchDuration) : undefined,
           maxRuntimeHours:
             options.maxRuntimeHours !== undefined ? Number(options.maxRuntimeHours) : undefined,
           leaseTtlMinutes:

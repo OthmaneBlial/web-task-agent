@@ -442,6 +442,7 @@ export interface AgentRunOptions {
   maxQueries?: number;
   maxResultsPerQuery?: number;
   fetchBatchSize?: number;
+  researchDurationMinutes?: number;
   maxRuntimeHours?: number;
   leaseTtlMinutes?: number;
   workflowName?: string;
@@ -493,6 +494,7 @@ export interface AgentRunState {
     maxQueries: number;
     maxResultsPerQuery: number;
     fetchBatchSize: number;
+    researchDurationMinutes: number | null;
     maxRuntimeHours: number;
     workflowName: string | null;
     workflowPresetId: string | null;
@@ -507,6 +509,8 @@ export interface AgentRunState {
     heartbeatAt: string | null;
     recoveredAt: string | null;
     recoveryCount: number;
+    researchStartedAt: string | null;
+    researchElapsedSeconds: number;
     executionDeadlineAt: string | null;
   };
   reportPath: string;

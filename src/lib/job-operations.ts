@@ -71,6 +71,10 @@ export function buildAgentRunOptionsFromStoredJob(
       numberOrNull(input.fetchBatchSize) ??
       numberOrNull(budget.fetchBatchSize) ??
       undefined,
+    researchDurationMinutes:
+      numberOrNull(input.researchDurationMinutes) ??
+      numberOrNull(budget.researchDurationMinutes) ??
+      undefined,
     maxRuntimeHours:
       numberOrNull(input.maxRuntimeHours) ??
       numberOrNull(budget.maxRuntimeHours) ??

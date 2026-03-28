@@ -29,7 +29,8 @@ npm run lightpanda:start
 
 # General research job
 npm run start -- agent run \
-  "Research cheerful launch ideas for our product and write one evidence-backed post"
+  "Research cheerful launch ideas for our product and write one evidence-backed post" \
+  --research-duration "30m"
 
 # Built-in workflow templates
 npm run start -- workflow list
@@ -41,7 +42,8 @@ npm run start -- workflow run article-research \
 
 # Queue long jobs
 npm run start -- workflow enqueue android-opportunity \
-  --topic "budgeting app for couples"
+  --topic "budgeting app for couples" \
+  --research-duration "2h"
 npm run start -- queue list
 npm run start -- queue pause <queue-id>
 npm run start -- queue resume <queue-id>
@@ -64,6 +66,8 @@ npm run start -- server run --port 4317
 3. Start Lightpanda.
 4. Run either a direct `agent run` job or a `workflow run` template.
 5. Start the local dashboard if you want to inspect jobs and queue state in the browser.
+
+`--research-duration` accepts values like `10m`, `30 minutes`, `1h`, or `2 hours`. When set, the agent keeps expanding into new queries and filters out already-covered sites until that research budget is used.
 
 ## Current System Shape
 

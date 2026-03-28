@@ -18,7 +18,7 @@ export const MAX_ARTICLES_PER_QUERY = 3;
 export const DEFAULT_AGENT_MAX_RUNTIME_HOURS = 6;
 export const DEFAULT_JOB_LEASE_TTL_SECONDS = 15 * 60;
 export const DEFAULT_JOB_HEARTBEAT_INTERVAL_SECONDS = 60;
-export const MAX_AGENT_QUERIES = 25;
+export const MAX_AGENT_QUERIES = 500;
 export const MAX_AGENT_RESULTS_PER_QUERY = 100;
 export const DEFAULT_FETCH_BATCH_SIZE = 5;
 export const MAX_FETCH_BATCH_SIZE = 20;
@@ -39,9 +39,58 @@ export interface AgentDocumentQualityAssessment {
 const AVERAGE_ARTICLE_READ_MS = Math.round((ARTICLE_READ_MIN_MS + ARTICLE_READ_MAX_MS) / 2);
 const AVERAGE_QUERY_SCAN_MS = Math.round((QUERY_SCAN_MIN_MS + QUERY_SCAN_MAX_MS) / 2);
 const AVERAGE_QUICK_SKIP_MS = Math.round((QUICK_SKIP_MIN_MS + QUICK_SKIP_MAX_MS) / 2);
+const QUERY_RECENCY_PATTERN = /\b(?:latest|recent|current|new|updated|today|20\d{2})\b/i;
+const TOPIC_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "apps",
+  "best",
+  "comparison",
+  "complaints",
+  "current",
+  "feature",
+  "features",
+  "find",
+  "forum",
+  "forums",
+  "free",
+  "latest",
+  "new",
+  "online",
+  "recent",
+  "request",
+  "requests",
+  "research",
+  "review",
+  "reviews",
+  "scan",
+  "search",
+  "software",
+  "solutions",
+  "survey",
+  "threads",
+  "tool",
+  "tools",
+  "top",
+  "updated",
+  "users",
+  "vs"
+]);
+const SEARCH_DOMAIN_EXCLUSION_SKIP = new Set([
+  "bing.com",
+  "duckduckgo.com",
+  "google.com",
+  "html.duckduckgo.com",
+  "search.brave.com"
+]);
 
 export function nowIso(): string {
   return new Date().toISOString();
+}
+
+export function currentUtcYear(): number {
+  return new Date().getUTCFullYear();
 }
 
 export function addSecondsToIso(input: string, seconds: number): string {
@@ -81,6 +130,193 @@ export function randomInt(min: number, max: number): number {
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
+}
+
+function normalizeQueryText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function uniqueQueryList(values: string[], limit?: number): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const value of values) {
+    const normalized = normalizeQueryText(value);
+    if (!normalized) {
+      continue;
+    }
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    output.push(normalized);
+    if (typeof limit === "number" && output.length >= limit) {
+      break;
+    }
+  }
+
+  return output;
+}
+
+function extractInstructionYears(instruction: string): number[] {
+  const matches = instruction.match(/\b20\d{2}\b/g) ?? [];
+  return uniqueQueryList(matches).map((value) => Number(value));
+}
+
+function stripQueryOperators(value: string): string {
+  return value
+    .replace(/site:[^\s]+/gi, " ")
+    .replace(/-[^\s]+/g, " ")
+    .replace(/\b(?:AND|OR|NOT)\b/gi, " ")
+    .replace(/"([^"]+)"/g, " $1 ")
+    .replace(/\b20\d{2}\b/g, " ")
+    .replace(/[^a-z0-9\s]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractTopicFromSource(value: string): string {
+  const tokens = stripQueryOperators(value)
+    .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(
+      (token) =>
+        token.length >= 3 &&
+        !TOPIC_STOP_WORDS.has(token)
+    );
+
+  return normalizeQueryText(tokens.slice(0, 6).join(" "));
+}
+
+function shouldUseCurrentYear(query: string): boolean {
+  return /\b(?:best|top|review|reviews|comparison|alternatives|complaints|features?|editor|android|ios|app|apps|software|tool|tools)\b/i.test(
+    query
+  );
+}
+
+export function normalizeResearchQueryForRecency(
+  query: string,
+  instruction: string,
+  year: number = currentUtcYear()
+): string {
+  let normalized = normalizeQueryText(query);
+  if (!normalized) {
+    return normalized;
+  }
+
+  const instructionYears = extractInstructionYears(instruction);
+  if (instructionYears.length > 0) {
+    return normalized;
+  }
+
+  normalized = normalized.replace(/\b20\d{2}\b/g, String(year));
+  if (QUERY_RECENCY_PATTERN.test(normalized)) {
+    return normalizeQueryText(normalized);
+  }
+
+  return normalizeQueryText(
+    shouldUseCurrentYear(normalized) ? `${normalized} ${year}` : `${normalized} latest`
+  );
+}
+
+export function buildForcedDurationResearchQueries(input: {
+  instruction: string;
+  existingQueries: string[];
+  researchedSites: string[];
+  maxQueries: number;
+  year?: number;
+}): string[] {
+  const year = input.year ?? currentUtcYear();
+  const existingQueryKeys = new Set(
+    input.existingQueries.map((query) => normalizeQueryText(query).toLowerCase())
+  );
+  const researchedSites = uniqueQueryList(
+    input.researchedSites
+      .map((site) => site.toLowerCase().replace(/^www\./, ""))
+      .filter((site) => site && !SEARCH_DOMAIN_EXCLUSION_SKIP.has(site)),
+    40
+  );
+  const exclusionBatches =
+    researchedSites.length > 0
+      ? Array.from({ length: Math.ceil(researchedSites.length / 4) }, (_value, index) =>
+          researchedSites.slice(index * 4, index * 4 + 4)
+        )
+      : [[]];
+  const topicCandidates = uniqueQueryList(
+    [
+      ...input.existingQueries.map((query) => extractTopicFromSource(query)),
+      extractTopicFromSource(input.instruction)
+    ].filter(Boolean),
+    3
+  );
+  const topic = topicCandidates[0] ?? normalizeQueryText(input.instruction);
+  const appLike = /\b(?:android|ios|app|apps|apk|play store|f-droid)\b/i.test(
+    `${input.instruction} ${input.existingQueries.join(" ")}`
+  );
+  const templates = uniqueQueryList(
+    [
+      `${topic} ${year}`,
+      `${topic} latest`,
+      `${topic} user reviews ${year}`,
+      `${topic} complaints ${year}`,
+      `${topic} feature requests ${year}`,
+      `${topic} alternatives ${year}`,
+      `${topic} comparison ${year}`,
+      `${topic} underrated ${year}`,
+      `${topic} hidden gems ${year}`,
+      `${topic} expert reviews ${year}`,
+      `${topic} buyer guide ${year}`,
+      `${topic} community latest`,
+      `${topic} forum latest`,
+      `site:reddit.com ${topic} latest`,
+      `site:github.com ${topic}`,
+      `site:stackexchange.com ${topic}`,
+      `site:xda-developers.com ${topic}`,
+      `site:androidpolice.com ${topic}`,
+      ...(appLike
+        ? [
+            `site:play.google.com ${topic}`,
+            `site:f-droid.org ${topic}`,
+            `site:alternativeto.net ${topic}`,
+            `site:apkpure.com ${topic}`,
+            `site:apkcombo.com ${topic}`,
+            `${topic} offline ${year}`,
+            `${topic} no subscription ${year}`,
+            `${topic} open source ${year}`,
+            `${topic} edit text ${year}`,
+            `${topic} annotation ${year}`,
+            `${topic} fill and sign ${year}`,
+            `${topic} markup ${year}`
+          ]
+        : [
+            `${topic} documentation latest`,
+            `${topic} release notes ${year}`,
+            `${topic} migration ${year}`,
+            `${topic} benchmark ${year}`,
+            `${topic} case study ${year}`
+          ])
+    ],
+    160
+  );
+  const candidates: string[] = [];
+
+  for (const template of templates) {
+    for (const exclusions of exclusionBatches) {
+      const exclusionClause = exclusions.map((site) => `-site:${site}`).join(" ");
+      const candidate = normalizeResearchQueryForRecency(
+        exclusionClause ? `${template} ${exclusionClause}` : template,
+        input.instruction,
+        year
+      );
+      if (!existingQueryKeys.has(candidate.toLowerCase())) {
+        candidates.push(candidate);
+      }
+    }
+  }
+
+  return uniqueQueryList(candidates, input.maxQueries);
 }
 
 function pageContentLength(page: AgentPageDigest): number {
@@ -689,8 +925,7 @@ export function estimateArticleReadMs(page: AgentPageDigest): number {
   return clamp(Math.round(estimated), ARTICLE_READ_MIN_MS, ARTICLE_READ_MAX_MS);
 }
 
-export function computeExecutionEstimateMinutes(plan: AgentPlan, maxResultsPerQuery: number): number {
-  const queries = plan.researchQueries.length;
+function computeEstimatedResearchMsPerQuery(maxResultsPerQuery: number): number {
   const expectedFetchedResultsPerQuery = clamp(
     Math.round(Math.min(maxResultsPerQuery, Math.max(6, maxResultsPerQuery * 0.25))),
     4,
@@ -699,17 +934,52 @@ export function computeExecutionEstimateMinutes(plan: AgentPlan, maxResultsPerQu
   const expectedReadResultsPerQuery = Math.max(1, Math.round(expectedFetchedResultsPerQuery * 0.65));
   const expectedQuickSkipsPerQuery = Math.max(0, expectedFetchedResultsPerQuery - expectedReadResultsPerQuery);
   const expectedSearchScansPerQuery = Math.max(1, Math.min(3, Math.ceil(maxResultsPerQuery / 15)));
-  const researchMs =
-    queries * expectedSearchScansPerQuery * AVERAGE_QUERY_SCAN_MS +
-    queries * expectedReadResultsPerQuery * AVERAGE_ARTICLE_READ_MS +
-    queries * expectedQuickSkipsPerQuery * AVERAGE_QUICK_SKIP_MS +
-    queries * 2_000;
+
+  return (
+    expectedSearchScansPerQuery * AVERAGE_QUERY_SCAN_MS +
+    expectedReadResultsPerQuery * AVERAGE_ARTICLE_READ_MS +
+    expectedQuickSkipsPerQuery * AVERAGE_QUICK_SKIP_MS +
+    2_000
+  );
+}
+
+export function computeEstimatedResearchMinutesPerQuery(maxResultsPerQuery: number): number {
+  return Math.max(1, Math.ceil(computeEstimatedResearchMsPerQuery(maxResultsPerQuery) / 60_000));
+}
+
+export function estimateMaxQueriesForDuration(
+  durationMinutes: number,
+  maxResultsPerQuery: number
+): number {
+  return clamp(
+    Math.max(
+      Math.ceil(durationMinutes / computeEstimatedResearchMinutesPerQuery(maxResultsPerQuery)) + 1,
+      durationMinutes * 8
+    ),
+    1,
+    MAX_AGENT_QUERIES
+  );
+}
+
+export function computeExecutionEstimateMinutes(
+  plan: AgentPlan,
+  maxResultsPerQuery: number,
+  researchDurationMinutes?: number | null
+): number {
+  const queries = plan.researchQueries.length;
+  const researchMs = queries * computeEstimatedResearchMsPerQuery(maxResultsPerQuery);
   const draftingMs =
     (plan.steps.some((step) => step.kind === "draft_post") ? 30_000 : 0) +
     (plan.steps.some((step) => step.kind === "draft_comments") ? 20_000 : 0) +
     15_000;
+  const estimatedResearchMinutes = Math.max(1, Math.round(researchMs / 60_000));
+  const draftingMinutes = Math.max(1, Math.round(draftingMs / 60_000));
+  const totalMinutes =
+    typeof researchDurationMinutes === "number" && Number.isFinite(researchDurationMinutes)
+      ? Math.max(estimatedResearchMinutes, researchDurationMinutes) + draftingMinutes
+      : estimatedResearchMinutes + draftingMinutes;
 
-  return Math.max(1, Math.round((researchMs + draftingMs) / 60_000));
+  return Math.max(1, totalMinutes);
 }
 
 export function countCapturedResearchSources(research: AgentResearchResult[]): number {
