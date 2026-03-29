@@ -7,6 +7,7 @@ import { Command } from "commander";
 import { requestAgentJobControl, resumeAgentJob, rerunAgentJob } from "./lib/job-operations";
 import { controlQueuedJob, enqueueQueuedAgentJob, getQueuedJob, listQueuedJobs } from "./lib/job-queue";
 import { listJobRunEvents } from "./lib/job-store";
+import { normalizeCliArgv } from "./lib/cli-argv";
 import { createManagementServer } from "./server/management-server";
 import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
@@ -717,7 +718,7 @@ async function main(): Promise<void> {
       });
     });
 
-  await program.parseAsync(process.argv);
+  await program.parseAsync(normalizeCliArgv(process.argv));
 }
 
 main().catch((error: unknown) => {
