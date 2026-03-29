@@ -70,6 +70,7 @@ import {
   addHoursToIso,
   buildForcedDurationResearchQueries,
   computeElapsedMinutes,
+  computeEstimatedResearchMinutesPerQuery,
   DEFAULT_AGENT_MAX_RUNTIME_HOURS,
   DEFAULT_FETCH_BATCH_SIZE,
   DEFAULT_JOB_HEARTBEAT_INTERVAL_SECONDS,
@@ -79,7 +80,10 @@ import {
   MAX_FETCH_BATCH_SIZE,
   computeExecutionEstimateMinutes,
   estimateMaxQueriesForDuration,
+  isLowSignalDurationResearchQuery,
+  isOverStructuredResearchQuery,
   normalizeResearchQueryForRecency,
+  simplifyDurationResearchQuery,
   countCapturedResearchDocuments,
   countCapturedResearchSources,
   nowIso
@@ -151,15 +155,22 @@ function normalizeQueryText(query: string): string {
 
 function normalizeResearchQueriesForRecency(
   queries: string[],
-  instruction: string
+  instruction: string,
+  preferSimpleDurationQueries: boolean = false
 ): string[] {
   const seen = new Set<string>();
   const normalized: string[] = [];
 
   for (const query of queries) {
-    const candidate = normalizeResearchQueryForRecency(query, instruction);
+    const candidate = preferSimpleDurationQueries
+      ? simplifyDurationResearchQuery(query, instruction)
+      : normalizeResearchQueryForRecency(query, instruction);
     const key = candidate.toLowerCase();
-    if (!candidate || seen.has(key)) {
+    if (
+      !candidate ||
+      seen.has(key) ||
+      (preferSimpleDurationQueries && isLowSignalDurationResearchQuery(candidate))
+    ) {
       continue;
     }
     seen.add(key);
@@ -167,6 +178,55 @@ function normalizeResearchQueriesForRecency(
   }
 
   return normalized;
+}
+
+function desiredInitialDurationQueryCount(
+  researchDurationMinutes: number,
+  maxResultsPerQuery: number
+): number {
+  return clampWholeNumber(
+    Math.ceil(researchDurationMinutes / Math.max(2, computeEstimatedResearchMinutesPerQuery(maxResultsPerQuery))) + 3,
+    6,
+    24
+  );
+}
+
+function prepareResearchQueries(input: {
+  queries: string[];
+  instruction: string;
+  researchDurationMinutes: number | null;
+  maxResultsPerQuery: number;
+}): string[] {
+  const normalized = normalizeResearchQueriesForRecency(
+    input.queries,
+    input.instruction,
+    Boolean(input.researchDurationMinutes)
+  );
+
+  if (!input.researchDurationMinutes) {
+    return normalized;
+  }
+
+  const desiredCount = desiredInitialDurationQueryCount(
+    input.researchDurationMinutes,
+    input.maxResultsPerQuery
+  );
+  if (normalized.length >= desiredCount) {
+    return normalized;
+  }
+
+  const fallbackQueries = buildForcedDurationResearchQueries({
+    instruction: input.instruction,
+    existingQueries: normalized,
+    researchedSites: [],
+    maxQueries: desiredCount - normalized.length
+  });
+
+  return normalizeResearchQueriesForRecency(
+    [...normalized, ...fallbackQueries],
+    input.instruction,
+    true
+  );
 }
 
 function normalizeDurationMinutes(value: unknown): number | null {
@@ -596,6 +656,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
   private getResearchBudgetSnapshot(state: AgentRunState): {
     targetMinutes: number | null;
     elapsedMinutes: number;
+    remainingSeconds: number | null;
     remainingMinutes: number | null;
   } {
     const targetMinutes = state.input.researchDurationMinutes;
@@ -610,14 +671,19 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             Math.round((Date.now() - activeStartedMs) / 1_000)
           )
         : 0);
-    const elapsedMinutes = Math.max(0, Math.ceil(elapsedSeconds / 60));
+    const elapsedMinutes = Math.max(0, Math.floor(elapsedSeconds / 60));
+    const remainingSeconds =
+      typeof targetMinutes === "number"
+        ? Math.max(0, targetMinutes * 60 - elapsedSeconds)
+        : null;
 
     return {
       targetMinutes,
       elapsedMinutes,
+      remainingSeconds,
       remainingMinutes:
-        typeof targetMinutes === "number"
-          ? Math.max(0, targetMinutes - elapsedMinutes)
+        typeof remainingSeconds === "number"
+          ? Math.ceil(remainingSeconds / 60)
           : null
     };
   }
@@ -648,7 +714,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
   private hasResearchTimeRemaining(state: AgentRunState): boolean {
     const snapshot = this.getResearchBudgetSnapshot(state);
-    return snapshot.remainingMinutes === null || snapshot.remainingMinutes > 0;
+    return snapshot.remainingSeconds === null || snapshot.remainingSeconds > 0;
   }
 
   private buildSeenSiteSet(state: AgentRunState, currentQueryKey?: string): Set<string> {
@@ -782,9 +848,15 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         researchedSites: Array.from(this.buildSeenSiteSet(state)),
         recentResearch: state.research,
         evidence: jobStore.getAgentEvidenceBundle(),
-        maxQueries: 1
+        maxQueries: Math.min(3, queryBudgetRemaining)
       }),
-      state.input.instruction
+      state.input.instruction,
+      Boolean(state.input.researchDurationMinutes)
+    ).filter(
+      (query) =>
+        !state.input.researchDurationMinutes ||
+        (!isOverStructuredResearchQuery(query) &&
+          !isLowSignalDurationResearchQuery(query))
     );
     const existingKeys = new Set(
       state.pipeline.workItems.map((item) => item.queryKey)
@@ -802,7 +874,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         instruction: state.input.instruction,
         existingQueries: state.plan?.researchQueries ?? [],
         researchedSites: Array.from(this.buildSeenSiteSet(state)),
-        maxQueries: Math.min(8, queryBudgetRemaining)
+        maxQueries: Math.min(6, queryBudgetRemaining)
       })
         .map(normalizeQueryText)
         .filter((query) => query.length > 0)
@@ -1219,10 +1291,12 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
               `Workflow-specific research queries applied for ${state.input.workflowTemplateId}.`
             );
           }
-          state.plan.researchQueries = normalizeResearchQueriesForRecency(
-            state.plan.researchQueries,
-            state.input.instruction
-          );
+          state.plan.researchQueries = prepareResearchQueries({
+            queries: state.plan.researchQueries,
+            instruction: state.input.instruction,
+            researchDurationMinutes: state.input.researchDurationMinutes,
+            maxResultsPerQuery: state.input.maxResultsPerQuery
+          });
           state.plan.estimatedMinutes = computeExecutionEstimateMinutes(
             state.plan,
             state.input.maxResultsPerQuery,
@@ -1268,10 +1342,12 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         throw new Error("agent plan is missing after planning");
       }
 
-      state.plan.researchQueries = normalizeResearchQueriesForRecency(
-        state.plan.researchQueries,
-        state.input.instruction
-      );
+      state.plan.researchQueries = prepareResearchQueries({
+        queries: state.plan.researchQueries,
+        instruction: state.input.instruction,
+        researchDurationMinutes: state.input.researchDurationMinutes,
+        maxResultsPerQuery: state.input.maxResultsPerQuery
+      });
 
       state.pipeline = ensurePipelineState({
         pipeline: state.pipeline,
@@ -1514,6 +1590,38 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             state.input.researchDurationMinutes &&
             this.hasResearchTimeRemaining(state)
           ) {
+            const pendingWorkItems = getPendingWorkItems(state.pipeline);
+
+            if (pendingWorkItems.length > 0) {
+              let processedPending = false;
+
+              for (const pendingWorkItem of pendingWorkItems) {
+                if (
+                  pendingWorkItem.nextStage === "search" &&
+                  !pendingWorkItem.searchedAt &&
+                  !this.hasResearchTimeRemaining(state)
+                ) {
+                  stoppedForResearchBudget = true;
+                  break;
+                }
+
+                await processWorkItem(pendingWorkItem);
+                processedPending = true;
+
+                if (!this.hasResearchTimeRemaining(state)) {
+                  stoppedForResearchBudget = true;
+                  break;
+                }
+              }
+
+              if (stoppedForResearchBudget) {
+                break;
+              }
+              if (processedPending) {
+                continue;
+              }
+            }
+
             const nextQueries = await this.expandResearchQueries(
               state,
               jobStore,
@@ -1523,20 +1631,6 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             if (nextQueries.length === 0) {
               break;
             }
-
-            const nextWorkItem = state.pipeline.workItems.find(
-              (item) => item.queryKey === normalizeQueryKey(nextQueries[0]!)
-            );
-            if (!nextWorkItem) {
-              break;
-            }
-
-            if (!this.hasResearchTimeRemaining(state)) {
-              stoppedForResearchBudget = true;
-              break;
-            }
-
-            await processWorkItem(nextWorkItem);
           }
 
           if (

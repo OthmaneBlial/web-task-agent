@@ -22,6 +22,7 @@ import {
   buildForcedDurationResearchQueries,
   currentUtcYear,
   evaluateDomainPolicy,
+  isLowSignalDurationResearchQuery,
   normalizeResearchQueryForRecency,
   rankSearchResults,
   rankSearchResultsForQuery
@@ -296,21 +297,34 @@ test("research query recency normalization replaces stale years with the current
   );
 });
 
-test("forced duration fallback queries keep coverage moving and exclude seen sites", () => {
+test("forced duration fallback queries stay natural-language and coverage-oriented", () => {
   const currentYear = currentUtcYear();
   const queries = buildForcedDurationResearchQueries({
     instruction: "Offline PDF Editor Android apps",
     existingQueries: ["best offline pdf editor android 2024"],
     researchedSites: ["pcworld.com", "techviral.net", "xodo.com", "revpdf.com"],
-    maxQueries: 8,
+    maxQueries: 40,
     year: currentYear
   });
 
-  assert.equal(queries.length, 8);
+  assert.equal(queries.length, 40);
   assert.ok(queries.some((query) => query.includes(String(currentYear))));
-  assert.ok(queries.some((query) => /-site:pcworld\.com/i.test(query)));
   assert.ok(queries.some((query) => /offline pdf editor android/i.test(query)));
+  assert.ok(queries.some((query) => /\b(?:play store|reddit|github|f-droid|alternativeto|xda)\b/i.test(query)));
+  assert.ok(queries.every((query) => !/\bsite:/i.test(query)));
+  assert.ok(queries.every((query) => !/\bOR\b/i.test(query)));
   assert.ok(queries.every((query) => !/2024/.test(query)));
+});
+
+test("duration query filter drops low-signal apk and mod phrasing", () => {
+  assert.equal(
+    isLowSignalDurationResearchQuery("offline pdf editor android apk mod premium unlocked 2026"),
+    true
+  );
+  assert.equal(
+    isLowSignalDurationResearchQuery("offline pdf editor android reddit complaints 2026"),
+    false
+  );
 });
 
 test("direct source helper extracts urls and builds targeted play store queries", () => {

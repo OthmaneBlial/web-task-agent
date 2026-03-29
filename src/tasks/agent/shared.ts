@@ -77,13 +77,19 @@ const TOPIC_STOP_WORDS = new Set([
   "users",
   "vs"
 ]);
-const SEARCH_DOMAIN_EXCLUSION_SKIP = new Set([
-  "bing.com",
-  "duckduckgo.com",
-  "google.com",
-  "html.duckduckgo.com",
-  "search.brave.com"
-]);
+const DURATION_SITE_HINTS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /site:play\.google\.com/gi, label: "play store" },
+  { pattern: /site:apps\.apple\.com/gi, label: "app store" },
+  { pattern: /site:reddit\.com/gi, label: "reddit" },
+  { pattern: /site:github\.com/gi, label: "github" },
+  { pattern: /site:f-droid\.org/gi, label: "f-droid" },
+  { pattern: /site:alternativeto\.net/gi, label: "alternativeto" },
+  { pattern: /site:stack(?:overflow|exchange)\.com/gi, label: "stack overflow" },
+  { pattern: /site:xda-developers\.com/gi, label: "xda" },
+  { pattern: /site:androidpolice\.com/gi, label: "android police" }
+];
+const LOW_SIGNAL_DURATION_QUERY_PATTERN =
+  /\b(?:apk(?:mirror|pure|fab|monk)?|mod(?:ded)?|premium|unlocked|patched|crack(?:ed)?|warez|torrent|mobilism|4pda|apksos|moddroid)\b/i;
 
 export function nowIso(): string {
   return new Date().toISOString();
@@ -167,7 +173,7 @@ function extractInstructionYears(instruction: string): number[] {
 function stripQueryOperators(value: string): string {
   return value
     .replace(/site:[^\s]+/gi, " ")
-    .replace(/-[^\s]+/g, " ")
+    .replace(/-site:[^\s]+/gi, " ")
     .replace(/\b(?:AND|OR|NOT)\b/gi, " ")
     .replace(/"([^"]+)"/g, " $1 ")
     .replace(/\b20\d{2}\b/g, " ")
@@ -221,6 +227,64 @@ export function normalizeResearchQueryForRecency(
   );
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function isOverStructuredResearchQuery(query: string): boolean {
+  const normalized = normalizeQueryText(query);
+  const siteCount = (normalized.match(/\bsite:/gi) ?? []).length;
+  const exclusionCount = (normalized.match(/-site:/gi) ?? []).length;
+  const orCount = (normalized.match(/\bOR\b/gi) ?? []).length;
+  const quoteCount = (normalized.match(/"/g) ?? []).length / 2;
+
+  return (
+    siteCount > 1 ||
+    exclusionCount > 0 ||
+    orCount > 0 ||
+    quoteCount > 2 ||
+    normalized.length > 140
+  );
+}
+
+export function isLowSignalDurationResearchQuery(query: string): boolean {
+  return LOW_SIGNAL_DURATION_QUERY_PATTERN.test(normalizeQueryText(query));
+}
+
+export function simplifyDurationResearchQuery(
+  query: string,
+  instruction: string,
+  year: number = currentUtcYear()
+): string {
+  const hints: string[] = [];
+  let normalized = query;
+
+  for (const item of DURATION_SITE_HINTS) {
+    normalized = normalized.replace(item.pattern, () => {
+      hints.push(item.label);
+      return " ";
+    });
+  }
+
+  normalized = normalized
+    .replace(/-site:[^\s]+/gi, " ")
+    .replace(/\b(?:AND|OR|NOT)\b/gi, " ")
+    .replace(/[()]/g, " ")
+    .replace(/"([^"]+)"/g, " $1 ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const suffixHints = uniqueQueryList(hints, 2).filter((hint) => {
+    const pattern = new RegExp(`\\b${escapeRegExp(hint)}\\b`, "i");
+    return !pattern.test(normalized);
+  });
+  if (suffixHints.length > 0) {
+    normalized = `${normalized} ${suffixHints.join(" ")}`;
+  }
+
+  return normalizeResearchQueryForRecency(normalized, instruction, year);
+}
+
 export function buildForcedDurationResearchQueries(input: {
   instruction: string;
   existingQueries: string[];
@@ -232,18 +296,6 @@ export function buildForcedDurationResearchQueries(input: {
   const existingQueryKeys = new Set(
     input.existingQueries.map((query) => normalizeQueryText(query).toLowerCase())
   );
-  const researchedSites = uniqueQueryList(
-    input.researchedSites
-      .map((site) => site.toLowerCase().replace(/^www\./, ""))
-      .filter((site) => site && !SEARCH_DOMAIN_EXCLUSION_SKIP.has(site)),
-    40
-  );
-  const exclusionBatches =
-    researchedSites.length > 0
-      ? Array.from({ length: Math.ceil(researchedSites.length / 4) }, (_value, index) =>
-          researchedSites.slice(index * 4, index * 4 + 4)
-        )
-      : [[]];
   const topicCandidates = uniqueQueryList(
     [
       ...input.existingQueries.map((query) => extractTopicFromSource(query)),
@@ -255,68 +307,189 @@ export function buildForcedDurationResearchQueries(input: {
   const appLike = /\b(?:android|ios|app|apps|apk|play store|f-droid)\b/i.test(
     `${input.instruction} ${input.existingQueries.join(" ")}`
   );
+  const researchedSiteKeys = new Set(
+    input.researchedSites
+      .map((site) => site.replace(/^www\./i, "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const genericFocuses = appLike
+    ? [
+        "latest",
+        "best apps",
+        "user reviews",
+        "complaints",
+        "feature requests",
+        "alternatives",
+        "comparison",
+        "expert reviews",
+        "real user opinions",
+        "community discussion",
+        "forum discussion",
+        "known issues",
+        "recent updates",
+        "privacy",
+        "open source",
+        "no ads",
+        "no subscription",
+        "local files",
+        "edit text",
+        "annotation",
+        "fill sign",
+        "ocr",
+        "permissions",
+        "performance"
+      ]
+    : [
+        "latest",
+        "user reviews",
+        "complaints",
+        "feature requests",
+        "alternatives",
+        "comparison",
+        "expert reviews",
+        "community discussion",
+        "forum discussion",
+        "documentation",
+        "release notes",
+        "migration",
+        "case study",
+        "known issues",
+        "performance"
+      ];
+  const sourceSurfaces: Array<{
+    label: string;
+    domains: string[];
+    focuses: string[];
+  }> = appLike
+    ? [
+        {
+          label: "play store",
+          domains: ["play.google.com"],
+          focuses: [
+            "reviews",
+            "ratings",
+            "complaints",
+            "permissions",
+            "recent updates",
+            "subscription issues",
+            "edit text",
+            "annotation"
+          ]
+        },
+        {
+          label: "reddit",
+          domains: ["reddit.com"],
+          focuses: [
+            "recommendations",
+            "complaints",
+            "alternatives",
+            "reviews",
+            "no ads",
+            "privacy",
+            "local files",
+            "annotation"
+          ]
+        },
+        {
+          label: "github",
+          domains: ["github.com"],
+          focuses: [
+            "issues",
+            "feature requests",
+            "open source",
+            "offline support",
+            "bug reports",
+            "annotation",
+            "edit text",
+            "privacy"
+          ]
+        },
+        {
+          label: "f-droid",
+          domains: ["f-droid.org"],
+          focuses: ["open source", "privacy", "alternatives", "no ads", "local files", "annotation", "ocr"]
+        },
+        {
+          label: "alternativeto",
+          domains: ["alternativeto.net"],
+          focuses: ["alternatives", "comparison", "similar apps", "top alternatives", "privacy"]
+        },
+        {
+          label: "xda",
+          domains: ["xda-developers.com", "forum.xda-developers.com"],
+          focuses: ["discussion", "recommendations", "issues", "offline use", "local files", "no ads"]
+        },
+        {
+          label: "android police",
+          domains: ["androidpolice.com"],
+          focuses: ["review", "best apps", "alternatives", "privacy"]
+        },
+        {
+          label: "forum",
+          domains: [],
+          focuses: [
+            "discussion",
+            "complaints",
+            "recommendations",
+            "feature requests",
+            "offline use",
+            "local files",
+            "annotation"
+          ]
+        }
+      ]
+    : [
+        {
+          label: "github",
+          domains: ["github.com"],
+          focuses: ["issues", "release notes", "migration", "examples", "case study"]
+        },
+        {
+          label: "reddit",
+          domains: ["reddit.com"],
+          focuses: ["discussion", "complaints", "recommendations", "alternatives"]
+        },
+        {
+          label: "stack overflow",
+          domains: ["stackoverflow.com", "stackexchange.com"],
+          focuses: ["issues", "examples", "migration", "best practices"]
+        },
+        {
+          label: "forum",
+          domains: [],
+          focuses: ["discussion", "complaints", "troubleshooting", "feature requests"]
+        },
+        {
+          label: "documentation",
+          domains: [],
+          focuses: ["latest", "release notes", "migration", "examples"]
+        }
+      ];
+  const orderedSurfaces = [...sourceSurfaces].sort((left, right) => {
+    const leftCovered = left.domains.some((domain) => researchedSiteKeys.has(domain));
+    const rightCovered = right.domains.some((domain) => researchedSiteKeys.has(domain));
+    return Number(leftCovered) - Number(rightCovered);
+  });
   const templates = uniqueQueryList(
     [
-      `${topic} ${year}`,
       `${topic} latest`,
-      `${topic} user reviews ${year}`,
-      `${topic} complaints ${year}`,
-      `${topic} feature requests ${year}`,
-      `${topic} alternatives ${year}`,
-      `${topic} comparison ${year}`,
-      `${topic} underrated ${year}`,
-      `${topic} hidden gems ${year}`,
-      `${topic} expert reviews ${year}`,
-      `${topic} buyer guide ${year}`,
-      `${topic} community latest`,
-      `${topic} forum latest`,
-      `site:reddit.com ${topic} latest`,
-      `site:github.com ${topic}`,
-      `site:stackexchange.com ${topic}`,
-      `site:xda-developers.com ${topic}`,
-      `site:androidpolice.com ${topic}`,
-      ...(appLike
-        ? [
-            `site:play.google.com ${topic}`,
-            `site:f-droid.org ${topic}`,
-            `site:alternativeto.net ${topic}`,
-            `site:apkpure.com ${topic}`,
-            `site:apkcombo.com ${topic}`,
-            `${topic} offline ${year}`,
-            `${topic} no subscription ${year}`,
-            `${topic} open source ${year}`,
-            `${topic} edit text ${year}`,
-            `${topic} annotation ${year}`,
-            `${topic} fill and sign ${year}`,
-            `${topic} markup ${year}`
-          ]
-        : [
-            `${topic} documentation latest`,
-            `${topic} release notes ${year}`,
-            `${topic} migration ${year}`,
-            `${topic} benchmark ${year}`,
-            `${topic} case study ${year}`
-          ])
+      ...genericFocuses.map((focus) =>
+        focus === "latest" ? `${topic} latest` : `${topic} ${focus} ${year}`
+      ),
+      ...orderedSurfaces.flatMap((surface) =>
+        surface.focuses.map((focus) => `${topic} ${surface.label} ${focus} ${year}`)
+      )
     ],
     160
   );
-  const candidates: string[] = [];
 
-  for (const template of templates) {
-    for (const exclusions of exclusionBatches) {
-      const exclusionClause = exclusions.map((site) => `-site:${site}`).join(" ");
-      const candidate = normalizeResearchQueryForRecency(
-        exclusionClause ? `${template} ${exclusionClause}` : template,
-        input.instruction,
-        year
-      );
-      if (!existingQueryKeys.has(candidate.toLowerCase())) {
-        candidates.push(candidate);
-      }
-    }
-  }
-
-  return uniqueQueryList(candidates, input.maxQueries);
+  return uniqueQueryList(
+    templates
+      .map((template) => simplifyDurationResearchQuery(template, input.instruction, year))
+      .filter((query) => !existingQueryKeys.has(query.toLowerCase()))
+      .filter((query) => !isLowSignalDurationResearchQuery(query)),
+    input.maxQueries
+  );
 }
 
 function pageContentLength(page: AgentPageDigest): number {
@@ -966,20 +1139,23 @@ export function computeExecutionEstimateMinutes(
   maxResultsPerQuery: number,
   researchDurationMinutes?: number | null
 ): number {
-  const queries = plan.researchQueries.length;
-  const researchMs = queries * computeEstimatedResearchMsPerQuery(maxResultsPerQuery);
   const draftingMs =
     (plan.steps.some((step) => step.kind === "draft_post") ? 30_000 : 0) +
     (plan.steps.some((step) => step.kind === "draft_comments") ? 20_000 : 0) +
     15_000;
-  const estimatedResearchMinutes = Math.max(1, Math.round(researchMs / 60_000));
   const draftingMinutes = Math.max(1, Math.round(draftingMs / 60_000));
-  const totalMinutes =
+  const researchMinutes =
     typeof researchDurationMinutes === "number" && Number.isFinite(researchDurationMinutes)
-      ? Math.max(estimatedResearchMinutes, researchDurationMinutes) + draftingMinutes
-      : estimatedResearchMinutes + draftingMinutes;
+      ? Math.max(1, Math.round(researchDurationMinutes))
+      : Math.max(
+          1,
+          Math.round(
+            (plan.researchQueries.length * computeEstimatedResearchMsPerQuery(maxResultsPerQuery)) /
+              60_000
+          )
+        );
 
-  return Math.max(1, totalMinutes);
+  return Math.max(1, researchMinutes + draftingMinutes);
 }
 
 export function countCapturedResearchSources(research: AgentResearchResult[]): number {

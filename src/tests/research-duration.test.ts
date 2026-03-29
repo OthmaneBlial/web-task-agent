@@ -70,7 +70,7 @@ function buildSearchResult(input: {
   };
 }
 
-test("research duration keeps expanding queries and filters repeated sites", async () => {
+test("research duration front-loads durable queries and filters repeated sites", async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-research-duration-"));
   const cachePath = path.join(tempDir, "agent-cache.json");
   const reportPath = path.join(tempDir, "artifacts", "report.md");
@@ -99,10 +99,16 @@ test("research duration keeps expanding queries and filters repeated sites", asy
     llmModule.LlmService.prototype.synthesizeAgentEvidence;
   const originalCreateDefaultAgentSearchAdapter =
     searchAdapterModule.createDefaultAgentSearchAdapter;
+  const originalDateNow = Date.now;
 
   let expandCalls = 0;
+  let simulatedNow = originalDateNow();
 
   cdpModule.ensureDebuggerReady = async () => {};
+  Date.now = () => {
+    simulatedNow += 20_000;
+    return simulatedNow;
+  };
   llmModule.LlmService.prototype.planAgentJob = async function planStub() {
     return buildPlan(initialQuery);
   };
@@ -196,20 +202,29 @@ test("research duration keeps expanding queries and filters repeated sites", asy
 
     const result = await task.run();
     const savedState = loadTaskState<AgentRunState>(cachePath);
+    const initialQueryWithYear = `${initialQuery} ${currentYear}`;
+    const repeatedSiteEntries = savedState.research.filter(
+      (entry) =>
+        entry.query !== initialQueryWithYear &&
+        entry.results.some((result) => result.site === "covered.example.com")
+    );
 
     assert.equal(result.status, "waiting_review");
     assert.ok(fs.existsSync(reportPath));
-    assert.ok(savedState.plan?.researchQueries.includes(`${initialQuery} ${currentYear}`));
-    assert.ok(savedState.plan?.researchQueries.includes(`${followUpQuery} latest`));
-    const followUpResearch = savedState.research.find(
-      (entry) => entry.query === `${followUpQuery} latest`
-    );
-    assert.ok(followUpResearch);
-    assert.equal(followUpResearch?.results.length, 1);
-    assert.equal(followUpResearch?.results[0]?.site, "novel.example.com");
+    assert.ok(savedState.plan?.researchQueries.includes(initialQueryWithYear));
     assert.ok(
-      savedState.notes.some((note) => note.includes("Expanded research coverage"))
+      savedState.plan?.researchQueries.some(
+        (query) =>
+          query !== initialQueryWithYear &&
+          /\b(?:latest|user reviews|complaints|alternatives|comparison)\b/i.test(query)
+      )
     );
+    assert.ok(
+      savedState.research.some((entry) =>
+        entry.results.some((result) => result.site === "novel.example.com")
+      )
+    );
+    assert.equal(repeatedSiteEntries.length, 0);
   } finally {
     cdpModule.ensureDebuggerReady = originalEnsureDebuggerReady;
     llmModule.LlmService.prototype.planAgentJob = originalPlanAgentJob;
@@ -219,6 +234,7 @@ test("research duration keeps expanding queries and filters repeated sites", asy
       originalSynthesizeAgentEvidence;
     searchAdapterModule.createDefaultAgentSearchAdapter =
       originalCreateDefaultAgentSearchAdapter;
+    Date.now = originalDateNow;
     delete require.cache[require.resolve("../tasks/agent-runner")];
     closeSharedJobDatabase(databasePath);
     process.env.ANTHROPIC_API_KEY = previousEnv.apiKey;
@@ -255,10 +271,16 @@ test("research duration falls back to deterministic queries and normalizes stale
     llmModule.LlmService.prototype.synthesizeAgentEvidence;
   const originalCreateDefaultAgentSearchAdapter =
     searchAdapterModule.createDefaultAgentSearchAdapter;
+  const originalDateNow = Date.now;
 
   const searchedQueries: string[] = [];
+  let simulatedNow = originalDateNow();
 
   cdpModule.ensureDebuggerReady = async () => {};
+  Date.now = () => {
+    simulatedNow += 20_000;
+    return simulatedNow;
+  };
   llmModule.LlmService.prototype.planAgentJob = async function planStub() {
     return buildPlan("best offline pdf editor android 2024");
   };
@@ -333,7 +355,7 @@ test("research duration falls back to deterministic queries and normalizes stale
     );
     assert.ok(savedState.plan?.researchQueries.some((query) => query.includes(String(currentYear))));
     assert.ok(
-      savedState.notes.some((note) => note.includes("deterministic duration fallback queries"))
+      searchedQueries.some((query) => query !== `best offline pdf editor android ${currentYear}`)
     );
   } finally {
     cdpModule.ensureDebuggerReady = originalEnsureDebuggerReady;
@@ -344,6 +366,7 @@ test("research duration falls back to deterministic queries and normalizes stale
       originalSynthesizeAgentEvidence;
     searchAdapterModule.createDefaultAgentSearchAdapter =
       originalCreateDefaultAgentSearchAdapter;
+    Date.now = originalDateNow;
     delete require.cache[require.resolve("../tasks/agent-runner")];
     closeSharedJobDatabase(databasePath);
     process.env.ANTHROPIC_API_KEY = previousEnv.apiKey;
