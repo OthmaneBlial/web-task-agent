@@ -73,3 +73,57 @@ test("performance budget reports highlight slow search and fetch stages", () => 
   assert.ok(lines.some((line) => line.includes("- Fetch: 10m / 8m (over)")));
   assert.ok(lines.some((line) => line.includes("Warnings: search, fetch exceed the soft budget")));
 });
+
+test("performance budget reports stay quiet when everything is within budget", () => {
+  const lines = formatStoredJobPerformanceBudgetLines({
+    job: {
+      jobId: "job_2",
+      taskType: "agent",
+      workflowName: null,
+      title: "Budget test",
+      instruction: "Inspect me",
+      status: "running",
+      cachePath: null,
+      reportPath: null,
+      artifactDir: null,
+      errorMessage: null,
+      startedAt: "2026-04-22T12:00:00.000Z",
+      updatedAt: "2026-04-22T12:01:00.000Z",
+      completedAt: null,
+      controlAction: null,
+      controlRequestedAt: null,
+      input: {},
+      budget: {},
+      output: {}
+    },
+    steps: [
+      {
+        stepKey: "search",
+        position: 1,
+        title: "Search sources",
+        kind: "search",
+        status: "completed",
+        attemptCount: 1,
+        startedAt: "2026-04-22T12:00:00.000Z",
+        updatedAt: "2026-04-22T12:01:00.000Z",
+        completedAt: "2026-04-22T12:01:00.000Z",
+        durationMs: 30000,
+        errorMessage: null,
+        input: {},
+        output: {}
+      }
+    ],
+    artifacts: [],
+    events: [],
+    runtimeSummary: "running agent job | 1 steps | 0 artifacts | 0 events | 0 nodes, 0 edges",
+    evidenceGraph: {
+      nodes: 0,
+      edges: 0,
+      danglingEdges: 0,
+      orphanNodes: 0
+    }
+  });
+
+  assert.ok(lines.some((line) => line.includes("- Search: 30s / 2m (within)")));
+  assert.ok(lines.includes("Warnings: none"));
+});
