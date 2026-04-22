@@ -288,6 +288,8 @@ export interface AgentResearchSummary {
   contentAngles: string[];
   keyFindingDetails: AgentResearchReferenceItem[];
   contentAngleDetails: AgentResearchReferenceItem[];
+  uncertainties?: string[];
+  recommendations?: string[];
   referencedEvidence: AgentReferencedEvidence[];
 }
 

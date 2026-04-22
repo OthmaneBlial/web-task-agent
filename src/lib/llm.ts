@@ -55,6 +55,8 @@ interface AgentEvidenceSummaryResponse {
     text?: string;
     evidenceIds?: string[];
   }>;
+  uncertainties?: string[];
+  recommendations?: string[];
 }
 
 interface AgentPostDraftResponse {
@@ -1155,20 +1157,21 @@ export class LlmService {
       "Prefer repeated patterns, concrete findings, and useful angles grounded in the extracted evidence.",
       "Treat persisted queries, sources, document snapshots, and extraction rows as the only source of truth.",
       "Use clustered repeated evidence as the primary signal when multiple sources support the same point.",
-      "If there are meaningful contradictions in the evidence, mention them clearly instead of flattening them away.",
+      "If there are meaningful contradictions or unresolved questions in the evidence, mention them clearly instead of flattening them away.",
       "You must reference evidence ids from the bundle for every finding and angle."
     ].join(" ");
 
     const prompt = [
       `Instruction: ${input.instruction}`,
       "Return strict JSON with this exact schema:",
-      '{"executiveSummary":"...","keyFindings":[{"text":"...","evidenceIds":["ext_x","src_y"]}],"contentAngles":[{"text":"...","evidenceIds":["ext_x"]}]}',
+      '{"executiveSummary":"...","keyFindings":[{"text":"...","evidenceIds":["ext_x","src_y"]}],"contentAngles":[{"text":"...","evidenceIds":["ext_x"]}],"uncertainties":["..."],"recommendations":["..."]}',
       "Rules:",
       "- Use only the supplied persisted evidence bundle.",
       "- Prefer findings backed by repeated complaints, requests, themes, claims, or multiple sources.",
       "- Prefer clusters with higher trendScore and higher sourceCount when choosing the most important repeated findings.",
       "- Treat trendScore as the signal for fresh, cross-source momentum.",
-      "- When contradictions are present, reflect that disagreement in the summary or findings where relevant.",
+      "- When contradictions are present, capture them in uncertainties and reflect the disagreement in the summary or findings where relevant.",
+      "- Recommendations should be short, practical next steps inferred from the strongest evidence clusters.",
       "- Every finding and every content angle must include 1 to 3 evidence ids from the bundle.",
       "- Prefer extraction ids when possible. Use source ids when the source itself is the best evidence unit.",
       "- Do not invent ids. Use only ids that exist in the supplied evidence bundle.",
@@ -1182,7 +1185,7 @@ export class LlmService {
     try {
       const payload = await this.requestJson<AgentEvidenceSummaryResponse>({
         operation: "agent_evidence_summary",
-        promptVersion: "agent_evidence_summary.v2",
+        promptVersion: "agent_evidence_summary.v3",
         system,
         prompt,
         maxTokens: 3_000
@@ -1218,6 +1221,14 @@ export class LlmService {
 
       const keyFindingDetails = normalizeItems(payload.keyFindings).slice(0, 6);
       const contentAngleDetails = normalizeItems(payload.contentAngles).slice(0, 6);
+      const uncertainties = uniqueStrings(
+        Array.isArray(payload.uncertainties) ? payload.uncertainties.map((item) => String(item).trim()) : [],
+        5
+      );
+      const recommendations = uniqueStrings(
+        Array.isArray(payload.recommendations) ? payload.recommendations.map((item) => String(item).trim()) : [],
+        5
+      );
       const referencedIds = uniqueEvidenceIds(
         [...keyFindingDetails, ...contentAngleDetails].flatMap((item) => item.evidenceIds),
         allowedIds,
@@ -1231,6 +1242,8 @@ export class LlmService {
         contentAngles: uniqueStrings(contentAngleDetails.map((item) => item.text), 6),
         keyFindingDetails,
         contentAngleDetails,
+        uncertainties,
+        recommendations,
         referencedEvidence: referencedIds
           .map((id) => referenceLookup.get(id))
           .filter((value): value is AgentReferencedEvidence => Boolean(value))

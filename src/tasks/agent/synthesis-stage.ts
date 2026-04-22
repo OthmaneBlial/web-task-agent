@@ -667,21 +667,30 @@ function renderSummaryReferenceCatalog(
 }
 
 function renderUncertaintySection(
-  evidence: AgentEvidenceBundle,
+  summary: AgentResearchSummary,
+  evidence?: AgentEvidenceBundle | null,
   labels?: Map<string, string>
 ): string {
-  if (evidence.contradictions.length === 0) {
+  const explicitUncertainties = summary.uncertainties ?? [];
+  const hasExplicitUncertainties = explicitUncertainties.length > 0;
+  if (!hasExplicitUncertainties && (!evidence || evidence.contradictions.length === 0)) {
     return "";
   }
 
   const lines = ["### Uncertainties", ""];
 
-  for (const contradiction of evidence.contradictions.slice(0, 5)) {
-    lines.push(`- ${contradiction.topic}`);
-    lines.push(`  ${contradiction.reason}`);
-    const refs = labels ? formatEvidenceRefs(contradiction.evidenceIds, labels, 4) : [];
-    if (refs.length > 0) {
-      lines.push(`  Evidence: ${refs.join(", ")}`);
+  for (const item of explicitUncertainties.slice(0, 5)) {
+    lines.push(`- ${item}`);
+  }
+
+  if (evidence) {
+    for (const contradiction of evidence.contradictions.slice(0, 5)) {
+      lines.push(`- ${contradiction.topic}`);
+      lines.push(`  ${contradiction.reason}`);
+      const refs = labels ? formatEvidenceRefs(contradiction.evidenceIds, labels, 4) : [];
+      if (refs.length > 0) {
+        lines.push(`  Evidence: ${refs.join(", ")}`);
+      }
     }
   }
 
@@ -690,17 +699,22 @@ function renderUncertaintySection(
 }
 
 function renderRecommendationSection(summary: AgentResearchSummary, evidence?: AgentEvidenceBundle | null): string {
+  const explicitRecommendations = summary.recommendations ?? [];
   const contentAngleDetails =
     (summary.contentAngleDetails ?? []).length > 0
       ? (summary.contentAngleDetails ?? [])
       : summary.contentAngles.map((text) => ({ text, evidenceIds: [] }));
 
-  if (contentAngleDetails.length === 0) {
+  if (explicitRecommendations.length === 0 && contentAngleDetails.length === 0) {
     return "";
   }
 
   const labels = buildEvidenceLabelMap(summary, evidence);
   const lines = ["### Recommendations", ""];
+
+  for (const recommendation of explicitRecommendations.slice(0, 5)) {
+    lines.push(`- ${recommendation}`);
+  }
 
   for (const angle of contentAngleDetails.slice(0, 5)) {
     lines.push(`- Focus on: ${angle.text}`);
@@ -761,8 +775,8 @@ export function renderResearchSummary(summary: AgentResearchSummary, evidence?: 
     lines.push(recommendationSection, "");
   }
 
-  if (evidence && evidence.contradictions.length > 0) {
-    const uncertaintySection = renderUncertaintySection(evidence, labels);
+  if ((summary.uncertainties ?? []).length > 0 || (evidence && evidence.contradictions.length > 0)) {
+    const uncertaintySection = renderUncertaintySection(summary, evidence, labels);
     if (uncertaintySection) {
       lines.push(uncertaintySection, "");
     }

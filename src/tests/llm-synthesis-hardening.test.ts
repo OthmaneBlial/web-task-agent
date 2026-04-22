@@ -94,7 +94,10 @@ function buildEvidenceBundle(): AgentEvidenceBundle {
   };
 }
 
-function createLlmServiceWithResponse(responseText: string) {
+function createLlmServiceWithResponse(
+  responseText: string,
+  capture?: (input: { model: string; max_tokens: number; system: string; messages: Array<{ role: string; content: string }> }) => void
+) {
   const previousEnv = {
     apiKey: process.env.ANTHROPIC_API_KEY,
     baseUrl: process.env.ANTHROPIC_BASE_URL
@@ -107,16 +110,25 @@ function createLlmServiceWithResponse(responseText: string) {
   delete require.cache[llmModulePath];
   const { LlmService } = require("../lib/llm") as typeof import("../lib/llm");
   const service = new LlmService("test-model");
+  const create = (async (input: {
+    model: string;
+    max_tokens: number;
+    system: string;
+    messages: Array<{ role: string; content: string }>;
+  }) => {
+    capture?.(input);
+    return {
+      content: [
+        {
+          type: "text",
+          text: responseText
+        }
+      ]
+    };
+  }) as unknown as () => Promise<unknown>;
   (service as unknown as { anthropic: { messages: { create: () => Promise<unknown> } } }).anthropic = {
     messages: {
-      create: async () => ({
-        content: [
-          {
-            type: "text",
-            text: responseText
-          }
-        ]
-      })
+      create
     }
   };
 
@@ -179,6 +191,33 @@ test("synthesizeAgentEvidence falls back to persisted evidence when JSON parsing
     assert.ok(summary.keyFindings.some((item) => item.includes("AI study schedule generation")));
     assert.ok(summary.contentAngles.some((item) => item.includes("AI study schedule generation")));
     assert.equal(summary.referencedEvidence[0]?.id, "ext_1");
+  } finally {
+    restoreEnv();
+  }
+});
+
+test("synthesizeAgentEvidence prompt requests explicit uncertainties and recommendations", async () => {
+  let capturedPrompt: string | null = null;
+  let capturedSystem: string | null = null;
+
+  const { service, restoreEnv } = createLlmServiceWithResponse(
+    `{"executiveSummary":"ok","keyFindings":[],"contentAngles":[],"uncertainties":[],"recommendations":[]}`,
+    (input) => {
+      capturedPrompt = input.messages[0]?.content ?? null;
+      capturedSystem = input.system;
+    }
+  );
+
+  try {
+    await service.synthesizeAgentEvidence({
+      instruction: "Research Android app opportunities around AI study planning.",
+      evidence: buildEvidenceBundle()
+    });
+
+    assert.match(capturedSystem ?? "", /unresolved questions/i);
+    assert.match(capturedPrompt ?? "", /"uncertainties"/);
+    assert.match(capturedPrompt ?? "", /"recommendations"/);
+    assert.match(capturedPrompt ?? "", /Recommendations should be short, practical next steps/);
   } finally {
     restoreEnv();
   }
