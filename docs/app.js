@@ -35,6 +35,13 @@ const DOC_PAGES = [
     path: "content/cli-reference.md"
   },
   {
+    slug: "test-suite-map",
+    section: "Reference",
+    title: "Test Suite Map",
+    summary: "Product surfaces and the tests that cover them.",
+    path: "content/test-suite-map.md"
+  },
+  {
     slug: "project-charter",
     section: "Reference",
     title: "Project Charter",

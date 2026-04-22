@@ -31,6 +31,8 @@ Useful health signals:
 - artifact inspection should not require database spelunking
 - docs drift should be rare and easy to spot
 
+For a more detailed product-surface view of the tests, read the test suite map page in the docs site.
+
 ## Pre-Merge Checklist
 
 - run the relevant test subset or full build for the touched area
