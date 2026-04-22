@@ -767,6 +767,40 @@ function renderRecommendationSection(summary: AgentResearchSummary, evidence?: A
   return lines.join("\n").trim();
 }
 
+function renderClaimChecklistSection(
+  evidence: AgentEvidenceBundle,
+  labels?: Map<string, string>
+): string {
+  const claimClusters = evidence.clusters
+    .filter((cluster) => cluster.kind === "claim")
+    .slice(0, 5);
+
+  if (claimClusters.length === 0 && evidence.contradictions.length === 0) {
+    return "";
+  }
+
+  const lines = ["### Claim Checklist", ""];
+
+  for (const cluster of claimClusters) {
+    lines.push(`- [ ] Verify claim: ${cluster.label}`);
+    const refs = labels ? formatEvidenceRefs(cluster.evidenceIds, labels, 4) : [];
+    if (refs.length > 0) {
+      lines.push(`  Evidence: ${refs.join(", ")}`);
+    }
+  }
+
+  for (const contradiction of evidence.contradictions.slice(0, 3)) {
+    lines.push(`- [ ] Resolve disagreement: ${contradiction.topic}`);
+    const refs = labels ? formatEvidenceRefs(contradiction.evidenceIds, labels, 4) : [];
+    if (refs.length > 0) {
+      lines.push(`  Evidence: ${refs.join(", ")}`);
+    }
+  }
+
+  lines.push("");
+  return lines.join("\n").trim();
+}
+
 export function renderResearchSummary(summary: AgentResearchSummary, evidence?: AgentEvidenceBundle | null): string {
   const labels = buildEvidenceLabelMap(summary, evidence);
   const lines = [
@@ -795,6 +829,13 @@ export function renderResearchSummary(summary: AgentResearchSummary, evidence?: 
       }
     }
     lines.push("");
+  }
+
+  if (evidence && (evidence.clusters.some((cluster) => cluster.kind === "claim") || evidence.contradictions.length > 0)) {
+    const claimChecklistSection = renderClaimChecklistSection(evidence, labels);
+    if (claimChecklistSection) {
+      lines.push(claimChecklistSection, "");
+    }
   }
 
   if (contentAngleDetails.length > 0) {
