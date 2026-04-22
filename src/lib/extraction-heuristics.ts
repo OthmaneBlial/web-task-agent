@@ -173,12 +173,72 @@ function titleText(result: AgentSearchResult): string {
   );
 }
 
+interface ExtractionGateDecision {
+  allow: boolean;
+  reason: string;
+  signals: string[];
+}
+
+function evaluateExtractionGate(result: AgentSearchResult): ExtractionGateDecision {
+  const signals: string[] = [];
+
+  if (!result.page) {
+    return {
+      allow: false,
+      reason: "missing page digest",
+      signals: ["page digest unavailable"]
+    };
+  }
+
+  const qualityScore = result.qualityScore ?? 0;
+  if (qualityScore > 0 && qualityScore < 0.5) {
+    return {
+      allow: false,
+      reason: "quality score below extraction threshold",
+      signals: [`quality score ${qualityScore.toFixed(2)} below 0.50`]
+    };
+  }
+
+  const combinedText = buildDigestText(result);
+  const sentenceCount = splitSentences(combinedText).length;
+  if (combinedText.length < 160 || sentenceCount < 2) {
+    return {
+      allow: false,
+      reason: "page body is too thin for extraction",
+      signals: [
+        `content length ${combinedText.length} chars`,
+        `${sentenceCount} readable sentences`
+      ]
+    };
+  }
+
+  const pageHeadingCount = result.page.headings.length;
+  if (pageHeadingCount > 0) {
+    signals.push(`${pageHeadingCount} headings available`);
+  }
+
+  if (qualityScore > 0) {
+    signals.push(`quality score ${qualityScore.toFixed(2)}`);
+  }
+
+  if (result.reviewStatus) {
+    signals.push(`review status ${result.reviewStatus}`);
+  }
+
+  return {
+    allow: true,
+    reason: "page has enough readable content",
+    signals
+  };
+}
+
 function pushEntitiesAndThemes(
   candidates: AgentExtractionCandidate[],
   result: AgentSearchResult,
   methodPrefix: string,
   themeConfidence: number,
-  origin: AgentExtractionOrigin
+  origin: AgentExtractionOrigin,
+  metadata?: Record<string, unknown>
 ): void {
   const titleValue = titleText(result);
 
@@ -191,6 +251,7 @@ function pushEntitiesAndThemes(
       method: `${methodPrefix}_entity`,
       origin,
       metadata: {
+        ...metadata,
         source: "title"
       }
     });
@@ -205,6 +266,7 @@ function pushEntitiesAndThemes(
       method: `${methodPrefix}_theme`,
       origin,
       metadata: {
+        ...metadata,
         source: "headings"
       }
     });
@@ -218,7 +280,8 @@ function pushSentenceCandidates(
   terms: string[],
   confidence: number,
   method: string,
-  origin: AgentExtractionOrigin
+  origin: AgentExtractionOrigin,
+  metadata?: Record<string, unknown>
 ): void {
   for (const sentence of extractSentencesByTerms(sentences, terms)) {
     candidates.push({
@@ -227,35 +290,14 @@ function pushSentenceCandidates(
       evidenceText: sentence,
       confidence,
       method,
-      origin
+      origin,
+      metadata
     });
   }
 }
 
 export function shouldExtractFromResult(result: AgentSearchResult): boolean {
-  if (!result.page) {
-    return false;
-  }
-
-  if (result.reviewStatus && result.reviewStatus !== "read") {
-    return false;
-  }
-
-  if ((result.qualityScore ?? 0) > 0 && (result.qualityScore ?? 0) < 0.45) {
-    return false;
-  }
-
-  const skipReason = (result.skipReason ?? "").toLowerCase();
-  if (
-    skipReason.includes("thin") ||
-    skipReason.includes("low-quality") ||
-    skipReason.includes("index-like") ||
-    skipReason.includes("domain policy")
-  ) {
-    return false;
-  }
-
-  return true;
+  return evaluateExtractionGate(result).allow;
 }
 
 export function buildHeuristicExtractionCandidates(
@@ -268,9 +310,18 @@ export function buildHeuristicExtractionCandidates(
   const combinedText = buildDigestText(result);
   const sentences = sentencePool(result);
   const claimSentences = sentences.length > 0 ? sentences : splitSentences(combinedText);
+  const gate = evaluateExtractionGate(result);
   const candidates: AgentExtractionCandidate[] = [];
+  const gateMetadata = {
+    extractionGate: gate.reason,
+    extractionSignals: gate.signals
+  };
 
-  pushEntitiesAndThemes(candidates, result, "heuristic_heading", 0.68, "heuristic");
+  if (!gate.allow) {
+    return [];
+  }
+
+  pushEntitiesAndThemes(candidates, result, "heuristic_heading", 0.68, "heuristic", gateMetadata);
   pushSentenceCandidates(
     candidates,
     "complaint",
@@ -293,7 +344,8 @@ export function buildHeuristicExtractionCandidates(
     ],
     0.77,
     "heuristic_negative_sentence",
-    "heuristic"
+    "heuristic",
+    gateMetadata
   );
   pushSentenceCandidates(
     candidates,
@@ -314,7 +366,8 @@ export function buildHeuristicExtractionCandidates(
     ],
     0.79,
     "heuristic_request_sentence",
-    "heuristic"
+    "heuristic",
+    gateMetadata
   );
   pushSentenceCandidates(
     candidates,
@@ -323,7 +376,8 @@ export function buildHeuristicExtractionCandidates(
     [" is ", " are ", " can ", " helps ", " lets ", " uses ", " supports ", " enables ", " offers "],
     0.66,
     "heuristic_claim_sentence",
-    "heuristic"
+    "heuristic",
+    gateMetadata
   );
 
   return selectUniqueExtractions(candidates);
@@ -338,9 +392,18 @@ export function buildDocumentationExtractionCandidates(
 
   const sentences = sentencePool(result);
   const claimSentences = sentences.length > 0 ? sentences : splitSentences(buildDigestText(result));
+  const gate = evaluateExtractionGate(result);
   const candidates: AgentExtractionCandidate[] = [];
+  const gateMetadata = {
+    extractionGate: gate.reason,
+    extractionSignals: gate.signals
+  };
 
-  pushEntitiesAndThemes(candidates, result, "docs", 0.74, "best_effort");
+  if (!gate.allow) {
+    return [];
+  }
+
+  pushEntitiesAndThemes(candidates, result, "docs", 0.74, "best_effort", gateMetadata);
   pushSentenceCandidates(
     candidates,
     "claim",
@@ -362,7 +425,8 @@ export function buildDocumentationExtractionCandidates(
     ],
     0.78,
     "docs_capability_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
   pushSentenceCandidates(
     candidates,
@@ -380,7 +444,8 @@ export function buildDocumentationExtractionCandidates(
     ],
     0.74,
     "docs_gap_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
   pushSentenceCandidates(
     candidates,
@@ -389,7 +454,8 @@ export function buildDocumentationExtractionCandidates(
     ["should", "could", "needs", "missing", "roadmap", "would help"],
     0.76,
     "docs_request_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
 
   return selectUniqueExtractions(candidates);
@@ -403,9 +469,18 @@ export function buildForumExtractionCandidates(
   }
 
   const sentences = sentencePool(result);
+  const gate = evaluateExtractionGate(result);
   const candidates: AgentExtractionCandidate[] = [];
+  const gateMetadata = {
+    extractionGate: gate.reason,
+    extractionSignals: gate.signals
+  };
 
-  pushEntitiesAndThemes(candidates, result, "forum", 0.7, "best_effort");
+  if (!gate.allow) {
+    return [];
+  }
+
+  pushEntitiesAndThemes(candidates, result, "forum", 0.7, "best_effort", gateMetadata);
   pushSentenceCandidates(
     candidates,
     "complaint",
@@ -426,7 +501,8 @@ export function buildForumExtractionCandidates(
     ],
     0.84,
     "forum_pain_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
   pushSentenceCandidates(
     candidates,
@@ -444,7 +520,8 @@ export function buildForumExtractionCandidates(
     ],
     0.86,
     "forum_request_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
   pushSentenceCandidates(
     candidates,
@@ -453,7 +530,8 @@ export function buildForumExtractionCandidates(
     ["we use", "i use", "works", "working", "helps", "useful", "switched", "adopted"],
     0.71,
     "forum_usage_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
 
   return selectUniqueExtractions(candidates);
@@ -467,9 +545,18 @@ export function buildReviewExtractionCandidates(
   }
 
   const sentences = sentencePool(result);
+  const gate = evaluateExtractionGate(result);
   const candidates: AgentExtractionCandidate[] = [];
+  const gateMetadata = {
+    extractionGate: gate.reason,
+    extractionSignals: gate.signals
+  };
 
-  pushEntitiesAndThemes(candidates, result, "review", 0.69, "best_effort");
+  if (!gate.allow) {
+    return [];
+  }
+
+  pushEntitiesAndThemes(candidates, result, "review", 0.69, "best_effort", gateMetadata);
   pushSentenceCandidates(
     candidates,
     "complaint",
@@ -488,7 +575,8 @@ export function buildReviewExtractionCandidates(
     ],
     0.83,
     "review_pain_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
   pushSentenceCandidates(
     candidates,
@@ -497,7 +585,8 @@ export function buildReviewExtractionCandidates(
     ["wish", "should", "could", "needs", "want", "missing", "would like"],
     0.82,
     "review_request_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
   pushSentenceCandidates(
     candidates,
@@ -506,7 +595,8 @@ export function buildReviewExtractionCandidates(
     ["helps", "easy to", "useful", "best for", "good for", "works for", "saves"],
     0.74,
     "review_value_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
 
   return selectUniqueExtractions(candidates);
@@ -521,9 +611,18 @@ export function buildGeneralExtractionCandidates(
 
   const sentences = sentencePool(result);
   const claimSentences = sentences.length > 0 ? sentences : splitSentences(buildDigestText(result));
+  const gate = evaluateExtractionGate(result);
   const candidates: AgentExtractionCandidate[] = [];
+  const gateMetadata = {
+    extractionGate: gate.reason,
+    extractionSignals: gate.signals
+  };
 
-  pushEntitiesAndThemes(candidates, result, "general", 0.66, "best_effort");
+  if (!gate.allow) {
+    return [];
+  }
+
+  pushEntitiesAndThemes(candidates, result, "general", 0.66, "best_effort", gateMetadata);
   pushSentenceCandidates(
     candidates,
     "claim",
@@ -541,7 +640,8 @@ export function buildGeneralExtractionCandidates(
     ],
     0.7,
     "general_claim_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
   pushSentenceCandidates(
     candidates,
@@ -559,7 +659,8 @@ export function buildGeneralExtractionCandidates(
     ],
     0.72,
     "general_pain_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
   pushSentenceCandidates(
     candidates,
@@ -568,7 +669,8 @@ export function buildGeneralExtractionCandidates(
     ["should", "could", "wish", "want", "need", "would help", "would like"],
     0.73,
     "general_request_sentence",
-    "best_effort"
+    "best_effort",
+    gateMetadata
   );
 
   return selectUniqueExtractions(candidates);

@@ -122,9 +122,13 @@ test("job store maintenance tracks schema version, canonical urls, and artifact 
     const extractionMetadata = JSON.parse(String(extractionRow?.metadata_json ?? "{}")) as {
       extractorId?: string;
       extractorOrigin?: string;
+      extractionGate?: string;
+      extractionSignals?: string[];
     };
     assert.equal(extractionMetadata.extractorId, "test_extractor");
     assert.equal(extractionMetadata.extractorOrigin, "best_effort");
+    assert.equal(extractionMetadata.extractionGate, "page has enough readable content");
+    assert.ok((extractionMetadata.extractionSignals ?? []).length > 0);
 
     assert.throws(() => store.setStatus("running"));
     assert.equal(getJobStoreSchemaVersion({ databasePath }), 2);
