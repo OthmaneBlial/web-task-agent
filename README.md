@@ -67,8 +67,16 @@ npm run start -- server run --port 4317
 1. Copy the environment file and fill in your API key.
 2. Install dependencies.
 3. Start Lightpanda.
-4. Run either a direct `agent run` job or a `workflow run` template.
-5. Start the local dashboard if you want to inspect jobs and queue state in the browser.
+4. Run `workflow run article-research` first if you want a structured, low-friction first pass.
+5. Use `agent run` when you want a free-form instruction without a template.
+6. Start the local dashboard if you want to inspect jobs and queue state in the browser.
+
+The fastest productive path for a new setup is usually:
+
+```bash
+npm run start -- workflow run article-research \
+  --topic "browser automation with Lightpanda and CDP"
+```
 
 `--research-duration` accepts values like `10m`, `30 minutes`, `1h`, or `2 hours`. When set, the agent keeps expanding into new queries and filters out already-covered sites until that research budget is used.
 

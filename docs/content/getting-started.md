@@ -50,6 +50,17 @@ npm run start -- workflow run article-research \
 
 If you are learning the system, run the workflow template first. It exercises the same durable pipeline but gives you a more structured output package.
 
+## 4b. Pick The Easiest First Run
+
+If you want the least surprising first experience, use:
+
+```bash
+npm run start -- workflow run article-research \
+  --topic "browser automation with Lightpanda and CDP"
+```
+
+Use `agent run` when you already know the instruction you want and do not need the template structure.
+
 ## 5. Inspect Outputs
 
 After a run, expect state in these places:
