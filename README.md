@@ -75,6 +75,7 @@ WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 - [CLI Reference](docs/content/cli-reference.md)
 - [Queue, Worker, And Controls](docs/content/queue-worker-controls.md)
 - [Project Layout](docs/content/project-layout.md)
+- [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
 - [Testing And Hardening](docs/content/testing-and-hardening.md)
 
