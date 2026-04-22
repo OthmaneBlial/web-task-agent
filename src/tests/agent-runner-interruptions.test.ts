@@ -306,6 +306,17 @@ test("agent runner pauses cleanly during research checkpoints", async () => {
     assert.ok(events.some((event) => event.eventType === "control_requested"));
     assert.ok(events.some((event) => event.eventType === "control_applied"));
     assert.equal(fs.existsSync(reportPath), false);
+
+    const resumedResult = await createRunner(cachePath, reportPath).run();
+    assert.equal(resumedResult.status, "completed");
+    assert.equal(fs.existsSync(reportPath), true);
+
+    const resumedDetail = getStoredJobDetail({
+      databasePath,
+      jobId: state.runId
+    });
+    assert.ok(resumedDetail);
+    assert.equal(resumedDetail.job.status, "completed");
   } finally {
     restoreControlTrigger();
     restoreStubs();
