@@ -273,6 +273,21 @@ function renderWorkflowPackageReadme(
     `- Prompt traces: ${relativeArtifactPath(state.artifactDir, outputPaths.promptTracePath)}`
   ];
 
+  const readingOrder = [
+    "- Start with the workflow brief for a decision-ready summary.",
+    "- Open the final report for citations, contradictions, and supporting context.",
+    "- Use the research summary when you need the shortest evidence-backed synopsis.",
+    "- Inspect the plan and runtime manifest when you want to understand how the run was assembled.",
+    "- Review the raw research snapshots only if you need to extend or audit the run."
+  ];
+
+  const reuseTips = [
+    "- Copy the workflow brief into a writing doc or handoff note to reuse the strongest findings immediately.",
+    "- Lift the final report's claim checklist into a follow-up validation task or editorial checklist.",
+    "- Reuse the evidence counts and example reference when comparing this run with future runs.",
+    "- Use the prompt traces only when you want to tune the workflow or investigate a weak output."
+  ];
+
   return [
     `# ${template.handoffTitle}`,
     "",
@@ -284,6 +299,10 @@ function renderWorkflowPackageReadme(
     "## Package Overview",
     "",
     state.researchSummary?.executiveSummary || "Workflow package generated.",
+    "",
+    "## Quick Start",
+    "",
+    ...readingOrder,
     "",
     "## Included Files",
     "",
@@ -301,11 +320,9 @@ function renderWorkflowPackageReadme(
     "",
     `- Repo example for this workflow: ${template.examplePath}`,
     "",
-    "## Operator Flow",
+    "## Reuse Tips",
     "",
-    "- Read the workflow brief first for the short decision-ready version.",
-    "- Open the final report when you need evidence detail and source references.",
-    "- Use the raw research snapshots only when you need to audit or extend the run."
+    ...reuseTips
   ].join("\n").trim();
 }
 

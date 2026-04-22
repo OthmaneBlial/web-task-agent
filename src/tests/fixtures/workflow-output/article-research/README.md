@@ -9,6 +9,14 @@ Status: waiting_review
 
 Research shows repeated demand for AI summary automation in long-running workflows.
 
+## Quick Start
+
+- Start with the workflow brief for a decision-ready summary.
+- Open the final report for citations, contradictions, and supporting context.
+- Use the research summary when you need the shortest evidence-backed synopsis.
+- Inspect the plan and runtime manifest when you want to understand how the run was assembled.
+- Review the raw research snapshots only if you need to extend or audit the run.
+
 ## Included Files
 
 - Final report: report.md
@@ -32,8 +40,9 @@ Research shows repeated demand for AI summary automation in long-running workflo
 
 - Repo example for this workflow: examples/workflows/article-research.md
 
-## Operator Flow
+## Reuse Tips
 
-- Read the workflow brief first for the short decision-ready version.
-- Open the final report when you need evidence detail and source references.
-- Use the raw research snapshots only when you need to audit or extend the run.
+- Copy the workflow brief into a writing doc or handoff note to reuse the strongest findings immediately.
+- Lift the final report's claim checklist into a follow-up validation task or editorial checklist.
+- Reuse the evidence counts and example reference when comparing this run with future runs.
+- Use the prompt traces only when you want to tune the workflow or investigate a weak output.
