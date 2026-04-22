@@ -23,6 +23,10 @@ interface ManagementServerOptions {
 function sendJson(res: ServerResponse, statusCode: number, body: unknown): void {
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Cache-Control": "no-store"
   });
   res.end(JSON.stringify(body, null, 2));
@@ -41,6 +45,12 @@ function sendApiError(
 function sendHtml(res: ServerResponse, html: string): void {
   res.writeHead(200, {
     "Content-Type": "text/html; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Content-Security-Policy":
+      "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     "Cache-Control": "no-store"
   });
   res.end(html);
@@ -49,9 +59,29 @@ function sendHtml(res: ServerResponse, html: string): void {
 function sendSseHeaders(res: ServerResponse): void {
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
     "Cache-Control": "no-store",
     Connection: "keep-alive"
   });
+}
+
+function isSameOriginRequest(req: IncomingMessage): boolean {
+  const host = req.headers.host;
+  if (!host) {
+    return true;
+  }
+
+  const rawOrigin = req.headers.origin ?? req.headers.referer;
+  if (!rawOrigin) {
+    return true;
+  }
+
+  try {
+    const origin = new URL(String(rawOrigin));
+    return origin.host === host;
+  } catch {
+    return false;
+  }
 }
 
 function sendSseEvent(res: ServerResponse, event: string, payload: unknown): void {
@@ -867,6 +897,11 @@ export function createManagementServer(options?: ManagementServerOptions): http.
     try {
       const method = req.method ?? "GET";
       const parsedUrl = new URL(req.url ?? "/", "http://127.0.0.1");
+
+      if (method === "POST" && !isSameOriginRequest(req)) {
+        sendApiError(res, 403, "forbidden_origin", "Cross-origin control requests are not allowed");
+        return;
+      }
 
       if (method === "GET" && parsedUrl.pathname === "/") {
         sendHtml(res, dashboardHtml());
