@@ -38,6 +38,10 @@ function normalizeExtractionValue(value: string): string {
   return normalizeText(value).toLowerCase();
 }
 
+function normalizeDuplicateFingerprint(value: string): string {
+  return normalizeExtractionValue(value).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 const BOILERPLATE_THEME_VALUES = new Set([
   "introduction",
   "conclusion",
@@ -86,6 +90,7 @@ export function selectUniqueExtractions(
   limitPerKind: number = 8
 ): AgentExtractionCandidate[] {
   const seen = new Set<string>();
+  const seenPrefixes = new Set<string>();
   const counts = new Map<AgentExtractionCandidate["kind"], number>();
   const selected: AgentExtractionCandidate[] = [];
 
@@ -109,7 +114,19 @@ export function selectUniqueExtractions(
       continue;
     }
 
+    const fingerprint = normalizeDuplicateFingerprint(candidate.value)
+      .split(" ")
+      .slice(0, 8)
+      .join(" ");
+    const prefixKey = `${candidate.kind}:${fingerprint}`;
+    if (fingerprint && seenPrefixes.has(prefixKey)) {
+      continue;
+    }
+
     seen.add(key);
+    if (fingerprint) {
+      seenPrefixes.add(prefixKey);
+    }
     counts.set(candidate.kind, count + 1);
     selected.push(candidate);
   }
