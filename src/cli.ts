@@ -28,6 +28,7 @@ import {
   formatStoredJobDebugLines
 } from "./lib/debug-format";
 import { formatStoredJobRecoveryReportLines } from "./lib/recovery-report";
+import { formatStoredJobPerformanceBudgetLines } from "./lib/performance-budget";
 import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
 import { logStructured } from "./lib/local-logging";
 import { assessStorageHealth } from "./lib/storage-validation";
@@ -776,6 +777,22 @@ Use "web-task-agent <command> --help" for the full option list.
       );
 
       for (const line of formatStoredJobRecoveryReportLines(detail, recoverableJobIds)) {
+        console.log(line);
+      }
+    });
+
+  job
+    .command("budget <jobId>")
+    .description("Print a soft latency budget report for a stored job")
+    .action((jobId) => {
+      const detail = getStoredJobDetail({
+        jobId: String(jobId)
+      });
+      if (!detail) {
+        throw new Error(`Unknown job: ${jobId}`);
+      }
+
+      for (const line of formatStoredJobPerformanceBudgetLines(detail)) {
         console.log(line);
       }
     });

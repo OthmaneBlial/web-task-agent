@@ -19,6 +19,6 @@ test("cli error formatter gives job and queue lookup hints", () => {
   const message = formatCliErrorMessage(new Error("Unknown queue item: queue_123"));
   assert.match(
     message,
-    /Run `web-task-agent job inspect <job-id>`, `web-task-agent job report <job-id>`, or `web-task-agent queue list`/
+    /Run `web-task-agent job inspect <job-id>`, `web-task-agent job report <job-id>`, `web-task-agent job budget <job-id>`, or `web-task-agent queue list`/
   );
 });

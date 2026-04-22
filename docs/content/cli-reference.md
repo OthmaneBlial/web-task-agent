@@ -21,6 +21,7 @@ web-task-agent queue list
 web-task-agent queue stats
 web-task-agent job logs <job-id> --limit 100
 web-task-agent job report <job-id>
+web-task-agent job budget <job-id>
 web-task-agent storage maintain
 web-task-agent worker run --once
 web-task-agent server run --port 4317
@@ -65,6 +66,17 @@ Use `job report <job-id>` when you want a compact recovery-focused summary that 
 - whether the job is recoverable right now
 - the recommended next command
 - the latest stored events and error message
+
+## Performance Budgets
+
+Use `job budget <job-id>` when you want to check whether a long run spent too much time in:
+
+- search
+- fetch
+- extraction
+- synthesis
+
+The report is soft, not fatal. It is there to catch obvious regressions before they become the new normal.
 
 ## Log Export
 
