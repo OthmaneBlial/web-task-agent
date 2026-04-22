@@ -1,5 +1,12 @@
 const DOC_PAGES = [
   {
+    slug: "platform",
+    section: "Guides",
+    title: "Platform",
+    summary: "The finished local research system in one concise page.",
+    path: "content/platform.md"
+  },
+  {
     slug: "overview",
     section: "Guides",
     title: "Overview",

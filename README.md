@@ -70,6 +70,7 @@ WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 
 ## Documentation
 
+- [Platform](docs/content/platform.md)
 - [Project Charter](docs/content/project-charter.md)
 - [Overview](docs/content/overview.md)
 - [Getting Started](docs/content/getting-started.md)
