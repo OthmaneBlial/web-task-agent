@@ -511,7 +511,7 @@ Use "web-task-agent <command> --help" for the full option list.
 
       console.log(`Queued workflow job.`);
       console.log(`Template: ${template.id}`);
-      console.log(`Preset: ${String(options.preset).toLowerCase()}`);
+      console.log(`Preset: ${preset.id} (${preset.description})`);
       console.log(`Queue ID: ${queued.queueId}`);
       console.log(`Job DB: ${queued.databasePath}`);
       console.log(`Cache: ${queued.cachePath}`);
@@ -536,9 +536,11 @@ Use "web-task-agent <command> --help" for the full option list.
       }
 
       for (const queuedJob of queuedJobs) {
-        console.log(
-          `${queuedJob.queueId} ${queuedJob.status} attempts=${queuedJob.attempts}/${queuedJob.maxAttempts} job=${queuedJob.jobId ?? "-"} ${queuedJob.label}`
-        );
+        console.log(`Queue item: ${queuedJob.queueId}`);
+        console.log(`  Status: ${queuedJob.status}`);
+        console.log(`  Attempts: ${queuedJob.attempts}/${queuedJob.maxAttempts}`);
+        console.log(`  Job ID: ${queuedJob.jobId ?? "-"}`);
+        console.log(`  Label: ${queuedJob.label}`);
       }
     });
 
@@ -566,6 +568,7 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log(`Queue ID: ${queuedJob.queueId}`);
       console.log(`Status: ${updated?.status ?? queuedJob.status}`);
       console.log(`Control: ${updated?.controlAction ?? "-"}`);
+      console.log(`Label: ${queuedJob.label}`);
     });
 
   queue
@@ -607,6 +610,7 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log(`Queue item updated.`);
       console.log(`Queue ID: ${String(queueId)}`);
       console.log(`Status: ${updated?.status ?? queuedJob.status}`);
+      console.log(`Label: ${queuedJob.label}`);
     });
 
   queue

@@ -58,6 +58,28 @@ The project now supports:
 
 That means a long job can pause, be interrupted, or be recovered by a later worker without starting from zero.
 
+## Queue Readability
+
+`queue list` now prints each item with stable labels for:
+
+- queue ID
+- status
+- attempts
+- job ID
+- label
+
+That makes it easier to scan the queue without mentally decoding a compact status string.
+
+## Job Log Readability
+
+`job logs` now prints a short header and then expands each event into:
+
+- timestamp
+- event type
+- message
+
+That makes long history dumps easier to read without losing the underlying data.
+
 ## Important Scope Note
 
 Graceful pause, cancel, resume, and rerun are currently implemented for **agent jobs**. That covers general agent runs and the built-in workflows because both go through the same agent runner.
