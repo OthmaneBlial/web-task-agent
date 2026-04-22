@@ -64,11 +64,28 @@ async function main(): Promise<void> {
 
   program
     .name("web-task-agent")
-    .description("Intelligent browser task automation using Lightpanda headless browser over CDP")
+    .description(
+      "Local-first long-running web research using Lightpanda, CDP, SQLite, queue workers, and evidence-backed workflow packages"
+    )
     .showHelpAfterError();
+
+  program.addHelpText(
+    "beforeAll",
+    `
+Common commands:
+  web-task-agent workflow list
+  web-task-agent workflow run <template> --topic <text>
+  web-task-agent agent run <instruction>
+  web-task-agent queue list
+  web-task-agent job logs <job-id> --limit 100
+
+Use "web-task-agent <command> --help" for the full option list.
+`
+  );
 
   program
     .command("github")
+    .description("Research GitHub repositories with the general-purpose browser scanner")
     .requiredOption("--url <url>", "GitHub search URL to scan")
     .option("--pages <number>", "Maximum number of pages to scrape", (value) => parsePositiveInteger(value, "pages"), 10)
     .requiredOption("--criteria <text>", "Claude evaluation criteria")
@@ -97,6 +114,7 @@ async function main(): Promise<void> {
 
   program
     .command("playstore")
+    .description("Research Play Store results with the general-purpose browser scanner")
     .requiredOption("--query <query>", "Google Play search keyword")
     .option(
       "--analyze-top <number>",
@@ -132,6 +150,7 @@ async function main(): Promise<void> {
 
   agent
     .command("run <instruction>")
+    .description("Run a long-form agent job immediately")
     .option("--resume", "Resume the latest cached agent run")
     .option("--cache <path>", "Use a specific cache file")
     .option("--report <path>", "Write the Markdown report to a specific path")
@@ -201,6 +220,7 @@ async function main(): Promise<void> {
 
   agent
     .command("enqueue <instruction>")
+    .description("Queue a long-form agent job for a worker")
     .option("--cache <path>", "Use a specific cache file")
     .option("--report <path>", "Write the Markdown report to a specific path")
     .option("--memory <path>", "Load product context from a Markdown or text file")
@@ -295,6 +315,7 @@ async function main(): Promise<void> {
 
   workflow
     .command("run <template>")
+    .description("Run a workflow template immediately")
     .requiredOption("--topic <text>", "Topic, niche, or seed question to research")
     .option("--audience <text>", "Optional audience to optimize the report for")
     .option("--context <text>", "Optional extra instructions or business context")
@@ -383,6 +404,7 @@ async function main(): Promise<void> {
 
   workflow
     .command("enqueue <template>")
+    .description("Queue a workflow template for a worker")
     .requiredOption("--topic <text>", "Topic, niche, or seed question to research")
     .option("--audience <text>", "Optional audience to optimize the report for")
     .option("--context <text>", "Optional extra instructions or business context")
@@ -483,6 +505,7 @@ async function main(): Promise<void> {
 
   queue
     .command("list")
+    .description("List queued jobs and their current state")
     .option("--status <status>", "Filter by queue status")
     .action((options) => {
       const queuedJobs = listQueuedJobs({
@@ -502,6 +525,7 @@ async function main(): Promise<void> {
 
   queue
     .command("pause <queueId>")
+    .description("Pause a queued job")
     .action((queueId) => {
       const queuedJob = getQueuedJob({
         queueId: String(queueId)
@@ -527,6 +551,7 @@ async function main(): Promise<void> {
 
   queue
     .command("resume <queueId>")
+    .description("Resume a paused queued job")
     .action((queueId) => {
       const updated = controlQueuedJob({
         queueId: String(queueId),
@@ -542,6 +567,7 @@ async function main(): Promise<void> {
 
   queue
     .command("cancel <queueId>")
+    .description("Cancel a queued job")
     .action((queueId) => {
       const queuedJob = getQueuedJob({
         queueId: String(queueId)
@@ -566,6 +592,7 @@ async function main(): Promise<void> {
 
   queue
     .command("retry <queueId>")
+    .description("Retry a failed queued job")
     .action((queueId) => {
       const updated = controlQueuedJob({
         queueId: String(queueId),
@@ -585,6 +612,7 @@ async function main(): Promise<void> {
 
   job
     .command("pause <jobId>")
+    .description("Request a pause for a stored job")
     .action((jobId) => {
       const updated = requestAgentJobControl({
         jobId: String(jobId),
@@ -601,6 +629,7 @@ async function main(): Promise<void> {
 
   job
     .command("cancel <jobId>")
+    .description("Request a cancel for a stored job")
     .action((jobId) => {
       const updated = requestAgentJobControl({
         jobId: String(jobId),
@@ -617,6 +646,7 @@ async function main(): Promise<void> {
 
   job
     .command("resume <jobId>")
+    .description("Resume a paused stored job")
     .action((jobId) => {
       const resumed = resumeAgentJob({
         jobId: String(jobId)
@@ -630,6 +660,7 @@ async function main(): Promise<void> {
 
   job
     .command("rerun <jobId>")
+    .description("Queue a rerun of a stored job")
     .action((jobId) => {
       const rerun = rerunAgentJob({
         jobId: String(jobId)
@@ -642,6 +673,7 @@ async function main(): Promise<void> {
 
   job
     .command("logs <jobId>")
+    .description("Print recent stored job log events")
     .option(
       "--limit <number>",
       "Maximum number of log events to print",
@@ -666,6 +698,7 @@ async function main(): Promise<void> {
     .command("worker")
     .description("Run a local worker that processes queued jobs")
     .command("run")
+    .description("Run the worker loop until the queue is empty or the process is interrupted")
     .option("--once", "Process at most one queued job and exit")
     .option(
       "--poll-interval-seconds <number>",
@@ -696,6 +729,7 @@ async function main(): Promise<void> {
     .command("server")
     .description("Run the local management API and HTML dashboard")
     .command("run")
+    .description("Start the local API and HTML dashboard")
     .option("--host <host>", "Host to bind", "127.0.0.1")
     .option(
       "--port <number>",

@@ -28,6 +28,13 @@ const DOC_PAGES = [
     path: "content/workflows.md"
   },
   {
+    slug: "cli-reference",
+    section: "Reference",
+    title: "CLI Reference",
+    summary: "Top-level command families, common commands, and output conventions.",
+    path: "content/cli-reference.md"
+  },
+  {
     slug: "project-charter",
     section: "Reference",
     title: "Project Charter",
