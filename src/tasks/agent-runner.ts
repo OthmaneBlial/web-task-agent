@@ -28,6 +28,7 @@ import type {
   TaskJobInfo
 } from "../types";
 import { BaseTask } from "./BaseTask";
+import { injectFailure } from "../lib/failure-injection";
 import { AgentExtractStage } from "./agent/extract-stage";
 import { createDefaultAgentExtractor } from "./agent/extractors/heuristic-extractor";
 import {
@@ -931,6 +932,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
   }
 
   async run(): Promise<AgentTaskResult> {
+    injectFailure("agent-runner.run");
     const { state, cachePath, resumed } = createOrResumeState<AgentRunState>({
       task: "agent",
       resume: this.options.resume,

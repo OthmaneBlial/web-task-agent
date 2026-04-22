@@ -11,6 +11,7 @@ import {
 import type { AgentRunOptions } from "../types";
 import { BaseTask } from "./BaseTask";
 import { AgentRunnerTask } from "./agent-runner";
+import { injectFailure } from "../lib/failure-injection";
 
 interface QueueWorkerOptions {
   databasePath?: string;
@@ -31,6 +32,7 @@ function sleepMs(ms: number): Promise<void> {
 
 export class QueueWorkerTask extends BaseTask<QueueWorkerOptions, QueueWorkerResult> {
   async run(): Promise<QueueWorkerResult> {
+    injectFailure("queue-worker.run");
     const workerId = `worker-${randomUUID().slice(0, 8)}`;
     const queueLeaseTtlSeconds = Math.max(60, Math.round(this.options.queueLeaseMinutes * 60));
     let recoveredJobs = 0;
