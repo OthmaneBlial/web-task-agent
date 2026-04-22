@@ -15,6 +15,11 @@ Research shows repeated demand for AI summary automation in long-running workflo
 
 - Build an evidence-backed research copilot for long-running workflows.
 
+## Claim Checklist
+
+- Verify: Operators repeatedly say manual synthesis is too slow for long-running research jobs.
+- Resolve: ai summary quality: AI summaries work well for short runs vs Manual synthesis is too slow
+
 ## Contradictions To Handle Carefully
 
 - ai summary quality: AI summaries work well for short runs vs Manual synthesis is too slow
@@ -26,7 +31,7 @@ Research shows repeated demand for AI summary automation in long-running workflo
 - Tension: cover disagreements, edge cases, or misleading narratives.
 - Practical takeaway: end with what builders or operators should do next.
 
-## Claim Checklist
+## Writing Checklist
 
 - Cross-check every strong claim against the evidence references in the report.
 - Explicitly mention contradictions instead of flattening them into consensus.

@@ -138,6 +138,10 @@ function renderArticleResearchBrief(
   const contradictions = evidence.contradictions
     .slice(0, 5)
     .map((item) => `${item.topic}: ${item.leftLabel} vs ${item.rightLabel}`);
+  const claimChecklist = [
+    ...findings.slice(0, 4).map((item) => `Verify: ${item}`),
+    ...contradictions.slice(0, 3).map((item) => `Resolve: ${item}`)
+  ];
 
   return [
     "# Article Brief",
@@ -157,6 +161,10 @@ function renderArticleResearchBrief(
     "",
     ...formatBulletList(angles, "No article angles were generated."),
     "",
+    "## Claim Checklist",
+    "",
+    ...formatBulletList(claimChecklist, "No claims were generated."),
+    "",
     "## Contradictions To Handle Carefully",
     "",
     ...formatBulletList(contradictions, "No major contradiction cluster was detected."),
@@ -168,7 +176,7 @@ function renderArticleResearchBrief(
     "- Tension: cover disagreements, edge cases, or misleading narratives.",
     "- Practical takeaway: end with what builders or operators should do next.",
     "",
-    "## Claim Checklist",
+    "## Writing Checklist",
     "",
     "- Cross-check every strong claim against the evidence references in the report.",
     "- Explicitly mention contradictions instead of flattening them into consensus.",
