@@ -23,6 +23,21 @@ function sendJson(res: ServerResponse, statusCode: number, body: unknown): void 
   res.end(JSON.stringify(body, null, 2));
 }
 
+function sendApiError(
+  res: ServerResponse,
+  statusCode: number,
+  error: string,
+  message: string,
+  details?: Record<string, unknown>
+): void {
+  sendJson(res, statusCode, {
+    ok: false,
+    error,
+    message,
+    ...(details ?? {})
+  });
+}
+
 function sendHtml(res: ServerResponse, html: string): void {
   res.writeHead(200, {
     "Content-Type": "text/html; charset=utf-8",
@@ -45,15 +60,11 @@ function sendSseEvent(res: ServerResponse, event: string, payload: unknown): voi
 }
 
 function notFound(res: ServerResponse): void {
-  sendJson(res, 404, {
-    error: "not_found"
-  });
+  sendApiError(res, 404, "not_found", "Resource not found");
 }
 
 function methodNotAllowed(res: ServerResponse): void {
-  sendJson(res, 405, {
-    error: "method_not_allowed"
-  });
+  sendApiError(res, 405, "method_not_allowed", "Method not allowed");
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -954,8 +965,17 @@ export function createManagementServer(options?: ManagementServerOptions): http.
         );
         const body = await readJsonBody(req);
         const action = body.action;
+        const detail = getStoredJobDetail({
+          databasePath: options?.databasePath,
+          jobId
+        });
+        if (!detail) {
+          notFound(res);
+          return;
+        }
 
         if (action === "pause" || action === "cancel") {
+          const before = detail.job;
           const job = requestAgentJobControl({
             databasePath: options?.databasePath,
             jobId,
@@ -963,6 +983,14 @@ export function createManagementServer(options?: ManagementServerOptions): http.
           });
           if (!job) {
             notFound(res);
+            return;
+          }
+          if (job.status === before.status && job.controlAction === before.controlAction) {
+            sendApiError(res, 409, "job_control_not_applicable", `Cannot ${action} job while it is ${before.status}`, {
+              jobId,
+              status: before.status,
+              action
+            });
             return;
           }
           sendJson(res, 200, {
@@ -974,6 +1002,13 @@ export function createManagementServer(options?: ManagementServerOptions): http.
         }
 
         if (action === "resume") {
+          if (detail.job.taskType !== "agent") {
+            sendApiError(res, 422, "unsupported_job_type", "Resume is only supported for agent jobs", {
+              jobId,
+              taskType: detail.job.taskType
+            });
+            return;
+          }
           const resumed = resumeAgentJob({
             databasePath: options?.databasePath,
             jobId
@@ -987,6 +1022,13 @@ export function createManagementServer(options?: ManagementServerOptions): http.
         }
 
         if (action === "rerun") {
+          if (detail.job.taskType !== "agent") {
+            sendApiError(res, 422, "unsupported_job_type", "Rerun is only supported for agent jobs", {
+              jobId,
+              taskType: detail.job.taskType
+            });
+            return;
+          }
           const rerun = rerunAgentJob({
             databasePath: options?.databasePath,
             jobId
@@ -999,8 +1041,9 @@ export function createManagementServer(options?: ManagementServerOptions): http.
           return;
         }
 
-        sendJson(res, 400, {
-          error: "invalid_job_control_action"
+        sendApiError(res, 400, "invalid_job_control_action", "Unsupported job control action", {
+          allowedActions: ["pause", "cancel", "resume", "rerun"],
+          action
         });
         return;
       }
@@ -1026,12 +1069,27 @@ export function createManagementServer(options?: ManagementServerOptions): http.
         }
 
         const body = await readJsonBody(req);
-        const action = body.action as QueueControlAction;
+        const action = body.action as QueueControlAction | string | undefined;
+        if (action !== "pause" && action !== "resume" && action !== "cancel" && action !== "retry") {
+          sendApiError(res, 400, "invalid_queue_control_action", "Unsupported queue control action", {
+            allowedActions: ["pause", "resume", "cancel", "retry"],
+            action
+          });
+          return;
+        }
         const queue = controlQueuedJob({
           databasePath: options?.databasePath,
           queueId,
-          action
+          action: action as QueueControlAction
         });
+        if (queue && queue.status === before.status && queue.controlAction === before.controlAction) {
+          sendApiError(res, 409, "queue_control_not_applicable", `Cannot ${action} queue item while it is ${before.status}`, {
+            queueId,
+            status: before.status,
+            action
+          });
+          return;
+        }
 
         if ((action === "pause" || action === "cancel") && before.status === "running" && before.jobId) {
           requestAgentJobControl({
@@ -1056,16 +1114,15 @@ export function createManagementServer(options?: ManagementServerOptions): http.
         return;
       }
 
-      if (method !== "GET" && method !== "POST") {
-        methodNotAllowed(res);
-        return;
-      }
+        if (method !== "GET" && method !== "POST") {
+          methodNotAllowed(res);
+          return;
+        }
 
-      notFound(res);
-    } catch (error) {
-      sendJson(res, 500, {
-        error: "server_error",
-        message: error instanceof Error ? error.stack ?? error.message : String(error)
+        notFound(res);
+      } catch (error) {
+      sendApiError(res, 500, "server_error", "Unexpected server error", {
+        detail: error instanceof Error ? error.message : String(error)
       });
     }
   });
