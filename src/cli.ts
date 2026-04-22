@@ -781,7 +781,10 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log(`Artifact Dir: ${detail.job.artifactDir ?? "-"}`);
       console.log(`Steps: ${detail.steps.length}`);
       console.log(`Artifacts: ${detail.artifacts.length}`);
-      console.log(`Evidence Graph: ${detail.evidenceGraph.nodes} nodes, ${detail.evidenceGraph.edges} edges`);
+      console.log(
+        `Evidence Graph: ${detail.evidenceGraph.nodes} nodes, ${detail.evidenceGraph.edges} edges, ` +
+          `${detail.evidenceGraph.danglingEdges} dangling, ${detail.evidenceGraph.orphanNodes} orphaned`
+      );
 
       if (detail.artifacts.length > 0) {
         console.log("Artifact paths:");

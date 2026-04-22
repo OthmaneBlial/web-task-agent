@@ -1509,6 +1509,8 @@ export interface StoredJobDetail {
   evidenceGraph: {
     nodes: number;
     edges: number;
+    danglingEdges: number;
+    orphanNodes: number;
   };
 }
 
@@ -1703,8 +1705,33 @@ export function getStoredJobDetail(input: {
   const graphRow = db.prepare(`
     SELECT
       (SELECT COUNT(*) FROM evidence_nodes WHERE job_id = ?) AS nodes,
-      (SELECT COUNT(*) FROM evidence_edges WHERE job_id = ?) AS edges
-  `).get(input.jobId, input.jobId) as Record<string, unknown> | undefined;
+      (SELECT COUNT(*) FROM evidence_edges WHERE job_id = ?) AS edges,
+      (
+        SELECT COUNT(*)
+        FROM evidence_edges ee
+        LEFT JOIN evidence_nodes from_node ON from_node.id = ee.from_node_id
+        LEFT JOIN evidence_nodes to_node ON to_node.id = ee.to_node_id
+        WHERE ee.job_id = ?
+          AND (from_node.id IS NULL OR to_node.id IS NULL)
+      ) AS dangling_edges,
+      (
+        SELECT COUNT(*)
+        FROM evidence_nodes n
+        WHERE n.job_id = ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM evidence_edges ee
+            WHERE ee.job_id = ?
+              AND (ee.from_node_id = n.id OR ee.to_node_id = n.id)
+          )
+      ) AS orphan_nodes
+  `).get(
+    input.jobId,
+    input.jobId,
+    input.jobId,
+    input.jobId,
+    input.jobId,
+  ) as Record<string, unknown> | undefined;
 
   return {
     job: mapJobSummary(jobRow),
@@ -1734,7 +1761,9 @@ export function getStoredJobDetail(input: {
     events,
     evidenceGraph: {
       nodes: Number(graphRow?.nodes ?? 0),
-      edges: Number(graphRow?.edges ?? 0)
+      edges: Number(graphRow?.edges ?? 0),
+      danglingEdges: Number(graphRow?.dangling_edges ?? 0),
+      orphanNodes: Number(graphRow?.orphan_nodes ?? 0)
     }
   };
 }
