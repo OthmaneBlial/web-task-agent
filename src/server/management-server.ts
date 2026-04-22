@@ -394,6 +394,7 @@ function dashboardHtml(): string {
         <div id="job-summary"><p>No job selected.</p></div>
         <div class="toolbar" id="job-controls"></div>
         <div class="flash" id="flash"></div>
+        <div id="job-artifacts"></div>
         <div style="margin-top: 16px;">
           <h3 style="margin-bottom: 10px;">Raw Detail</h3>
           <pre class="code" id="job-detail">No job selected.</pre>
@@ -575,12 +576,26 @@ function dashboardHtml(): string {
       if (!state.detail) {
         document.getElementById('job-summary').innerHTML = '<p>No job selected.</p>';
         document.getElementById('job-controls').innerHTML = '';
+        document.getElementById('job-artifacts').innerHTML = '';
         document.getElementById('job-detail').textContent = 'No job selected.';
         return;
       }
 
       const job = state.detail.job;
+      const steps = Array.isArray(state.detail.steps) ? state.detail.steps : [];
+      const artifacts = Array.isArray(state.detail.artifacts) ? state.detail.artifacts : [];
+      const events = Array.isArray(state.detail.events) ? state.detail.events : [];
+      const graph = state.detail.evidenceGraph;
       const linkedQueue = linkedQueueForJob(job.jobId);
+      const graphState = graph.danglingEdges > 0 || graph.orphanNodes > 0 ? 'warning' : '';
+      const artifactRows = artifacts.length === 0
+        ? '<p>No tracked artifacts yet.</p>'
+        : '<div class="table-wrap"><table><thead><tr><th>Artifact</th><th>Type</th><th>Path</th><th>Size</th><th>Updated</th></tr></thead><tbody>' +
+          artifacts.map((artifact) =>
+            '<tr><td>' + escapeHtml(artifact.artifactKey) + '</td><td>' + escapeHtml(artifact.artifactType) + '</td><td>' + escapeHtml(artifact.path) + '</td><td>' + escapeHtml(String(artifact.metadata?.sizeBytes ?? '-')) + '</td><td>' + escapeHtml(artifact.updatedAt) + '</td></tr>'
+          ).join('') +
+          '</tbody></table></div>';
+
       document.getElementById('detail-label').textContent = job.title + ' (' + job.status + ')';
       document.getElementById('job-summary').innerHTML = [
         '<div class="grid-cards">',
@@ -588,11 +603,22 @@ function dashboardHtml(): string {
         '<div class="mini-card"><strong>Status</strong><div>' + pill(job.status) + (job.controlAction ? ' ' + pill(job.controlAction + ' requested') : '') + '</div></div>',
         '<div class="mini-card"><strong>Workflow</strong><div>' + escapeHtml(job.workflowName || '-') + '</div></div>',
         '<div class="mini-card"><strong>Queue Link</strong><div>' + escapeHtml(linkedQueue ? linkedQueue.queueId : '-') + '</div></div>',
+        '<div class="mini-card"><strong>Steps</strong><div>' + steps.length + ' tracked</div></div>',
+        '<div class="mini-card"><strong>Artifacts</strong><div>' + artifacts.length + ' tracked</div></div>',
+        '<div class="mini-card"><strong>Events</strong><div>' + events.length + ' recent</div></div>',
+        '<div class="mini-card"><strong>Evidence Graph</strong><div>' + graph.nodes + ' nodes / ' + graph.edges + ' edges' + (graphState ? '<div class="muted ' + graphState + '">' + graph.danglingEdges + ' dangling, ' + graph.orphanNodes + ' orphan</div>' : '') + '</div></div>',
         '<div class="mini-card"><strong>Cache</strong><div>' + escapeHtml(job.cachePath || '-') + '</div></div>',
         '<div class="mini-card"><strong>Report</strong><div>' + escapeHtml(job.reportPath || '-') + '</div></div>',
         '</div>'
       ].join('');
       document.getElementById('job-controls').innerHTML = jobActionButtons(job);
+      document.getElementById('job-artifacts').innerHTML = [
+        '<div class="section-title" style="margin-top: 16px;">',
+        '<h3>Artifacts</h3>',
+        '<span class="muted">tracked outputs and file metadata</span>',
+        '</div>',
+        artifactRows
+      ].join('');
       document.getElementById('job-detail').textContent = JSON.stringify(state.detail, null, 2);
 
       document.querySelectorAll('[data-job-action]').forEach((button) => {
