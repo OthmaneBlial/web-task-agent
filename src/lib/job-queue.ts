@@ -126,6 +126,38 @@ function ensureTableColumns(
   }
 }
 
+export function getQueuedJobSummary(options?: {
+  databasePath?: string;
+}): {
+  queued: number;
+  running: number;
+  paused: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+} {
+  const { db } = getQueueDatabase(options?.databasePath);
+  const row = db.prepare(`
+    SELECT
+      SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) AS queued,
+      SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) AS running,
+      SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) AS paused,
+      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+      SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
+      SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
+    FROM queued_jobs
+  `).get() as Record<string, unknown> | undefined;
+
+  return {
+    queued: Number(row?.queued ?? 0),
+    running: Number(row?.running ?? 0),
+    paused: Number(row?.paused ?? 0),
+    completed: Number(row?.completed ?? 0),
+    failed: Number(row?.failed ?? 0),
+    cancelled: Number(row?.cancelled ?? 0)
+  };
+}
+
 function getQueueDatabase(customPath?: string): { db: DatabaseSync; databasePath: string } {
   const databasePath = resolveJobDatabasePath(customPath);
   ensureParentDir(databasePath);
@@ -288,6 +320,8 @@ export function listQueuedJobs(options?: {
         ELSE 5
       END,
       priority ASC,
+      attempts ASC,
+      run_after ASC,
       created_at ASC
     LIMIT ?
   `).all(
@@ -690,12 +724,23 @@ export function failQueuedJob(input: {
   const payload = parseQueuedPayload(row.payload_json, {
     forceResume: true
   });
+  const retryAt = shouldRetry
+    ? addSecondsToIso(timestamp, Math.max(30, input.retryDelaySeconds ?? 300))
+    : null;
+  const resultPayload = {
+    status: shouldRetry ? "queued" : "failed",
+    errorMessage: input.errorMessage,
+    attempts,
+    maxAttempts,
+    retryAt
+  };
 
   db.prepare(`
     UPDATE queued_jobs
     SET
       status = ?,
       payload_json = ?,
+      result_json = ?,
       last_error = ?,
       control_action = NULL,
       control_requested_at = NULL,
@@ -710,10 +755,9 @@ export function failQueuedJob(input: {
   `).run(
     shouldRetry ? "queued" : "failed",
     serializeJson(payload),
+    serializeJson(resultPayload),
     input.errorMessage,
-    shouldRetry
-      ? addSecondsToIso(timestamp, Math.max(30, input.retryDelaySeconds ?? 300))
-      : timestamp,
+    shouldRetry ? retryAt : timestamp,
     timestamp,
     shouldRetry ? "queued" : "failed",
     timestamp,

@@ -6,8 +6,18 @@ import path from "node:path";
 import { Command } from "commander";
 
 import { requestAgentJobControl, resumeAgentJob, rerunAgentJob } from "./lib/job-operations";
-import { controlQueuedJob, enqueueQueuedAgentJob, getQueuedJob, listQueuedJobs } from "./lib/job-queue";
-import { getStoredJobDetail, listJobRunEvents } from "./lib/job-store";
+import {
+  controlQueuedJob,
+  enqueueQueuedAgentJob,
+  getQueuedJob,
+  getQueuedJobSummary,
+  listQueuedJobs
+} from "./lib/job-queue";
+import {
+  getStoredJobDetail,
+  listJobRunEvents,
+  maintainJobStore
+} from "./lib/job-store";
 import { normalizeCliArgv } from "./lib/cli-argv";
 import { formatCliErrorMessage } from "./lib/cli-error";
 import { ensureLlmRuntimeEnvironment } from "./lib/runtime-env";
@@ -738,6 +748,20 @@ Use "web-task-agent <command> --help" for the full option list.
       }
     });
 
+  queue
+    .command("stats")
+    .description("Show queue counts by status")
+    .action(() => {
+      const summary = getQueuedJobSummary();
+      console.log(`Queue summary:`);
+      console.log(`  Queued: ${summary.queued}`);
+      console.log(`  Running: ${summary.running}`);
+      console.log(`  Paused: ${summary.paused}`);
+      console.log(`  Completed: ${summary.completed}`);
+      console.log(`  Failed: ${summary.failed}`);
+      console.log(`  Cancelled: ${summary.cancelled}`);
+    });
+
   job
     .command("inspect <jobId>")
     .description("Show a stored job summary, steps, and artifact paths")
@@ -765,6 +789,30 @@ Use "web-task-agent <command> --help" for the full option list.
           console.log(`- ${artifact.artifactKey}: ${artifact.path}`);
         }
       }
+    });
+
+  const storage = program
+    .command("storage")
+    .description("Inspect and maintain the local job database");
+
+  storage
+    .command("maintain")
+    .description("Show local storage stats and optionally vacuum the database")
+    .option("--vacuum", "Run VACUUM after collecting the storage summary")
+    .action((options) => {
+      const summary = maintainJobStore({
+        vacuum: Boolean(options.vacuum)
+      });
+      console.log(`Storage summary:`);
+      console.log(`  Database: ${summary.databasePath}`);
+      console.log(`  Schema version: ${summary.schemaVersion}`);
+      console.log(`  Jobs: ${summary.jobs}`);
+      console.log(`  Steps: ${summary.steps}`);
+      console.log(`  Artifacts: ${summary.artifacts}`);
+      console.log(`  Events: ${summary.events}`);
+      console.log(`  Pages: ${summary.pages}`);
+      console.log(`  Freelist pages: ${summary.freelistPages}`);
+      console.log(`  Vacuumed: ${summary.vacuumed ? "yes" : "no"}`);
     });
 
   program

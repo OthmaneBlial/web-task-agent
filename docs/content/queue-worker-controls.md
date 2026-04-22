@@ -25,11 +25,13 @@ npm run start -- worker run --once
 ```
 
 The worker claims queued jobs, heartbeats while they run, and completes or retries them based on durable queue state in SQLite.
+It now exits cleanly on `SIGINT` or `SIGTERM` after finishing the current iteration.
 
 ## Queue Controls
 
 ```bash
 npm run start -- queue list
+npm run start -- queue stats
 npm run start -- queue pause <queue-id>
 npm run start -- queue resume <queue-id>
 npm run start -- queue cancel <queue-id>

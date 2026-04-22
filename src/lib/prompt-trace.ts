@@ -36,6 +36,14 @@ interface PromptTraceManifest {
   traces: PromptTraceRecord[];
 }
 
+function pruneManifest(manifest: PromptTraceManifest, maxTraces: number): void {
+  if (!Number.isFinite(maxTraces) || maxTraces <= 0 || manifest.traces.length <= maxTraces) {
+    return;
+  }
+
+  manifest.traces.splice(0, manifest.traces.length - maxTraces);
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -101,7 +109,8 @@ export class PromptTraceRecorder {
 
   constructor(
     private readonly outputPath: string,
-    private readonly appendRunEvent?: (eventType: string, message: string, metadata?: unknown) => void
+    private readonly appendRunEvent?: (eventType: string, message: string, metadata?: unknown) => void,
+    private readonly maxTraces: number = 2_000
   ) {
     ensureDir(path.dirname(this.outputPath));
     this.manifest = loadManifest(this.outputPath);
@@ -109,6 +118,7 @@ export class PromptTraceRecorder {
   }
 
   private persist(): void {
+    pruneManifest(this.manifest, this.maxTraces);
     this.manifest.updatedAt = nowIso();
     writeJsonAtomic(this.outputPath, this.manifest);
   }
@@ -190,6 +200,7 @@ export class PromptTraceRecorder {
 export function createPromptTraceRecorder(input: {
   outputPath: string;
   appendRunEvent?: (eventType: string, message: string, metadata?: unknown) => void;
+  maxTraces?: number;
 }): PromptTraceRecorder {
-  return new PromptTraceRecorder(input.outputPath, input.appendRunEvent);
+  return new PromptTraceRecorder(input.outputPath, input.appendRunEvent, input.maxTraces ?? 2_000);
 }

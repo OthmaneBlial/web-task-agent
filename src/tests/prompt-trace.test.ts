@@ -113,3 +113,59 @@ test("prompt trace recorder persists local prompt/version history", () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test("prompt trace recorder prunes older records when retention is bounded", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-prompt-trace-prune-"));
+  const tracePath = path.join(tempDir, "runtime", "llm-prompt-traces.json");
+
+  try {
+    const recorder = createPromptTraceRecorder({
+      outputPath: tracePath,
+      maxTraces: 2
+    });
+    const hooks = recorder.createHooks();
+
+    hooks.onStart?.({
+      traceId: "trace_a",
+      operation: "alpha",
+      promptVersion: "alpha.v1",
+      model: "test-model",
+      maxTokens: 100,
+      createdAt: "2026-03-20T12:00:00.000Z",
+      system: "system a",
+      prompt: "prompt a"
+    });
+    hooks.onStart?.({
+      traceId: "trace_b",
+      operation: "beta",
+      promptVersion: "beta.v1",
+      model: "test-model",
+      maxTokens: 100,
+      createdAt: "2026-03-20T12:01:00.000Z",
+      system: "system b",
+      prompt: "prompt b"
+    });
+    hooks.onStart?.({
+      traceId: "trace_c",
+      operation: "gamma",
+      promptVersion: "gamma.v1",
+      model: "test-model",
+      maxTokens: 100,
+      createdAt: "2026-03-20T12:02:00.000Z",
+      system: "system c",
+      prompt: "prompt c"
+    });
+
+    const manifest = JSON.parse(fs.readFileSync(tracePath, "utf8")) as {
+      traces: Array<{ traceId: string }>;
+    };
+
+    assert.equal(manifest.traces.length, 2);
+    assert.deepEqual(
+      manifest.traces.map((trace) => trace.traceId),
+      ["trace_b", "trace_c"]
+    );
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

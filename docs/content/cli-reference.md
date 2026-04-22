@@ -18,7 +18,9 @@ web-task-agent workflow enqueue <template> --topic <text>
 web-task-agent agent run <instruction>
 web-task-agent agent enqueue <instruction>
 web-task-agent queue list
+web-task-agent queue stats
 web-task-agent job logs <job-id> --limit 100
+web-task-agent storage maintain
 web-task-agent worker run --once
 web-task-agent server run --port 4317
 ```
@@ -29,6 +31,8 @@ web-task-agent server run --port 4317
 - `workflow run` when you want a full research package immediately.
 - `agent run` when you want a free-form instruction without a template.
 - `queue list` and `job logs` when you are already operating a long run.
+- `queue stats` when you want a quick status snapshot without scanning each queue item.
+- `storage maintain` when you want database counts or a vacuum pass.
 
 ## Output Conventions
 

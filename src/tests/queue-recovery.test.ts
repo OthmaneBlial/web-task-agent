@@ -9,6 +9,7 @@ import { createOrResumeState, saveTaskState } from "../lib/cache";
 import {
   claimNextQueuedJob,
   enqueueQueuedAgentJob,
+  getQueuedJobSummary,
   recoverStaleQueuedJobs
 } from "../lib/job-queue";
 
@@ -17,6 +18,7 @@ test("stale queued job recovery forces resume from saved cache state", () => {
   const databasePath = path.join(tempDir, "jobs.sqlite");
   const cachePath = path.join(tempDir, "agent-cache.json");
   const reportPath = path.join(tempDir, "report.md");
+  let queueDb: DatabaseSync | null = null;
 
   try {
     const queued = enqueueQueuedAgentJob({
@@ -47,7 +49,7 @@ test("stale queued job recovery forces resume from saved cache state", () => {
       marker: "persisted-state"
     });
 
-    const queueDb = new DatabaseSync(databasePath);
+    queueDb = new DatabaseSync(databasePath);
     queueDb.prepare(`
       UPDATE queued_jobs
       SET lease_expires_at = ?
@@ -79,6 +81,11 @@ test("stale queued job recovery forces resume from saved cache state", () => {
     });
     assert.ok(reclaimed);
     assert.equal(reclaimed.payload.options.resume, true);
+    const summary = getQueuedJobSummary({
+      databasePath
+    });
+    assert.equal(summary.running, 1);
+    assert.equal(summary.queued, 0);
 
     const resumed = createOrResumeState({
       task: "agent",
@@ -94,6 +101,7 @@ test("stale queued job recovery forces resume from saved cache state", () => {
     assert.equal(resumed.state.runId, "saved_run");
     assert.equal(resumed.state.marker, "persisted-state");
   } finally {
+    queueDb?.close();
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });

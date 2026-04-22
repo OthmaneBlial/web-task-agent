@@ -30,6 +30,7 @@ import {
 } from "../tasks/agent/shared";
 
 const DEFAULT_DATABASE_PATH = path.join(process.cwd(), ".data", "web-task-agent.sqlite");
+const JOB_STORE_SCHEMA_VERSION = 2;
 
 interface JobStoreOptions {
   jobId: string;
@@ -54,6 +55,7 @@ interface JobStoreOptions {
 interface JobStepRow {
   attempt_count: number;
   started_at: string | null;
+  status: JobStepStatus;
 }
 
 interface StepWriteOptions {
@@ -104,6 +106,112 @@ function normalizeError(error: unknown): string {
   return String(error);
 }
 
+function normalizeJobLifecycleStatus(value: unknown): JobLifecycleStatus {
+  return value === "planning" ||
+    value === "running" ||
+    value === "waiting_review" ||
+    value === "paused" ||
+    value === "cancelled" ||
+    value === "completed" ||
+    value === "failed"
+    ? value
+    : "running";
+}
+
+function normalizeJobStepStatus(value: unknown): JobStepStatus {
+  return value === "pending" ||
+    value === "running" ||
+    value === "completed" ||
+    value === "failed" ||
+    value === "skipped"
+    ? value
+    : "pending";
+}
+
+function isValidJobStatusTransition(
+  fromStatus: JobLifecycleStatus,
+  toStatus: JobLifecycleStatus
+): boolean {
+  if (fromStatus === toStatus) {
+    return true;
+  }
+
+  switch (fromStatus) {
+    case "planning":
+      return (
+        toStatus === "running" ||
+        toStatus === "waiting_review" ||
+        toStatus === "paused" ||
+        toStatus === "cancelled" ||
+        toStatus === "completed" ||
+        toStatus === "failed"
+      );
+    case "running":
+      return (
+        toStatus === "planning" ||
+        toStatus === "waiting_review" ||
+        toStatus === "paused" ||
+        toStatus === "cancelled" ||
+        toStatus === "completed" ||
+        toStatus === "failed"
+      );
+    case "waiting_review":
+      return (
+        toStatus === "running" ||
+        toStatus === "paused" ||
+        toStatus === "cancelled" ||
+        toStatus === "completed" ||
+        toStatus === "failed"
+      );
+    case "paused":
+      return toStatus === "running" || toStatus === "cancelled" || toStatus === "failed";
+    case "cancelled":
+    case "completed":
+    case "failed":
+      return false;
+  }
+}
+
+function isValidStepStatusTransition(fromStatus: JobStepStatus, toStatus: JobStepStatus): boolean {
+  if (fromStatus === toStatus) {
+    return true;
+  }
+
+  switch (fromStatus) {
+    case "pending":
+      return toStatus === "running" || toStatus === "completed" || toStatus === "failed" || toStatus === "skipped";
+    case "running":
+      return toStatus === "pending" || toStatus === "completed" || toStatus === "failed" || toStatus === "skipped";
+    case "completed":
+    case "failed":
+    case "skipped":
+      return toStatus === "pending";
+  }
+}
+
+function normalizeArtifactMetadata(
+  artifactPath: string,
+  metadata?: unknown
+): Record<string, unknown> {
+  const baseMetadata = metadata && typeof metadata === "object" ? { ...(metadata as Record<string, unknown>) } : {};
+  const resolvedPath = path.resolve(artifactPath);
+
+  let fileStats: fs.Stats | null = null;
+  try {
+    fileStats = fs.statSync(resolvedPath);
+  } catch {
+    fileStats = null;
+  }
+
+  return {
+    ...baseMetadata,
+    absolutePath: resolvedPath,
+    exists: Boolean(fileStats?.isFile()),
+    sizeBytes: fileStats && fileStats.isFile() ? fileStats.size : null,
+    modifiedAt: fileStats ? fileStats.mtime.toISOString() : null
+  };
+}
+
 function hashValue(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -125,6 +233,7 @@ function canonicalizeUrl(rawUrl: string): string {
   parsed.hash = "";
   parsed.protocol = parsed.protocol.toLowerCase();
   parsed.hostname = parsed.hostname.toLowerCase();
+  parsed.hostname = parsed.hostname.replace(/^www\./, "");
   if (
     (parsed.protocol === "http:" && parsed.port === "80") ||
     (parsed.protocol === "https:" && parsed.port === "443")
@@ -164,7 +273,8 @@ function canonicalizeUrl(rawUrl: string): string {
   if (parsed.pathname.length > 1) {
     parsed.pathname = parsed.pathname
       .replace(/\/{2,}/g, "/")
-      .replace(/\/index\.(html?|php)$/i, "/")
+      .replace(/\/index\.(html?|php|xhtml)$/i, "/")
+      .replace(/\/default\.(html?|php)$/i, "/")
       .replace(/\/amp$/i, "")
       .replace(/\/+$/g, "");
   }
@@ -843,6 +953,63 @@ export function closeSharedJobDatabase(customPath?: string): void {
   }
 }
 
+export function getJobStoreSchemaVersion(options?: {
+  databasePath?: string;
+}): number {
+  const { db } = getDatabase(options?.databasePath);
+  const row = db.prepare(`
+    SELECT value
+    FROM job_store_meta
+    WHERE key = 'schema_version'
+  `).get() as Record<string, unknown> | undefined;
+
+  const parsed = Number(row?.value ?? JOB_STORE_SCHEMA_VERSION);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : JOB_STORE_SCHEMA_VERSION;
+}
+
+export function maintainJobStore(options?: {
+  databasePath?: string;
+  vacuum?: boolean;
+}): {
+  databasePath: string;
+  schemaVersion: number;
+  jobs: number;
+  steps: number;
+  artifacts: number;
+  events: number;
+  pages: number;
+  freelistPages: number;
+  vacuumed: boolean;
+} {
+  const { db, databasePath } = getDatabase(options?.databasePath);
+  const countsRow = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM jobs) AS jobs,
+      (SELECT COUNT(*) FROM job_steps) AS steps,
+      (SELECT COUNT(*) FROM job_artifacts) AS artifacts,
+      (SELECT COUNT(*) FROM job_run_events) AS events
+  `).get() as Record<string, unknown> | undefined;
+  const pageRow = db.prepare(`PRAGMA page_count`).get() as Record<string, unknown> | undefined;
+  const freelistRow = db.prepare(`PRAGMA freelist_count`).get() as Record<string, unknown> | undefined;
+  const vacuumed = Boolean(options?.vacuum);
+
+  if (vacuumed) {
+    db.exec("VACUUM");
+  }
+
+  return {
+    databasePath,
+    schemaVersion: getJobStoreSchemaVersion({ databasePath }),
+    jobs: Number(countsRow?.jobs ?? 0),
+    steps: Number(countsRow?.steps ?? 0),
+    artifacts: Number(countsRow?.artifacts ?? 0),
+    events: Number(countsRow?.events ?? 0),
+    pages: Number(pageRow?.page_count ?? 0),
+    freelistPages: Number(freelistRow?.freelist_count ?? 0),
+    vacuumed
+  };
+}
+
 function ensureTableColumns(
   database: DatabaseSync,
   tableName: string,
@@ -898,6 +1065,11 @@ function initializeSchema(database: DatabaseSync): void {
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
     PRAGMA busy_timeout = 5000;
+
+    CREATE TABLE IF NOT EXISTS job_store_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
 
     CREATE TABLE IF NOT EXISTS jobs (
       id TEXT PRIMARY KEY,
@@ -1164,6 +1336,13 @@ function initializeSchema(database: DatabaseSync): void {
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_jobs_lease_expires_at ON jobs(lease_expires_at);
   `);
+
+  database.prepare(`
+    INSERT INTO job_store_meta (key, value)
+    VALUES ('schema_version', ?)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value
+  `).run(String(JOB_STORE_SCHEMA_VERSION));
 }
 
 function getDatabase(customPath?: string): { db: DatabaseSync; databasePath: string } {
@@ -1234,7 +1413,7 @@ export function listRecoverableJobs(options?: {
     taskType: String(row.task_type ?? "agent") as JobTaskType,
     workflowName: row.workflow_name ? String(row.workflow_name) : null,
     title: String(row.title ?? ""),
-    status: String(row.status ?? "running") as JobLifecycleStatus,
+    status: normalizeJobLifecycleStatus(row.status),
     cachePath: row.cache_path ? String(row.cache_path) : null,
     reportPath: row.report_path ? String(row.report_path) : null,
     artifactDir: row.artifact_dir ? String(row.artifact_dir) : null,
@@ -1310,7 +1489,7 @@ function mapJobSummary(row: Record<string, unknown>): StoredJobSummary {
     workflowName: row.workflow_name ? String(row.workflow_name) : null,
     title: String(row.title ?? ""),
     instruction: row.instruction ? String(row.instruction) : null,
-    status: String(row.status ?? "running") as JobLifecycleStatus,
+    status: normalizeJobLifecycleStatus(row.status),
     cachePath: row.cache_path ? String(row.cache_path) : null,
     reportPath: row.report_path ? String(row.report_path) : null,
     artifactDir: row.artifact_dir ? String(row.artifact_dir) : null,
@@ -1504,7 +1683,7 @@ export function getStoredJobDetail(input: {
       position: Number(row.position ?? 0),
       title: String(row.title ?? ""),
       kind: String(row.kind ?? ""),
-      status: String(row.status ?? "pending") as JobStepStatus,
+      status: normalizeJobStepStatus(row.status),
       attemptCount: Number(row.attempt_count ?? 0),
       startedAt: row.started_at ? String(row.started_at) : null,
       updatedAt: String(row.updated_at ?? ""),
@@ -1710,7 +1889,7 @@ export class JobStore {
     const current = this.readLeaseRow();
     const previousOwnerId = current?.lease_owner_id ? String(current.lease_owner_id) : null;
     const previousExpiresAt = current?.lease_expires_at ? String(current.lease_expires_at) : null;
-    const currentStatus = current?.status ? String(current.status) : this.job.status;
+    const currentStatus = normalizeJobLifecycleStatus(current?.status ?? this.job.status);
     const isExpired =
       previousExpiresAt !== null &&
       Number.isFinite(Date.parse(previousExpiresAt)) &&
@@ -1859,7 +2038,7 @@ export class JobStore {
 
   private getStep(stepKey: string): JobStepRow | null {
     const row = this.db.prepare(`
-      SELECT attempt_count, started_at
+      SELECT attempt_count, started_at, status
       FROM job_steps
       WHERE job_id = ? AND step_key = ?
     `).get(this.jobId, stepKey);
@@ -1873,22 +2052,30 @@ export class JobStore {
       started_at:
         typeof (row as Record<string, unknown>).started_at === "string"
           ? String((row as Record<string, unknown>).started_at)
-          : null
+          : null,
+      status: normalizeJobStepStatus((row as Record<string, unknown>).status)
     };
   }
 
   private writeStep(step: JobStepDefinition, options: StepWriteOptions): void {
     const existing = this.getStep(step.stepKey);
     const updatedAt = nowIso();
+    const nextStatus = normalizeJobStepStatus(options.status);
+    const previousStatus = existing?.status ?? "pending";
+    if (existing && !isValidStepStatusTransition(previousStatus, nextStatus)) {
+      throw new Error(
+        `invalid job step status transition for ${step.stepKey}: ${previousStatus} -> ${nextStatus}`
+      );
+    }
     const startedAt =
       existing?.started_at ??
-      (options.status === "running" || options.status === "completed" || options.status === "failed"
+      (nextStatus === "running" || nextStatus === "completed" || nextStatus === "failed"
         ? updatedAt
         : null);
     const completedAt =
       typeof options.completedAt === "string"
         ? options.completedAt
-        : options.status === "completed" || options.status === "failed" || options.status === "skipped"
+        : nextStatus === "completed" || nextStatus === "failed" || nextStatus === "skipped"
           ? updatedAt
           : null;
     const attemptCount = (existing?.attempt_count ?? 0) + (options.bumpAttempt ? 1 : 0);
@@ -1922,7 +2109,7 @@ export class JobStore {
       step.position,
       step.title,
       step.kind,
-      options.status,
+      nextStatus,
       attemptCount,
       startedAt,
       updatedAt,
@@ -1963,19 +2150,25 @@ export class JobStore {
     }
   ): void {
     const previousStatus = this.job.status;
+    const nextStatus = normalizeJobLifecycleStatus(status);
+    if (!isValidJobStatusTransition(previousStatus, nextStatus)) {
+      throw new Error(
+        `invalid job status transition for ${this.jobId}: ${previousStatus} -> ${nextStatus}`
+      );
+    }
     this.syncJob({
-      status,
+      status: nextStatus,
       output: options?.output ?? this.job.output,
       errorMessage: options?.errorMessage,
       completedAt: options?.completedAt
     });
-    if (status === "paused" || status === "cancelled" || status === "completed" || status === "failed") {
+    if (nextStatus === "paused" || nextStatus === "cancelled" || nextStatus === "completed" || nextStatus === "failed") {
       this.clearControlRequest();
     }
-    if (previousStatus !== status) {
-      this.recordRunEvent("status_changed", `Job status changed from ${previousStatus} to ${status}`, {
+    if (previousStatus !== nextStatus) {
+      this.recordRunEvent("status_changed", `Job status changed from ${previousStatus} to ${nextStatus}`, {
         previousStatus,
-        status
+        status: nextStatus
       });
     }
   }
@@ -2003,7 +2196,7 @@ export class JobStore {
       artifactKey,
       artifactType,
       path.resolve(artifactPath),
-      serializeJson(metadata),
+      serializeJson(normalizeArtifactMetadata(artifactPath, metadata)),
       timestamp,
       timestamp
     );
