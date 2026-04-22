@@ -236,6 +236,40 @@ function renderWorkflowPackageReadme(
   ].join("\n").trim();
 }
 
+function validateWorkflowPackageStructure(outputPaths: AgentOutputPaths): {
+  expected: string[];
+  present: string[];
+  missing: string[];
+  allPresent: boolean;
+} {
+  const expectedEntries = [
+    ["researchSummary", outputPaths.researchSummaryPath],
+    ["workflowBrief", outputPaths.workflowBriefPath],
+    ["plan", outputPaths.planPath],
+    ["postDraft", outputPaths.postDraftPath],
+    ["commentsDraft", outputPaths.commentsDraftPath],
+    ["rawResearchDir", outputPaths.researchDir],
+    ["runtimeManifest", outputPaths.pipelineManifestPath],
+    ["promptTraces", outputPaths.promptTracePath],
+    ["packageManifest", outputPaths.packageManifestPath],
+    ["packageReadme", outputPaths.packageReadmePath]
+  ] as const;
+
+  const present = expectedEntries
+    .filter(([, filePath]) => Boolean(filePath) && fs.existsSync(String(filePath)))
+    .map(([label]) => label);
+  const missing = expectedEntries
+    .filter(([, filePath]) => !filePath || !fs.existsSync(String(filePath)))
+    .map(([label]) => label);
+
+  return {
+    expected: expectedEntries.map(([label]) => label),
+    present,
+    missing,
+    allPresent: missing.length === 0
+  };
+}
+
 export function buildAgentOutputPaths(artifactDir: string): AgentOutputPaths {
   return {
     planPath: path.join(artifactDir, "plan", "plan.json"),
@@ -317,7 +351,8 @@ export function writeWorkflowPackageArtifacts(
       runtimeManifest: relativeArtifactPath(state.artifactDir, outputPaths.pipelineManifestPath),
       promptTraces: relativeArtifactPath(state.artifactDir, outputPaths.promptTracePath)
     },
-    evidenceCounts: evidence.counts
+    evidenceCounts: evidence.counts,
+    layoutChecks: validateWorkflowPackageStructure(outputPaths)
   };
   writeJsonAtomic(outputPaths.packageManifestPath, manifest);
 

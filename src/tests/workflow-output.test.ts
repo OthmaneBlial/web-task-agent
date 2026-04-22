@@ -243,6 +243,21 @@ test("workflow package writer creates polished handoff files", () => {
   try {
     const state = createWorkflowState(tempDir, "article-research");
     fs.writeFileSync(state.reportPath, "# Final Report\n", "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.researchSummaryPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.researchSummaryPath!, "# Research Summary\n", "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.planPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.planPath!, '{"version":1}\n', "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.postDraftPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.postDraftPath!, "# Draft\n", "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.commentsDraftPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.commentsDraftPath!, "[]\n", "utf8");
+    fs.mkdirSync(path.join(tempDir, "raw", "research"), { recursive: true });
+    fs.mkdirSync(path.dirname(state.outputs.pipelineManifestPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.pipelineManifestPath!, '{"version":2}\n', "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.packageManifestPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.packageManifestPath!, '{"placeholder":true}\n', "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.packageReadmePath!), { recursive: true });
+    fs.writeFileSync(state.outputs.packageReadmePath!, "# Placeholder\n", "utf8");
     fs.mkdirSync(path.dirname(state.outputs.promptTracePath!), { recursive: true });
     fs.writeFileSync(state.outputs.promptTracePath!, '{\n  "version": 1,\n  "updatedAt": "2026-03-20T12:00:00.000Z",\n  "traces": []\n}\n', "utf8");
 
@@ -282,6 +297,7 @@ test("workflow package writer creates polished handoff files", () => {
         )
       )
     );
+    assert.equal(JSON.parse(packageManifest).layoutChecks.allPresent, true);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

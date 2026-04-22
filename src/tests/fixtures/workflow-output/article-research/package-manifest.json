@@ -25,5 +25,33 @@
     "extractions": 3,
     "clusters": 2,
     "contradictions": 1
+  },
+  "layoutChecks": {
+    "expected": [
+      "researchSummary",
+      "workflowBrief",
+      "plan",
+      "postDraft",
+      "commentsDraft",
+      "rawResearchDir",
+      "runtimeManifest",
+      "promptTraces",
+      "packageManifest",
+      "packageReadme"
+    ],
+    "present": [
+      "researchSummary",
+      "workflowBrief",
+      "plan",
+      "postDraft",
+      "commentsDraft",
+      "rawResearchDir",
+      "runtimeManifest",
+      "promptTraces",
+      "packageManifest",
+      "packageReadme"
+    ],
+    "missing": [],
+    "allPresent": true
   }
 }
