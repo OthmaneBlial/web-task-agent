@@ -317,6 +317,22 @@ test("workflow package writer creates polished handoff files", () => {
   }
 });
 
+test("workflow package writer skips packaging when no template is configured", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-workflow-package-skip-"));
+
+  try {
+    const state = createWorkflowState(tempDir, "article-research");
+    state.input.workflowTemplateId = null;
+    const written = writeWorkflowPackageArtifacts(state, createSampleEvidence());
+
+    assert.equal(written.workflowBriefPath, null);
+    assert.equal(written.packageManifestPath, null);
+    assert.equal(written.packageReadmePath, null);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("report renders a dedicated ASO audit section for direct app runs", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-aso-report-"));
 
