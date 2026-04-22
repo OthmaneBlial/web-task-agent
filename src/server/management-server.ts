@@ -702,7 +702,8 @@ function dashboardHtml(): string {
 
       document.getElementById('detail-label').textContent = job.title + ' (' + job.status + ')';
       document.getElementById('job-summary').innerHTML = [
-        '<div class="grid-cards">',
+        '<p>' + escapeHtml(state.detail.runtimeSummary || 'Runtime summary unavailable.') + '</p>',
+        '<div class="grid-cards" style="margin-top: 12px;">',
         '<div class="mini-card"><strong>Job</strong><div>' + escapeHtml(job.jobId) + '</div></div>',
         '<div class="mini-card"><strong>Status</strong><div>' + pill(job.status) + (job.controlAction ? ' ' + pill(job.controlAction + ' requested') : '') + '</div></div>',
         '<div class="mini-card"><strong>Workflow</strong><div>' + escapeHtml(job.workflowName || '-') + '</div></div>',

@@ -29,6 +29,7 @@ import {
   addSecondsToIso,
   classifyResearchContentType
 } from "../tasks/agent/shared";
+import { formatStoredJobRuntimeSummary } from "./runtime-summary";
 
 const DEFAULT_DATABASE_PATH = path.join(process.cwd(), ".data", "web-task-agent.sqlite");
 const JOB_STORE_SCHEMA_VERSION = 2;
@@ -1561,6 +1562,7 @@ export interface StoredJobDetail {
   steps: StoredJobStepRecord[];
   artifacts: StoredJobArtifactRecord[];
   events: JobRunEventRecord[];
+  runtimeSummary: string;
   evidenceGraph: {
     nodes: number;
     edges: number;
@@ -1788,38 +1790,50 @@ export function getStoredJobDetail(input: {
     input.jobId,
   ) as Record<string, unknown> | undefined;
 
+  const job = mapJobSummary(jobRow);
+  const mappedSteps = steps.map((row) => ({
+    stepKey: String(row.step_key ?? ""),
+    position: Number(row.position ?? 0),
+    title: String(row.title ?? ""),
+    kind: String(row.kind ?? ""),
+    status: normalizeJobStepStatus(row.status),
+    attemptCount: Number(row.attempt_count ?? 0),
+    startedAt: row.started_at ? String(row.started_at) : null,
+    updatedAt: String(row.updated_at ?? ""),
+    completedAt: row.completed_at ? String(row.completed_at) : null,
+    durationMs: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
+    errorMessage: row.error_message ? String(row.error_message) : null,
+    input: parseJsonValue<Record<string, unknown>>(row.input_json, {}),
+    output: parseJsonValue<Record<string, unknown>>(row.output_json, {})
+  }));
+  const mappedArtifacts = artifacts.map((row) => ({
+    artifactKey: String(row.artifact_key ?? ""),
+    artifactType: String(row.artifact_type ?? ""),
+    path: String(row.path ?? ""),
+    metadata: parseJsonValue<Record<string, unknown>>(row.metadata_json, {}),
+    createdAt: String(row.created_at ?? ""),
+    updatedAt: String(row.updated_at ?? "")
+  }));
+  const evidenceGraph = {
+    nodes: Number(graphRow?.nodes ?? 0),
+    edges: Number(graphRow?.edges ?? 0),
+    danglingEdges: Number(graphRow?.dangling_edges ?? 0),
+    orphanNodes: Number(graphRow?.orphan_nodes ?? 0)
+  };
+
   return {
-    job: mapJobSummary(jobRow),
-    steps: steps.map((row) => ({
-      stepKey: String(row.step_key ?? ""),
-      position: Number(row.position ?? 0),
-      title: String(row.title ?? ""),
-      kind: String(row.kind ?? ""),
-      status: normalizeJobStepStatus(row.status),
-      attemptCount: Number(row.attempt_count ?? 0),
-      startedAt: row.started_at ? String(row.started_at) : null,
-      updatedAt: String(row.updated_at ?? ""),
-      completedAt: row.completed_at ? String(row.completed_at) : null,
-      durationMs: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
-      errorMessage: row.error_message ? String(row.error_message) : null,
-      input: parseJsonValue<Record<string, unknown>>(row.input_json, {}),
-      output: parseJsonValue<Record<string, unknown>>(row.output_json, {})
-    })),
-    artifacts: artifacts.map((row) => ({
-      artifactKey: String(row.artifact_key ?? ""),
-      artifactType: String(row.artifact_type ?? ""),
-      path: String(row.path ?? ""),
-      metadata: parseJsonValue<Record<string, unknown>>(row.metadata_json, {}),
-      createdAt: String(row.created_at ?? ""),
-      updatedAt: String(row.updated_at ?? "")
-    })),
+    job,
+    steps: mappedSteps,
+    artifacts: mappedArtifacts,
     events,
-    evidenceGraph: {
-      nodes: Number(graphRow?.nodes ?? 0),
-      edges: Number(graphRow?.edges ?? 0),
-      danglingEdges: Number(graphRow?.dangling_edges ?? 0),
-      orphanNodes: Number(graphRow?.orphan_nodes ?? 0)
-    }
+    runtimeSummary: formatStoredJobRuntimeSummary({
+      job,
+      steps: mappedSteps,
+      artifacts: mappedArtifacts,
+      events,
+      evidenceGraph
+    }),
+    evidenceGraph
   };
 }
 

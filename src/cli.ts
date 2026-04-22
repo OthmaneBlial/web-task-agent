@@ -21,6 +21,7 @@ import {
 import { normalizeCliArgv } from "./lib/cli-argv";
 import { formatCliErrorMessage } from "./lib/cli-error";
 import { ensureLlmRuntimeEnvironment } from "./lib/runtime-env";
+import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
 import { createManagementServer } from "./server/management-server";
 import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
@@ -777,6 +778,7 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log(`Title: ${detail.job.title}`);
       console.log(`Status: ${detail.job.status}`);
       console.log(`Task Type: ${detail.job.taskType}`);
+      console.log(`Runtime Summary: ${formatStoredJobRuntimeSummary(detail)}`);
       console.log(`Report: ${detail.job.reportPath ?? "-"}`);
       console.log(`Artifact Dir: ${detail.job.artifactDir ?? "-"}`);
       console.log(`Steps: ${detail.steps.length}`);
