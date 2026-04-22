@@ -24,6 +24,7 @@ web-task-agent job report <job-id>
 web-task-agent job budget <job-id>
 web-task-agent storage maintain
 web-task-agent storage cleanup --prompt-traces <path>
+web-task-agent storage gate
 web-task-agent worker run --once
 web-task-agent server run --port 4317
 ```
@@ -85,6 +86,14 @@ Use `storage cleanup --prompt-traces <path>` when you want to trim an existing p
 
 - `--max-traces` keeps the newest records and drops older ones
 - `--dry-run` previews the change without rewriting the file
+
+## Hardening Gate
+
+Use `storage gate` when you want a quick readiness check for the local platform.
+
+- storage health must be clean
+- recoverable jobs should be resolved
+- paused or failed queue items should be cleared before you call the system done enough
 
 ## Log Export
 

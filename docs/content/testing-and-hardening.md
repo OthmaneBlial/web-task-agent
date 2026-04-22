@@ -38,6 +38,7 @@ For a more detailed product-surface view of the tests, read the test suite map p
 - run the relevant test subset or full build for the touched area
 - confirm the docs and examples still match the command or output shape
 - confirm the artifact layout and runtime paths still look the same to an operator
+- run `storage gate` before treating the local platform as ready enough for the current phase
 - update the living roadmap with the commit reference when the phase is complete
 
 ## Current Hardening Position

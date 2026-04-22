@@ -44,6 +44,7 @@ npm run start -- job budget <job-id>
 npm run start -- job logs <job-id> --limit 100
 npm run start -- storage maintain
 npm run start -- storage cleanup --prompt-traces <path>
+npm run start -- storage gate
 npm run start -- worker run --once
 npm run start -- server run --port 4317
 ```

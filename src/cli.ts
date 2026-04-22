@@ -29,6 +29,7 @@ import {
 } from "./lib/debug-format";
 import { formatStoredJobRecoveryReportLines } from "./lib/recovery-report";
 import { formatStoredJobPerformanceBudgetLines } from "./lib/performance-budget";
+import { evaluateProductionHardeningGate, formatProductionHardeningGateLines } from "./lib/hardening-gate";
 import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
 import { maintainPromptTraceRetention } from "./lib/prompt-trace";
 import { logStructured } from "./lib/local-logging";
@@ -953,6 +954,29 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log(`  After: ${summary.afterCount}`);
       console.log(`  Removed: ${summary.removedCount}`);
       console.log(`  Dry run: ${summary.dryRun ? "yes" : "no"}`);
+    });
+
+  storage
+    .command("gate")
+    .description("Run the final production-hardening readiness gate")
+    .action(() => {
+      const storageSummary = maintainJobStore({
+        vacuum: false
+      });
+      const storageHealth = assessStorageHealth(storageSummary);
+      const queueSummary = getQueuedJobSummary();
+      const recoverableJobs = listRecoverableJobs({
+        limit: 200
+      }).length;
+      const gate = evaluateProductionHardeningGate({
+        storage: storageHealth,
+        queue: queueSummary,
+        recoverableJobs
+      });
+
+      for (const line of formatProductionHardeningGateLines(gate)) {
+        console.log(line);
+      }
     });
 
   program
