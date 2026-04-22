@@ -22,6 +22,7 @@ import { normalizeCliArgv } from "./lib/cli-argv";
 import { formatCliErrorMessage } from "./lib/cli-error";
 import { ensureLlmRuntimeEnvironment } from "./lib/runtime-env";
 import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
+import { logStructured } from "./lib/local-logging";
 import { createManagementServer } from "./server/management-server";
 import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
@@ -883,6 +884,9 @@ Use "web-task-agent <command> --help" for the full option list.
 }
 
 main().catch((error: unknown) => {
+  logStructured("cli", error instanceof Error ? error.message : String(error), "error", {
+    stack: error instanceof Error ? error.stack ?? null : null
+  });
   console.error(formatCliErrorMessage(error));
   process.exitCode = 1;
 });
