@@ -712,8 +712,55 @@ Use "web-task-agent <command> --help" for the full option list.
         console.log("No job events found.");
         return;
       }
-      for (const event of events) {
-        console.log(`${event.createdAt} [${event.eventType}] ${event.message}`);
+
+      const renderedLines = [
+        `Job logs: ${String(jobId)}`,
+        `Events returned: ${events.length}`,
+        ...events.flatMap((event) => [
+          `- ${event.createdAt}`,
+          `  Type: ${event.eventType}`,
+          `  Message: ${event.message}`
+        ])
+      ];
+
+      if (options.output) {
+        const outputPath = path.resolve(String(options.output));
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+        fs.writeFileSync(outputPath, `${renderedLines.join("\n")}\n`, "utf8");
+        console.log(`Wrote job logs to ${outputPath}`);
+      } else {
+        for (const line of renderedLines) {
+          console.log(line);
+        }
+      }
+    });
+
+  job
+    .command("inspect <jobId>")
+    .description("Show a stored job summary, steps, and artifact paths")
+    .action((jobId) => {
+      const detail = getStoredJobDetail({
+        jobId: String(jobId)
+      });
+      if (!detail) {
+        throw new Error(`Unknown job: ${jobId}`);
+      }
+
+      console.log(`Job ID: ${detail.job.jobId}`);
+      console.log(`Title: ${detail.job.title}`);
+      console.log(`Status: ${detail.job.status}`);
+      console.log(`Task Type: ${detail.job.taskType}`);
+      console.log(`Report: ${detail.job.reportPath ?? "-"}`);
+      console.log(`Artifact Dir: ${detail.job.artifactDir ?? "-"}`);
+      console.log(`Steps: ${detail.steps.length}`);
+      console.log(`Artifacts: ${detail.artifacts.length}`);
+      console.log(`Evidence Graph: ${detail.evidenceGraph.nodes} nodes, ${detail.evidenceGraph.edges} edges`);
+
+      if (detail.artifacts.length > 0) {
+        console.log("Artifact paths:");
+        for (const artifact of detail.artifacts) {
+          console.log(`- ${artifact.artifactKey}: ${artifact.path}`);
+        }
       }
     });
 
