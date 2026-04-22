@@ -20,6 +20,7 @@ web-task-agent agent enqueue <instruction>
 web-task-agent queue list
 web-task-agent queue stats
 web-task-agent job logs <job-id> --limit 100
+web-task-agent job report <job-id>
 web-task-agent storage maintain
 web-task-agent worker run --once
 web-task-agent server run --port 4317
@@ -54,8 +55,16 @@ Use `job inspect <job-id>` when you want to see:
 - the stored job summary
 - the report path
 - the artifact directory
-- the artifact keys and file paths
-- the number of stored steps and evidence graph nodes
+  - the artifact keys and file paths
+  - the number of stored steps and evidence graph nodes
+
+## Recovery Reports
+
+Use `job report <job-id>` when you want a compact recovery-focused summary that highlights:
+
+- whether the job is recoverable right now
+- the recommended next command
+- the latest stored events and error message
 
 ## Log Export
 

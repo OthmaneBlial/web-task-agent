@@ -27,6 +27,7 @@ import {
   formatQueuedJobDebugLines,
   formatStoredJobDebugLines
 } from "./lib/debug-format";
+import { formatStoredJobRecoveryReportLines } from "./lib/recovery-report";
 import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
 import { logStructured } from "./lib/local-logging";
 import { assessStorageHealth } from "./lib/storage-validation";
@@ -754,6 +755,28 @@ Use "web-task-agent <command> --help" for the full option list.
         for (const line of renderedLines) {
           console.log(line);
         }
+      }
+    });
+
+  job
+    .command("report <jobId>")
+    .description("Print a recovery-focused report for a stored job")
+    .action((jobId) => {
+      const detail = getStoredJobDetail({
+        jobId: String(jobId)
+      });
+      if (!detail) {
+        throw new Error(`Unknown job: ${jobId}`);
+      }
+
+      const recoverableJobIds = new Set(
+        listRecoverableJobs({
+          limit: 200
+        }).map((record) => record.jobId)
+      );
+
+      for (const line of formatStoredJobRecoveryReportLines(detail, recoverableJobIds)) {
+        console.log(line);
       }
     });
 

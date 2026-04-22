@@ -8,7 +8,7 @@ export function formatCliErrorMessage(error: unknown): string {
     } else if (/unknown workflow template/i.test(message)) {
       hints.push("Run `web-task-agent workflow list` to see the available templates.");
     } else if (/unknown (job|queue item)/i.test(message)) {
-      hints.push("Run `web-task-agent job inspect <job-id>` or `web-task-agent queue list` to confirm the ID.");
+      hints.push("Run `web-task-agent job inspect <job-id>`, `web-task-agent job report <job-id>`, or `web-task-agent queue list` to confirm the ID.");
     } else {
       hints.push("Run `web-task-agent --help` or `<command> --help` for usage.");
     }
