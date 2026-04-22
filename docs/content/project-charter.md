@@ -26,6 +26,13 @@ Use these terms consistently across docs, CLI output, and implementation notes:
 - `evidence cluster`: grouped claims and supporting material
 - `handoff package`: the final workflow bundle that a human or downstream tool can use
 
+Rules of thumb:
+
+- Use `job` for the end-to-end run and `queue item` only while it is waiting to be claimed.
+- Use `workflow` for named templates and presets, not for ad hoc instructions.
+- Use `artifact` for on-disk outputs that are registered in SQLite.
+- Use `source` and `document` to distinguish a canonical web reference from a fetched page snapshot.
+
 ## Architecture Map
 
 The canonical flow is:

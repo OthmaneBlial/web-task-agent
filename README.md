@@ -97,6 +97,7 @@ The canonical flow is:
 ## Project Charter
 
 See [docs/content/project-charter.md](docs/content/project-charter.md) for the north star, vocabulary, maintenance rules, runtime layout, and quality gate.
+Use the charter as the canonical source for terminology when a command, doc, or code path could use more than one name.
 
 ## Workflow Packages
 
