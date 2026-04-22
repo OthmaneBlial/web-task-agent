@@ -666,6 +666,54 @@ function renderSummaryReferenceCatalog(
   return lines.join("\n").trim();
 }
 
+function renderUncertaintySection(
+  evidence: AgentEvidenceBundle,
+  labels?: Map<string, string>
+): string {
+  if (evidence.contradictions.length === 0) {
+    return "";
+  }
+
+  const lines = ["### Uncertainties", ""];
+
+  for (const contradiction of evidence.contradictions.slice(0, 5)) {
+    lines.push(`- ${contradiction.topic}`);
+    lines.push(`  ${contradiction.reason}`);
+    const refs = labels ? formatEvidenceRefs(contradiction.evidenceIds, labels, 4) : [];
+    if (refs.length > 0) {
+      lines.push(`  Evidence: ${refs.join(", ")}`);
+    }
+  }
+
+  lines.push("");
+  return lines.join("\n").trim();
+}
+
+function renderRecommendationSection(summary: AgentResearchSummary, evidence?: AgentEvidenceBundle | null): string {
+  const contentAngleDetails =
+    (summary.contentAngleDetails ?? []).length > 0
+      ? (summary.contentAngleDetails ?? [])
+      : summary.contentAngles.map((text) => ({ text, evidenceIds: [] }));
+
+  if (contentAngleDetails.length === 0) {
+    return "";
+  }
+
+  const labels = buildEvidenceLabelMap(summary, evidence);
+  const lines = ["### Recommendations", ""];
+
+  for (const angle of contentAngleDetails.slice(0, 5)) {
+    lines.push(`- Focus on: ${angle.text}`);
+    const refs = formatEvidenceRefs(angle.evidenceIds, labels);
+    if (refs.length > 0) {
+      lines.push(`  Evidence: ${refs.join(", ")}`);
+    }
+  }
+
+  lines.push("");
+  return lines.join("\n").trim();
+}
+
 export function renderResearchSummary(summary: AgentResearchSummary, evidence?: AgentEvidenceBundle | null): string {
   const labels = buildEvidenceLabelMap(summary, evidence);
   const lines = [
@@ -706,6 +754,18 @@ export function renderResearchSummary(summary: AgentResearchSummary, evidence?: 
       }
     }
     lines.push("");
+  }
+
+  const recommendationSection = renderRecommendationSection(summary, evidence);
+  if (recommendationSection) {
+    lines.push(recommendationSection, "");
+  }
+
+  if (evidence && evidence.contradictions.length > 0) {
+    const uncertaintySection = renderUncertaintySection(evidence, labels);
+    if (uncertaintySection) {
+      lines.push(uncertaintySection, "");
+    }
   }
 
   if (evidence && evidence.counts.sources > 0) {
