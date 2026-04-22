@@ -17,6 +17,7 @@ import { QueueWorkerTask } from "./tasks/queue-worker";
 import {
   buildWorkflowRunOptions,
   getWorkflowTemplate,
+  getWorkflowPreset,
   listWorkflowTemplates
 } from "./workflows";
 
@@ -313,7 +314,10 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log("Available workflows:");
       for (const template of templates) {
         console.log(`- ${template.id}: ${template.description}`);
-        console.log(`  Presets: ${template.presets.map((preset) => preset.id).join(", ")}`);
+        console.log(`  Default preset: ${template.defaultPresetId}`);
+        for (const preset of template.presets) {
+          console.log(`  - ${preset.id}: ${preset.description}`);
+        }
         console.log(`  Example: ${template.examplePath}`);
       }
     });
@@ -364,6 +368,10 @@ Use "web-task-agent <command> --help" for the full option list.
       if (!template) {
         throw new Error(`Unknown workflow template: ${templateId}`);
       }
+      const preset = getWorkflowPreset(
+        template,
+        options.preset ? normalizeText(String(options.preset)).toLowerCase() : undefined
+      );
       ensureLlmRuntimeEnvironment(`workflow run ${template.id}`);
 
       const task = new AgentRunnerTask(
@@ -397,7 +405,7 @@ Use "web-task-agent <command> --help" for the full option list.
       const result = await task.run();
       console.log(`Workflow job update.`);
       console.log(`Template: ${template.id}`);
-      console.log(`Preset: ${String(options.preset).toLowerCase()}`);
+      console.log(`Preset: ${preset.id} (${preset.description})`);
       console.log(`Status: ${result.status}`);
       console.log(`Expected time: ${result.expectedMinutes} minutes`);
       console.log(`Actual runtime: ${result.elapsedMinutes} minutes`);
@@ -459,6 +467,10 @@ Use "web-task-agent <command> --help" for the full option list.
       if (!template) {
         throw new Error(`Unknown workflow template: ${templateId}`);
       }
+      const preset = getWorkflowPreset(
+        template,
+        options.preset ? normalizeText(String(options.preset)).toLowerCase() : undefined
+      );
       ensureLlmRuntimeEnvironment(`workflow enqueue ${template.id}`);
 
       const payloadOptions = buildWorkflowRunOptions({

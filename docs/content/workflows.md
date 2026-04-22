@@ -56,6 +56,14 @@ Both templates:
 - write workflow briefs and package manifests
 - support queueing and worker execution
 
+## Choosing A Preset
+
+- `fast`: quick directional check with fewer queries and a shorter runtime
+- `standard`: the default balance for normal operator use
+- `deep`: more coverage and a longer runtime for higher-confidence outputs
+
+If you are unsure which preset to use, start with `standard`. Use `fast` when you only need a quick sense of direction, and use `deep` when the topic is important enough to justify more runtime.
+
 ## Queue A Workflow Instead Of Running It Immediately
 
 ```bash
