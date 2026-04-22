@@ -43,6 +43,24 @@ The commands print stable labels for:
 
 Those labels make it easier to copy values into follow-up commands or inspect paths in the filesystem.
 
+## Artifact Discovery
+
+Use `job inspect <job-id>` when you want to see:
+
+- the stored job summary
+- the report path
+- the artifact directory
+- the artifact keys and file paths
+- the number of stored steps and evidence graph nodes
+
+## Log Export
+
+Use `job logs <job-id> --output <path>` to write the recent event history to a file for later review or sharing.
+
+## Failure Messages
+
+Most command failures now print a short action-oriented hint. The goal is to point you to the next useful command or missing environment variable instead of dumping a raw stack trace first.
+
 ## Environment Validation
 
 Job-launching commands fail fast when the API key is missing. Set one of:
