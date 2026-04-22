@@ -54,6 +54,12 @@ After a run, expect state in these places:
 
 The quickest way to understand a fresh run is to open the workflow package first, then compare it with the stored job state and the local dashboard.
 
+The main distinction to remember is:
+
+- `.cache/` is for temporary resume state
+- `.data/` is for durable job and queue data
+- `reports/` is for human-facing outputs
+
 ## 6. Start The Local Dashboard
 
 ```bash

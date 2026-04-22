@@ -69,6 +69,8 @@
 - `.data/` is for durable structured state.
 - `reports/` is for generated deliverables.
 - `base/` is intentionally local-only and ignored by git.
+- `reports/workflows/<template>/<topic-slug>/` is the stable package destination for workflow runs.
+- `.data/web-task-agent.sqlite` is the default durable database path.
 
 ## Useful Mental Model
 

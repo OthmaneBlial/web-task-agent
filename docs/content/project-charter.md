@@ -90,6 +90,8 @@ The project uses a small number of stable locations:
 - `.data/` for durable SQLite data
 - `reports/` for generated reports and workflow packages
 - `base/` for the private living roadmap and other local-only planning notes
+- `reports/workflows/<template>/<topic-slug>/` for the canonical workflow package output path
+- `.data/web-task-agent.sqlite` for the main durable database file
 
 ## First Operator Journey
 
