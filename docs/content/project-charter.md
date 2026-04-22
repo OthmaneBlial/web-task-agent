@@ -118,3 +118,9 @@ Before a major change is considered done:
 - the docs should describe the new behavior
 - the output package should still be easy to inspect
 - the change should not break recovery, queueing, or artifact paths
+
+Pre-merge checklist:
+
+- verify the changed command path with a quick local run
+- make sure the docs mention any new flags, files, or output paths
+- confirm the roadmap entry for the work is updated after the commit lands

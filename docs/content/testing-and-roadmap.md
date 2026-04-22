@@ -31,6 +31,13 @@ Useful health signals:
 - artifact inspection should not require database spelunking
 - docs drift should be rare and easy to spot
 
+## Pre-Merge Checklist
+
+- run the relevant test subset or full build for the touched area
+- confirm the docs and examples still match the command or output shape
+- confirm the artifact layout and runtime paths still look the same to an operator
+- update the living roadmap with the commit reference when the phase is complete
+
 ## Current Macro Roadmap Position
 
 Most of the large platform milestones are already complete:
