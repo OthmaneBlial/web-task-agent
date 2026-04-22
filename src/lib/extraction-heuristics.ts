@@ -512,6 +512,68 @@ export function buildReviewExtractionCandidates(
   return selectUniqueExtractions(candidates);
 }
 
+export function buildGeneralExtractionCandidates(
+  result: AgentSearchResult
+): AgentExtractionCandidate[] {
+  if (!shouldExtractFromResult(result)) {
+    return [];
+  }
+
+  const sentences = sentencePool(result);
+  const claimSentences = sentences.length > 0 ? sentences : splitSentences(buildDigestText(result));
+  const candidates: AgentExtractionCandidate[] = [];
+
+  pushEntitiesAndThemes(candidates, result, "general", 0.66, "best_effort");
+  pushSentenceCandidates(
+    candidates,
+    "claim",
+    claimSentences,
+    [
+      "helps",
+      "supports",
+      "enables",
+      "improves",
+      "reduces",
+      "provides",
+      "simplifies",
+      "automates",
+      "creates"
+    ],
+    0.7,
+    "general_claim_sentence",
+    "best_effort"
+  );
+  pushSentenceCandidates(
+    candidates,
+    "complaint",
+    sentences,
+    [
+      "slow",
+      "hard",
+      "missing",
+      "problem",
+      "issue",
+      "confusing",
+      "manual",
+      "expensive"
+    ],
+    0.72,
+    "general_pain_sentence",
+    "best_effort"
+  );
+  pushSentenceCandidates(
+    candidates,
+    "feature_request",
+    sentences,
+    ["should", "could", "wish", "want", "need", "would help", "would like"],
+    0.73,
+    "general_request_sentence",
+    "best_effort"
+  );
+
+  return selectUniqueExtractions(candidates);
+}
+
 export function buildContentAwareExtractionCandidates(
   result: AgentSearchResult
 ): AgentExtractionCandidate[] {
@@ -534,6 +596,13 @@ export function buildContentAwareExtractionCandidates(
   if (contentType === "review") {
     return selectUniqueExtractions([
       ...buildReviewExtractionCandidates(result),
+      ...buildHeuristicExtractionCandidates(result)
+    ]);
+  }
+
+  if (contentType === "general") {
+    return selectUniqueExtractions([
+      ...buildGeneralExtractionCandidates(result),
       ...buildHeuristicExtractionCandidates(result)
     ]);
   }

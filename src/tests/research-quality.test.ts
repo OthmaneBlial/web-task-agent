@@ -153,6 +153,31 @@ function createReviewResult(): AgentSearchResult {
   };
 }
 
+function createGeneralResult(): AgentSearchResult {
+  return {
+    title: "Why teams automate evidence exports",
+    url: "https://blog.example.com/why-teams-automate-evidence-exports",
+    snippet: "Teams want automation that reduces manual evidence collection and keeps reports reusable.",
+    site: "blog.example.com",
+    reviewStatus: "read",
+    qualityScore: 0.8,
+    qualitySignals: ["blog post", "multiple paragraphs"],
+    page: {
+      title: "Why teams automate evidence exports",
+      url: "https://blog.example.com/why-teams-automate-evidence-exports",
+      description: "A product blog post about workflow automation and evidence exports.",
+      h1: "Why teams automate evidence exports",
+      headings: ["Automation payoff", "Operational tradeoffs"],
+      paragraphs: [
+        "Automation helps teams reduce manual evidence collection and improves the reliability of long research workflows.",
+        "The article says current reporting is too repetitive and could use better export packaging for downstream review.",
+        "Teams want a workflow that creates reusable drafts instead of a pile of ad hoc notes."
+      ],
+      capturedAt: "2026-03-20T12:20:00.000Z"
+    }
+  };
+}
+
 function createStaleDocsResult(): AgentSearchResult {
   return {
     title: "CSV export workflow guide",
@@ -500,17 +525,21 @@ test("default extractor uses source-specific heuristics for docs forums and revi
   const docsResults = extractor.extractFromResult(createGoodResult());
   const forumResults = extractor.extractFromResult(createForumResult());
   const reviewResults = extractor.extractFromResult(createReviewResult());
+  const generalResults = extractor.extractFromResult(createGeneralResult());
 
   const docsMethods = docsResults.map((item) => item.method);
   const forumMethods = forumResults.map((item) => item.method);
   const reviewMethods = reviewResults.map((item) => item.method);
+  const generalMethods = generalResults.map((item) => item.method);
 
   assert.ok(docsMethods.some((method) => method.startsWith("docs_")));
   assert.ok(forumMethods.some((method) => method.startsWith("forum_")));
   assert.ok(reviewMethods.some((method) => method.startsWith("review_")));
+  assert.ok(generalMethods.some((method) => method.startsWith("general_")));
   assert.ok(docsResults.every((item) => item.origin === "best_effort" || item.origin === "heuristic"));
   assert.ok(forumResults.every((item) => item.origin === "best_effort" || item.origin === "heuristic"));
   assert.ok(reviewResults.every((item) => item.origin === "best_effort" || item.origin === "heuristic"));
+  assert.ok(generalResults.every((item) => item.origin === "best_effort" || item.origin === "heuristic"));
 });
 
 test("extractor skips low-quality results and persists only readable evidence", () => {
