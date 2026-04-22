@@ -29,6 +29,7 @@ import {
 } from "./lib/debug-format";
 import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
 import { logStructured } from "./lib/local-logging";
+import { assessStorageHealth } from "./lib/storage-validation";
 import { createManagementServer } from "./server/management-server";
 import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
@@ -879,6 +880,11 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log(`  Pages: ${summary.pages}`);
       console.log(`  Freelist pages: ${summary.freelistPages}`);
       console.log(`  Vacuumed: ${summary.vacuumed ? "yes" : "no"}`);
+      const health = assessStorageHealth(summary);
+      console.log(`  Health: ${health.healthy ? "healthy" : "attention needed"}`);
+      for (const warning of health.warnings) {
+        console.log(`  Warning: ${warning}`);
+      }
     });
 
   program
