@@ -71,7 +71,28 @@ Commands:
 
 ```bash
 npm run start -- server run --port 4317
+npm run start -- job inspect <job-id>
 npm run start -- job logs <job-id> --limit 100
 ```
 
 This is useful when a run is long enough that you want real operator visibility instead of waiting blindly.
+
+## Example 6: Export Logs For Later Review
+
+Command:
+
+```bash
+npm run start -- job logs <job-id> --limit 250 --output ./job-logs.txt
+```
+
+Use this when you want to share or archive a long log history without losing the exact event ordering.
+
+## Example 7: Discover A Workflow Before Launching It
+
+Command:
+
+```bash
+npm run start -- workflow list
+```
+
+Use this when you want to compare `fast`, `standard`, and `deep` before picking the launch option that fits the job.
