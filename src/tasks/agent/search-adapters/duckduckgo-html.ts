@@ -153,9 +153,41 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
         const normalize = (value) => (value || "").replace(/\\s+/g, " ").trim();
         const siteOf = (rawUrl) => {
           try {
-            return new URL(rawUrl).hostname.replace(/^www\\./, "");
+            return new URL(rawUrl).hostname.replace(/^www\\./, "").toLowerCase();
           } catch {
             return "";
+          }
+        };
+        const normalizeResultUrl = (rawUrl) => {
+          try {
+            const parsed = new URL(rawUrl, window.location.origin);
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+              return null;
+            }
+            parsed.hash = "";
+            parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\\./, "");
+            if (
+              (parsed.protocol === "http:" && parsed.port === "80") ||
+              (parsed.protocol === "https:" && parsed.port === "443")
+            ) {
+              parsed.port = "";
+            }
+            for (const param of [
+              "utm_source",
+              "utm_medium",
+              "utm_campaign",
+              "utm_term",
+              "utm_content",
+              "utm_id",
+              "gclid",
+              "fbclid",
+              "msclkid"
+            ]) {
+              parsed.searchParams.delete(param);
+            }
+            return parsed.toString();
+          } catch {
+            return null;
           }
         };
 
@@ -185,15 +217,7 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
             }
           }
 
-          let url = null;
-          try {
-            const parsed = new URL(href, window.location.origin);
-            if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-              url = parsed.toString();
-            }
-          } catch {
-            url = null;
-          }
+          const url = normalizeResultUrl(href);
 
           if (!url || seen.has(url)) {
             continue;

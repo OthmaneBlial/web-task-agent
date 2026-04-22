@@ -24,6 +24,42 @@ import {
 } from "../shared";
 import type { AgentFetcher } from "../fetcher";
 
+function normalizeBrowserUrl(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+
+    parsed.hash = "";
+    parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    if (
+      (parsed.protocol === "http:" && parsed.port === "80") ||
+      (parsed.protocol === "https:" && parsed.port === "443")
+    ) {
+      parsed.port = "";
+    }
+
+    for (const param of [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "utm_id",
+      "gclid",
+      "fbclid",
+      "msclkid"
+    ]) {
+      parsed.searchParams.delete(param);
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 export class BrowserPageFetcher implements AgentFetcher {
   readonly id = "browser_page_fetcher";
   readonly label = "Browser Page Fetcher";
@@ -128,6 +164,10 @@ export class BrowserPageFetcher implements AgentFetcher {
     const enriched: AgentSearchResult[] = [];
 
     for (const result of results) {
+      const normalizedUrl = normalizeBrowserUrl(result.url);
+      if (normalizedUrl) {
+        result.url = normalizedUrl;
+      }
       result.contentType = result.contentType ?? classifyResearchContentType(result);
       const policy = evaluateDomainPolicy(result);
       result.policyAction = policy.action;

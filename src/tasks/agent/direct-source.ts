@@ -144,6 +144,22 @@ function cleanAppTitle(raw: string | null | undefined): string {
     .trim();
 }
 
+function normalizeAppListingTitle(raw: string | null | undefined): string {
+  const cleaned = cleanAppTitle(raw);
+  if (!cleaned) {
+    return "";
+  }
+
+  const brandSplit = cleaned.match(/^[^:|/]{2,30}[:|/]\s*(.+)$/);
+  const withoutBrand = brandSplit ? brandSplit[1] : cleaned;
+  const modifierMatch = withoutBrand.match(/^(offline|online|free|pro|lite|premium|ad[-\s]?free|no[-\s]?ads)\s+(.+)$/i);
+  if (modifierMatch) {
+    return `${modifierMatch[2].trim()} ${modifierMatch[1].trim()}`.replace(/\s+/g, " ").trim();
+  }
+
+  return withoutBrand.replace(/\s+/g, " ").trim();
+}
+
 function isPlaceholderProvidedSourceTitle(raw: string | null | undefined): boolean {
   const normalized = cleanAppTitle(raw).toLowerCase();
   return normalized.startsWith("provided source url:");
@@ -560,9 +576,11 @@ async function fetchPlayStoreAppMetadata(url: string): Promise<{
     const longDescription = extractRichPlayStoreDescription(html);
     const category = extractPlayStoreCategory(html);
     const developer = extractPlayStoreDeveloper(html);
+    const cleanedH1 = normalizeAppListingTitle(h1);
+    const cleanedFullTitle = normalizeAppListingTitle(fullTitle);
     const appName =
-      cleanAppTitle(h1) ||
-      cleanAppTitle(fullTitle) ||
+      cleanedFullTitle ||
+      cleanedH1 ||
       humanizePackageId(appId) ||
       "";
 
