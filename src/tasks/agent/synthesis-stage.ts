@@ -544,6 +544,31 @@ function renderEvidenceSection(evidence: AgentEvidenceBundle): string {
   return lines.join("\n").trim();
 }
 
+function renderEvidenceDebugSection(evidence: AgentEvidenceBundle): string {
+  if (evidence.sources.length === 0) {
+    return "";
+  }
+
+  const lines = ["## Evidence Debug", ""];
+
+  for (const source of evidence.sources.slice(0, 6)) {
+    lines.push(
+      `- [${source.sourceId}] ${source.title} | type ${source.contentType} | quality ${(source.sourceQualityScore * 100).toFixed(0)}% | freshness ${(source.freshnessScore * 100).toFixed(0)}% | trend ${(source.trendScore * 100).toFixed(0)}% | overall ${(source.overallScore * 100).toFixed(0)}%`
+    );
+    if (source.qualitySignals.length > 0) {
+      lines.push(`  Signals: ${source.qualitySignals.slice(0, 4).join(" | ")}`);
+    }
+    if (source.extractions.length > 0) {
+      lines.push(
+        `  Extractions: ${source.extractions.slice(0, 3).map((item) => `${item.kind}: ${item.value}`).join(" | ")}`
+      );
+    }
+  }
+
+  lines.push("");
+  return lines.join("\n").trim();
+}
+
 function renderClusterSection(evidence: AgentEvidenceBundle, labels?: Map<string, string>): string {
   if (evidence.clusters.length === 0) {
     return "";
@@ -768,6 +793,10 @@ export function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundl
       lines.push(`- ${note}`);
     }
     lines.push("");
+  }
+
+  if (evidence && evidence.sources.length > 0) {
+    lines.push(renderEvidenceDebugSection(evidence), "");
   }
 
   if (state.research.length > 0) {
