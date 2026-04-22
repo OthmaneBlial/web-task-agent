@@ -402,7 +402,7 @@ function formatEvidenceRefs(ids: string[], labels: Map<string, string>, limit: n
   const display = ids
     .map((id) => labels.get(id))
     .filter((value): value is string => Boolean(value));
-  return Array.from(new Set(display)).slice(0, limit);
+  return Array.from(new Set(display)).sort((left, right) => left.localeCompare(right)).slice(0, limit);
 }
 
 function derivePlanLines(state: AgentRunState): string[] {
@@ -615,7 +615,17 @@ function renderSummaryReferenceCatalog(
   const labels = buildEvidenceLabelMap(summary, evidence);
   const lines = ["### Evidence References", ""];
 
-  for (const reference of referencedEvidence) {
+  const orderedReferences = [...referencedEvidence].sort((left, right) => {
+    if (left.sourceTitle !== right.sourceTitle) {
+      return left.sourceTitle.localeCompare(right.sourceTitle);
+    }
+    if (left.sourceUrl !== right.sourceUrl) {
+      return left.sourceUrl.localeCompare(right.sourceUrl);
+    }
+    return left.id.localeCompare(right.id);
+  });
+
+  for (const reference of orderedReferences) {
     const confidence =
       typeof reference.confidence === "number" ? ` | confidence ${(reference.confidence * 100).toFixed(0)}%` : "";
     const score =
