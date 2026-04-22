@@ -382,6 +382,7 @@ function dashboardHtml(): string {
           <span class="muted">worker-facing execution backlog</span>
         </div>
         <div id="queue"></div>
+        <div id="queue-detail" style="margin-top: 14px;"></div>
       </div>
     </section>
 
@@ -413,6 +414,7 @@ function dashboardHtml(): string {
   <script>
     const state = {
       selectedJobId: null,
+      selectedQueueId: null,
       jobs: [],
       queue: [],
       recoverable: [],
@@ -522,9 +524,16 @@ function dashboardHtml(): string {
         ? '<p>No queued jobs.</p>'
         : '<div class="table-wrap"><table><thead><tr><th>Queue ID</th><th>Status</th><th>Attempts</th><th>Linked Job</th><th>Label</th><th>Actions</th></tr></thead><tbody>' +
           state.queue.map((item) =>
-            '<tr><td>' + escapeHtml(item.queueId) + '</td><td>' + pill(item.status) + (item.controlAction ? '<div class="muted">' + escapeHtml(item.controlAction) + ' requested</div>' : '') + '</td><td>' + item.attempts + '/' + item.maxAttempts + '</td><td>' + escapeHtml(item.jobId || '-') + '</td><td>' + escapeHtml(item.label) + '</td><td>' + queueActionButtons(item) + '</td></tr>'
+            '<tr><td><button class="rowlink" data-queue-id="' + escapeHtml(item.queueId) + '">' + escapeHtml(item.queueId) + '</button><div class="muted">' + escapeHtml(item.mode) + ' / ' + escapeHtml(item.taskType) + '</div></td><td>' + pill(item.status) + (item.controlAction ? '<div class="muted">' + escapeHtml(item.controlAction) + ' requested</div>' : '') + '</td><td>' + item.attempts + '/' + item.maxAttempts + '</td><td>' + escapeHtml(item.jobId || '-') + '</td><td>' + escapeHtml(item.label) + '</td><td>' + queueActionButtons(item) + '</td></tr>'
           ).join('') +
           '</tbody></table></div>';
+
+      document.querySelectorAll('[data-queue-id]').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.selectedQueueId = button.getAttribute('data-queue-id');
+          renderQueueDetail();
+        });
+      });
 
       document.querySelectorAll('[data-queue-action]').forEach((button) => {
         button.addEventListener('click', async () => {
@@ -538,6 +547,63 @@ function dashboardHtml(): string {
           if (state.selectedJobId) {
             await loadJobDetail();
           }
+          renderQueueDetail();
+        });
+      });
+    }
+
+    function renderQueueDetail() {
+      const node = document.getElementById('queue-detail');
+      const item = state.queue.find((entry) => entry.queueId === state.selectedQueueId) || null;
+      if (!item) {
+        node.innerHTML = '<p>No queue item selected.</p>';
+        return;
+      }
+
+      const payloadOptions = item.payload && item.payload.options ? item.payload.options : {};
+      const optionEntries = Object.entries(payloadOptions)
+        .filter(([, value]) => value !== null && value !== undefined && value !== "")
+        .slice(0, 8)
+        .map(([key, value]) => '<li><strong>' + escapeHtml(key) + ':</strong> ' + escapeHtml(typeof value === 'string' ? value : JSON.stringify(value)) + '</li>');
+
+      node.innerHTML = [
+        '<div class="section-title" style="margin-top: 16px;">',
+        '<h3>Queue Detail</h3>',
+        '<span class="muted">' + escapeHtml(item.queueId) + '</span>',
+        '</div>',
+        '<div class="grid-cards">',
+        '<div class="mini-card"><strong>Status</strong><div>' + pill(item.status) + '</div></div>',
+        '<div class="mini-card"><strong>Attempts</strong><div>' + item.attempts + ' / ' + item.maxAttempts + '</div></div>',
+        '<div class="mini-card"><strong>Priority</strong><div>' + item.priority + '</div></div>',
+        '<div class="mini-card"><strong>Linked Job</strong><div>' + escapeHtml(item.jobId || '-') + '</div></div>',
+        '<div class="mini-card"><strong>Run After</strong><div>' + escapeHtml(item.runAfter) + '</div></div>',
+        '<div class="mini-card"><strong>Lease Expires</strong><div>' + escapeHtml(item.leaseExpiresAt || '-') + '</div></div>',
+        '</div>',
+        '<div class="toolbar">',
+        queueActionButtons(item),
+        '</div>',
+        '<div class="grid-cards" style="margin-top: 16px;">',
+        '<div class="mini-card"><strong>Payload Mode</strong><div>' + escapeHtml(item.mode) + '</div></div>',
+        '<div class="mini-card"><strong>Task Type</strong><div>' + escapeHtml(item.taskType) + '</div></div>',
+        '<div class="mini-card"><strong>Payload Label</strong><div>' + escapeHtml(item.payload.label || '-') + '</div></div>',
+        '<div class="mini-card"><strong>Last Error</strong><div>' + escapeHtml(item.lastError || '-') + '</div></div>',
+        '</div>',
+        '<div style="margin-top: 16px;">',
+        '<h3 style="margin-bottom: 10px;">Payload Options</h3>',
+        optionEntries.length === 0 ? '<p>No additional queue payload options were stored.</p>' : '<ul>' + optionEntries.join('') + '</ul>',
+        '</div>'
+      ].join('');
+
+      document.querySelectorAll('[data-queue-action]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const queueId = button.getAttribute('data-queue-id');
+          const action = button.getAttribute('data-queue-action');
+          if (!queueId || !action) {
+            return;
+          }
+          await postJson('/api/queue/' + encodeURIComponent(queueId) + '/control', { action });
+          await refresh();
+          renderQueueDetail();
         });
       });
     }
@@ -739,6 +805,10 @@ function dashboardHtml(): string {
       renderStats();
       renderJobs();
       renderQueue();
+      if (state.selectedQueueId && !state.queue.some((item) => item.queueId === state.selectedQueueId)) {
+        state.selectedQueueId = null;
+      }
+      renderQueueDetail();
       document.getElementById('refresh-status').textContent = 'refreshed ' + new Date().toLocaleTimeString();
       if (state.selectedJobId) {
         const stillExists = state.jobs.some((job) => job.jobId === state.selectedJobId);
