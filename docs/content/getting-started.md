@@ -6,6 +6,8 @@
 npm install
 ```
 
+If the install fails, fix the local environment first rather than trying to debug the agent itself.
+
 ## 2. Configure Environment
 
 Create or update your `.env` file with the variables used by the project:
@@ -44,6 +46,8 @@ npm run start -- workflow run article-research \
   --topic "browser automation with Lightpanda and CDP"
 ```
 
+If you are learning the system, run the workflow template first. It exercises the same durable pipeline but gives you a more structured output package.
+
 ## 5. Inspect Outputs
 
 After a run, expect state in these places:
@@ -59,6 +63,14 @@ The main distinction to remember is:
 - `.cache/` is for temporary resume state
 - `.data/` is for durable job and queue data
 - `reports/` is for human-facing outputs
+
+### Suggested First Walkthrough
+
+1. install dependencies
+2. start Lightpanda
+3. run `workflow run article-research`
+4. open the resulting report package
+5. open the dashboard and compare the visible job state with the files on disk
 
 ## 6. Start The Local Dashboard
 

@@ -103,6 +103,13 @@ The shortest useful path should stay simple:
 4. inspect the report package
 5. open the local dashboard if the run is long or needs recovery
 
+First 15 minutes checklist:
+
+- confirm the environment file is populated
+- run one built-in workflow before trying a custom job
+- open the generated report package and verify the artifact paths
+- check the dashboard once to see where the job state lives
+
 ## Quality Gate
 
 Before a major change is considered done:
