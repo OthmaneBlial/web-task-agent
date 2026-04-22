@@ -10,6 +10,11 @@ import {
   listStoredJobs
 } from "../lib/job-store";
 import type { JobControlAction, QueueControlAction } from "../types";
+import {
+  createApiError,
+  isJobControlAction,
+  isQueueControlAction
+} from "./api-contract";
 
 interface ManagementServerOptions {
   databasePath?: string;
@@ -30,12 +35,7 @@ function sendApiError(
   message: string,
   details?: Record<string, unknown>
 ): void {
-  sendJson(res, statusCode, {
-    ok: false,
-    error,
-    message,
-    ...(details ?? {})
-  });
+  sendJson(res, statusCode, createApiError(error, message, details));
 }
 
 function sendHtml(res: ServerResponse, html: string): void {
@@ -1043,7 +1043,8 @@ export function createManagementServer(options?: ManagementServerOptions): http.
 
         sendApiError(res, 400, "invalid_job_control_action", "Unsupported job control action", {
           allowedActions: ["pause", "cancel", "resume", "rerun"],
-          action
+          action,
+          valid: isJobControlAction(action)
         });
         return;
       }
@@ -1069,11 +1070,12 @@ export function createManagementServer(options?: ManagementServerOptions): http.
         }
 
         const body = await readJsonBody(req);
-        const action = body.action as QueueControlAction | string | undefined;
-        if (action !== "pause" && action !== "resume" && action !== "cancel" && action !== "retry") {
+        const action = body.action;
+        if (!isQueueControlAction(action)) {
           sendApiError(res, 400, "invalid_queue_control_action", "Unsupported queue control action", {
             allowedActions: ["pause", "resume", "cancel", "retry"],
-            action
+            action,
+            valid: isQueueControlAction(action)
           });
           return;
         }
