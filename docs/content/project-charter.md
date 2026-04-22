@@ -63,6 +63,14 @@ The project is healthy when:
 - docs stay close to implementation behavior
 - tests cover the places where state, recovery, and artifacts can regress
 
+Helpful signals to watch:
+
+- time to first useful run after clone
+- percentage of interrupted jobs that resume cleanly
+- number of docs pages that still match the code paths they describe
+- number of high-risk paths covered by tests
+- amount of time needed to inspect a failed job
+
 ## Maintenance Rules
 
 - Keep runtime data out of git.

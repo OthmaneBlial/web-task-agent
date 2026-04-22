@@ -24,6 +24,13 @@ The project is healthiest when these remain true:
 - queue controls stay safe to use on long-running jobs
 - new changes add or update tests where state or recovery can regress
 
+Useful health signals:
+
+- first-run setup should stay short and obvious
+- interrupted jobs should resume with minimal manual cleanup
+- artifact inspection should not require database spelunking
+- docs drift should be rare and easy to spot
+
 ## Current Macro Roadmap Position
 
 Most of the large platform milestones are already complete:
