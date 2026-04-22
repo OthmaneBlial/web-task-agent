@@ -15,12 +15,18 @@ import {
 } from "./lib/job-queue";
 import {
   getStoredJobDetail,
+  listRecoverableJobs,
   listJobRunEvents,
+  listStoredJobs,
   maintainJobStore
 } from "./lib/job-store";
 import { normalizeCliArgv } from "./lib/cli-argv";
 import { formatCliErrorMessage } from "./lib/cli-error";
 import { ensureLlmRuntimeEnvironment } from "./lib/runtime-env";
+import {
+  formatQueuedJobDebugLines,
+  formatStoredJobDebugLines
+} from "./lib/debug-format";
 import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
 import { logStructured } from "./lib/local-logging";
 import { createManagementServer } from "./server/management-server";
@@ -794,6 +800,60 @@ Use "web-task-agent <command> --help" for the full option list.
         for (const artifact of detail.artifacts) {
           console.log(`- ${artifact.artifactKey}: ${artifact.path}`);
         }
+      }
+    });
+
+  const debug = program
+    .command("debug")
+    .description("Quick debugging shortcuts for local operators");
+
+  debug
+    .command("summary")
+    .description("Show a compact runtime summary of stored jobs and the queue")
+    .action(() => {
+      const jobs = listStoredJobs({
+        limit: 200
+      });
+      const queueSummary = getQueuedJobSummary();
+      const recoverable = listRecoverableJobs();
+
+      console.log(`Debug summary:`);
+      console.log(`  Stored jobs: ${jobs.length}`);
+      console.log(`  Queue queued: ${queueSummary.queued}`);
+      console.log(`  Queue running: ${queueSummary.running}`);
+      console.log(`  Queue paused: ${queueSummary.paused}`);
+      console.log(`  Recoverable jobs: ${recoverable.length}`);
+    });
+
+  debug
+    .command("job <jobId>")
+    .description("Print a compact job debug view")
+    .action((jobId) => {
+      const detail = getStoredJobDetail({
+        jobId: String(jobId)
+      });
+      if (!detail) {
+        throw new Error(`Unknown job: ${jobId}`);
+      }
+
+      for (const line of formatStoredJobDebugLines(detail)) {
+        console.log(line);
+      }
+    });
+
+  debug
+    .command("queue <queueId>")
+    .description("Print a compact queue debug view")
+    .action((queueId) => {
+      const queuedJob = getQueuedJob({
+        queueId: String(queueId)
+      });
+      if (!queuedJob) {
+        throw new Error(`Unknown queue item: ${queueId}`);
+      }
+
+      for (const line of formatQueuedJobDebugLines(queuedJob)) {
+        console.log(line);
       }
     });
 
