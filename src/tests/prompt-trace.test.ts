@@ -169,3 +169,67 @@ test("prompt trace recorder prunes older records when retention is bounded", () 
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test("prompt trace recorder reloads existing manifests before appending", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-prompt-trace-reload-"));
+  const tracePath = path.join(tempDir, "runtime", "llm-prompt-traces.json");
+
+  try {
+    const firstRecorder = createPromptTraceRecorder({
+      outputPath: tracePath
+    });
+    const firstHooks = firstRecorder.createHooks();
+    firstHooks.onStart?.({
+      traceId: "trace_first",
+      operation: "alpha",
+      promptVersion: "alpha.v1",
+      model: "test-model",
+      maxTokens: 100,
+      createdAt: "2026-03-20T12:00:00.000Z",
+      system: "system a",
+      prompt: "prompt a"
+    });
+    firstHooks.onSuccess?.({
+      traceId: "trace_first",
+      operation: "alpha",
+      promptVersion: "alpha.v1",
+      model: "test-model",
+      maxTokens: 100,
+      createdAt: "2026-03-20T12:00:00.000Z",
+      completedAt: "2026-03-20T12:00:01.000Z",
+      durationMs: 1000,
+      system: "system a",
+      prompt: "prompt a",
+      responseText: "{\"summary\":\"ok\"}"
+    });
+
+    const secondRecorder = createPromptTraceRecorder({
+      outputPath: tracePath
+    });
+    const secondHooks = secondRecorder.createHooks();
+    secondHooks.onStart?.({
+      traceId: "trace_second",
+      operation: "beta",
+      promptVersion: "beta.v1",
+      model: "test-model",
+      maxTokens: 100,
+      createdAt: "2026-03-20T12:02:00.000Z",
+      system: "system b",
+      prompt: "prompt b"
+    });
+
+    const manifest = JSON.parse(fs.readFileSync(tracePath, "utf8")) as {
+      traces: Array<{ traceId: string; status: string }>;
+    };
+
+    assert.deepEqual(
+      manifest.traces.map((trace) => ({ traceId: trace.traceId, status: trace.status })),
+      [
+        { traceId: "trace_first", status: "completed" },
+        { traceId: "trace_second", status: "running" }
+      ]
+    );
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
