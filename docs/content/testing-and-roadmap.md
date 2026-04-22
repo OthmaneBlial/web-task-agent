@@ -72,6 +72,7 @@ This is intentionally **local-first**, not a scale-out or hosted deployment road
 - Mark completed phases with `[x]` and record the commit that did the work.
 - Treat docs drift as a regression when behavior or paths change.
 - Keep commit messages narrow enough that one roadmap phase maps cleanly to one commit when possible.
+- If a phase ends up spanning multiple commits, record the last commit that completed the work.
 
 ## Repo Source Pages
 

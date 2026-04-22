@@ -81,6 +81,7 @@ Helpful signals to watch:
 - Keep the roadmap entries in phase order so future progress is easy to scan.
 - Prefer one commit per roadmap phase when the work is easy to separate.
 - Update `base/roadmap.md` locally as work lands, even though it stays ignored by git.
+- When a phase is split across multiple commits, keep the final commit reference in the roadmap entry.
 
 ## Runtime Layout
 
