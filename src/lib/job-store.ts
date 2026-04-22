@@ -729,16 +729,16 @@ function scoreFreshness(isoTimestamp: string | null | undefined): number {
     return 1;
   }
   if (ageDays <= 7) {
-    return 0.95;
+    return 0.97;
   }
-  if (ageDays <= 30) {
-    return 0.85;
+  if (ageDays <= 21) {
+    return 0.9;
   }
-  if (ageDays <= 90) {
-    return 0.65;
+  if (ageDays <= 60) {
+    return 0.72;
   }
-  if (ageDays <= 365) {
-    return 0.4;
+  if (ageDays <= 180) {
+    return 0.45;
   }
   return 0.2;
 }
@@ -851,10 +851,65 @@ function scoreSourceQuality(input: {
     score += 0.02;
   }
 
+  const authorityScore = scoreSourceAuthority({
+    site: input.site,
+    title: input.title,
+    description: input.description,
+    reviewStatus: input.reviewStatus,
+    hasDocument: input.hasDocument
+  });
+  score = score * 0.74 + authorityScore * 0.26;
+  signals.push(`authority score ${authorityScore.toFixed(2)}`);
+
   return {
     score: clampUnit(score),
     signals
   };
+}
+
+function scoreSourceAuthority(input: {
+  site: string;
+  title: string;
+  description?: string;
+  reviewStatus?: "read" | "skipped" | "error";
+  hasDocument: boolean;
+}): number {
+  const site = input.site.toLowerCase();
+  const title = input.title.toLowerCase();
+  const description = (input.description ?? "").toLowerCase();
+  let score = 0.5;
+
+  if (site.startsWith("docs.") || site.startsWith("developer.")) {
+    score += 0.18;
+  }
+  if (site.endsWith(".gov") || site.endsWith(".edu") || site === "github.com") {
+    score += 0.18;
+  }
+  if (site.includes("play.google.com") || site.includes("apps.apple.com")) {
+    score += 0.12;
+  }
+  if (site.includes("reddit.com") || site.includes("forum.") || site.includes("community.")) {
+    score += 0.06;
+  }
+  if (input.hasDocument) {
+    score += 0.07;
+  }
+  if (title.includes("guide") || title.includes("reference") || title.includes("manual")) {
+    score += 0.05;
+  }
+  if (description.includes("guide") || description.includes("reference") || description.includes("documentation")) {
+    score += 0.04;
+  }
+
+  if (input.reviewStatus === "read") {
+    score += 0.03;
+  } else if (input.reviewStatus === "skipped") {
+    score -= 0.04;
+  } else if (input.reviewStatus === "error") {
+    score -= 0.08;
+  }
+
+  return clampUnit(score);
 }
 
 function normalizeContentType(
@@ -922,11 +977,11 @@ function scoreSourceTrend(input: {
           : 0.6;
 
   return clampUnit(
-    input.freshnessScore * 0.4 +
-      input.sourceQualityScore * 0.15 +
+    input.freshnessScore * 0.45 +
+      input.sourceQualityScore * 0.16 +
       density * 0.15 +
       actionability * 0.18 +
-      contentTypeTrendWeight(input.contentType) * 0.07 +
+      contentTypeTrendWeight(input.contentType) * 0.06 +
       reviewScore * 0.05
   );
 }
@@ -945,7 +1000,7 @@ function scoreClusterTrend(input: {
   const queryBreadth = Math.min(1, input.queryCount / 3);
 
   return clampUnit(
-    input.freshnessScore * 0.3 +
+    input.freshnessScore * 0.34 +
       supportScore * 0.24 +
       evidenceDensity * 0.11 +
       queryBreadth * 0.12 +
