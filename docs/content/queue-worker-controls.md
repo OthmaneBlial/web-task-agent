@@ -45,6 +45,9 @@ npm run start -- job pause <job-id>
 npm run start -- job cancel <job-id>
 npm run start -- job resume <job-id>
 npm run start -- job rerun <job-id>
+npm run start -- job inspect <job-id>
+npm run start -- job report <job-id>
+npm run start -- job budget <job-id>
 npm run start -- job logs <job-id> --limit 100
 ```
 
@@ -81,6 +84,12 @@ That makes it easier to scan the queue without mentally decoding a compact statu
 - message
 
 That makes long history dumps easier to read without losing the underlying data.
+
+## Recovery And Debug Views
+
+- `job inspect` shows the stored job summary, artifacts, steps, and evidence graph counts.
+- `job report` adds a recovery-focused command recommendation.
+- `job budget` surfaces soft latency budgets for search, fetch, extraction, and synthesis.
 
 ## Important Scope Note
 

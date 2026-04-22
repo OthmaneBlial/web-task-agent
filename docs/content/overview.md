@@ -39,6 +39,7 @@ Both workflow templates produce topic-based output folders under `reports/workfl
 ## Main Operator Surfaces
 
 - CLI for running, queueing, controlling, and inspecting work
+- Recovery, budget, and cleanup reports for stored jobs and prompt traces
 - Local worker mode for processing queued jobs
 - Local management server with HTML dashboard
 - JSON API for jobs, queue state, controls, recoverable runs, and logs

@@ -98,7 +98,11 @@ Then open the local management UI at `http://127.0.0.1:4317`.
 ```bash
 npm run start -- workflow list
 npm run start -- queue list
+npm run start -- job inspect <job-id>
+npm run start -- job report <job-id>
+npm run start -- job budget <job-id>
 npm run start -- job logs <job-id> --limit 100
+npm run start -- storage cleanup --prompt-traces <path>
 npm run start -- worker run --once
 ```
 

@@ -39,7 +39,10 @@
 - `src/lib/cdp.ts`
 - `src/lib/llm.ts`
 - `src/lib/prompt-trace.ts`
+- `src/lib/recovery-report.ts`
+- `src/lib/performance-budget.ts`
 - `src/lib/extraction-heuristics.ts`
+- `src/lib/storage-validation.ts`
 
 ## Workflow Definitions
 
@@ -54,6 +57,8 @@
 - `src/tests/research-quality.test.ts`
 - `src/tests/workflow-output.test.ts`
 - `src/tests/prompt-trace.test.ts`
+- `src/tests/recovery-report.test.ts`
+- `src/tests/performance-budget.test.ts`
 - `src/tests/agent-runner-interruptions.test.ts`
 
 ## Generated Runtime Locations
