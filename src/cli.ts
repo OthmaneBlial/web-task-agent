@@ -30,6 +30,7 @@ import {
 import { formatStoredJobRecoveryReportLines } from "./lib/recovery-report";
 import { formatStoredJobPerformanceBudgetLines } from "./lib/performance-budget";
 import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
+import { maintainPromptTraceRetention } from "./lib/prompt-trace";
 import { logStructured } from "./lib/local-logging";
 import { assessStorageHealth } from "./lib/storage-validation";
 import { createManagementServer } from "./server/management-server";
@@ -925,6 +926,33 @@ Use "web-task-agent <command> --help" for the full option list.
       for (const warning of health.warnings) {
         console.log(`  Warning: ${warning}`);
       }
+    });
+
+  storage
+    .command("cleanup")
+    .description("Prune prompt-trace manifests without touching evidence artifacts")
+    .requiredOption("--prompt-traces <path>", "Prompt trace manifest to clean up")
+    .option(
+      "--max-traces <number>",
+      "Maximum prompt traces to keep in the manifest",
+      (value) => parsePositiveInteger(value, "max-traces"),
+      2000
+    )
+    .option("--dry-run", "Preview the cleanup without writing changes")
+    .action((options) => {
+      const summary = maintainPromptTraceRetention({
+        tracePath: String(options.promptTraces),
+        maxTraces: Number(options.maxTraces),
+        dryRun: Boolean(options.dryRun)
+      });
+
+      console.log("Prompt trace cleanup:");
+      console.log(`  Trace path: ${summary.tracePath}`);
+      console.log(`  Max traces: ${summary.maxTraces}`);
+      console.log(`  Before: ${summary.beforeCount}`);
+      console.log(`  After: ${summary.afterCount}`);
+      console.log(`  Removed: ${summary.removedCount}`);
+      console.log(`  Dry run: ${summary.dryRun ? "yes" : "no"}`);
     });
 
   program

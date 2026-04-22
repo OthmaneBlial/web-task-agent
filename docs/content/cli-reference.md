@@ -23,6 +23,7 @@ web-task-agent job logs <job-id> --limit 100
 web-task-agent job report <job-id>
 web-task-agent job budget <job-id>
 web-task-agent storage maintain
+web-task-agent storage cleanup --prompt-traces <path>
 web-task-agent worker run --once
 web-task-agent server run --port 4317
 ```
@@ -77,6 +78,13 @@ Use `job budget <job-id>` when you want to check whether a long run spent too mu
 - synthesis
 
 The report is soft, not fatal. It is there to catch obvious regressions before they become the new normal.
+
+## Cleanup And Retention
+
+Use `storage cleanup --prompt-traces <path>` when you want to trim an existing prompt-trace manifest without touching the job database or artifact evidence.
+
+- `--max-traces` keeps the newest records and drops older ones
+- `--dry-run` previews the change without rewriting the file
 
 ## Log Export
 

@@ -36,6 +36,15 @@ interface PromptTraceManifest {
   traces: PromptTraceRecord[];
 }
 
+export interface PromptTraceRetentionSummary {
+  tracePath: string;
+  beforeCount: number;
+  afterCount: number;
+  removedCount: number;
+  maxTraces: number;
+  dryRun: boolean;
+}
+
 function pruneManifest(manifest: PromptTraceManifest, maxTraces: number): void {
   if (!Number.isFinite(maxTraces) || maxTraces <= 0 || manifest.traces.length <= maxTraces) {
     return;
@@ -203,4 +212,43 @@ export function createPromptTraceRecorder(input: {
   maxTraces?: number;
 }): PromptTraceRecorder {
   return new PromptTraceRecorder(input.outputPath, input.appendRunEvent, input.maxTraces ?? 2_000);
+}
+
+export function maintainPromptTraceRetention(input: {
+  tracePath: string;
+  maxTraces?: number;
+  dryRun?: boolean;
+}): PromptTraceRetentionSummary {
+  const tracePath = path.resolve(input.tracePath);
+  const maxTraces = Math.max(1, Math.floor(input.maxTraces ?? 2_000));
+  const dryRun = Boolean(input.dryRun);
+
+  if (!fs.existsSync(tracePath)) {
+    return {
+      tracePath,
+      beforeCount: 0,
+      afterCount: 0,
+      removedCount: 0,
+      maxTraces,
+      dryRun
+    };
+  }
+
+  const manifest = loadManifest(tracePath);
+  const beforeCount = manifest.traces.length;
+  pruneManifest(manifest, maxTraces);
+  const afterCount = manifest.traces.length;
+
+  if (!dryRun && afterCount !== beforeCount) {
+    writeJsonAtomic(tracePath, manifest);
+  }
+
+  return {
+    tracePath,
+    beforeCount,
+    afterCount,
+    removedCount: beforeCount - afterCount,
+    maxTraces,
+    dryRun
+  };
 }
