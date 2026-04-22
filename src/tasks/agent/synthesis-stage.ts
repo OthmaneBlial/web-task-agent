@@ -569,6 +569,45 @@ function renderEvidenceDebugSection(evidence: AgentEvidenceBundle): string {
   return lines.join("\n").trim();
 }
 
+function renderReportOutline(state: AgentRunState, evidence?: AgentEvidenceBundle | null): string {
+  const sections: string[] = [];
+
+  if (state.plan) {
+    sections.push("Plan");
+  }
+  if (state.researchSummary || (evidence && evidence.counts.sources > 0)) {
+    sections.push("Research Summary");
+  }
+  if (evidence && evidence.counts.sources > 0) {
+    sections.push("Evidence Snapshot");
+    sections.push("Evidence Debug");
+  }
+  if (evidence && evidence.clusters.length > 0) {
+    sections.push("Repeated Evidence Clusters");
+  }
+  if ((state.researchSummary?.uncertainties ?? []).length > 0 || (evidence && evidence.contradictions.length > 0)) {
+    sections.push("Uncertainties");
+  }
+  if ((state.researchSummary?.recommendations ?? []).length > 0 || (state.researchSummary?.contentAngles ?? []).length > 0) {
+    sections.push("Recommendations");
+  }
+  if (state.research.length > 0) {
+    sections.push("Sources Reviewed");
+  } else if (evidence && evidence.counts.sources > 0) {
+    sections.push("Evidence-Backed Signals");
+  }
+  if (readIfExists(state.outputs.postDraftPath) || readIfExists(state.outputs.commentsDraftPath)) {
+    sections.push("Draft Outputs");
+  }
+
+  if (sections.length === 0) {
+    return "";
+  }
+
+  const lines = ["## Report Outline", "", ...sections.map((section) => `- ${section}`), ""];
+  return lines.join("\n").trim();
+}
+
 function renderClusterSection(evidence: AgentEvidenceBundle, labels?: Map<string, string>): string {
   if (evidence.clusters.length === 0) {
     return "";
@@ -828,6 +867,11 @@ export function renderReport(state: AgentRunState, evidence?: AgentEvidenceBundl
     `Memory File: ${state.input.memoryPath ?? "none"}`,
     ""
   ].filter((value): value is string => Boolean(value));
+
+  const reportOutline = renderReportOutline(state, evidence);
+  if (reportOutline) {
+    lines.push(reportOutline, "");
+  }
 
   if (state.plan) {
     lines.push("## Plan", "", `Summary: ${state.plan.summary}`, `Tone: ${state.plan.tone}`, "");
