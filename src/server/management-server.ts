@@ -130,6 +130,9 @@ function dashboardHtml(): string {
       box-shadow: var(--shadow);
       backdrop-filter: blur(12px);
     }
+    .panel > p {
+      margin-top: 8px;
+    }
     .hero-copy h1 {
       margin: 0 0 10px;
       font-size: clamp(2rem, 3vw, 3.4rem);
@@ -204,6 +207,13 @@ function dashboardHtml(): string {
       gap: 10px;
       margin-top: 16px;
     }
+    .table-wrap {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: auto;
+      background: rgba(255,255,255,0.45);
+    }
     .btn {
       appearance: none;
       border: 1px solid var(--line);
@@ -242,6 +252,7 @@ function dashboardHtml(): string {
     }
     table {
       width: 100%;
+      min-width: 840px;
       border-collapse: collapse;
       font-size: 0.94rem;
     }
@@ -257,6 +268,10 @@ function dashboardHtml(): string {
       font-size: 0.82rem;
       text-transform: uppercase;
       letter-spacing: 0.07em;
+      background: rgba(255, 250, 243, 0.96);
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
     button.rowlink {
       font: inherit;
@@ -324,6 +339,9 @@ function dashboardHtml(): string {
       .hero, .layout, .detail-grid, .stats, .grid-cards {
         grid-template-columns: 1fr;
       }
+      table {
+        min-width: 760px;
+      }
       .log-line {
         grid-template-columns: 1fr;
         gap: 4px;
@@ -345,6 +363,7 @@ function dashboardHtml(): string {
           <h2>Recoverable Runs</h2>
           <span class="muted" id="refresh-status">refreshing...</span>
         </div>
+        <p>Shows jobs with stale leases or other recoverable state so you can resume work quickly.</p>
         <div id="recoverable"></div>
       </div>
     </section>
@@ -451,11 +470,11 @@ function dashboardHtml(): string {
 
       document.getElementById('recoverable').innerHTML = state.recoverable.length === 0
         ? '<p>No stale recoverable jobs.</p>'
-        : '<table><thead><tr><th>Job</th><th>Status</th><th>Lease</th></tr></thead><tbody>' +
+        : '<div class="table-wrap"><table><thead><tr><th>Job</th><th>Status</th><th>Lease</th></tr></thead><tbody>' +
           state.recoverable.map((job) =>
             '<tr><td>' + escapeHtml(job.title) + '<div class="muted">' + escapeHtml(job.jobId) + '</div></td><td>' + pill(job.status) + '</td><td>' + escapeHtml(job.leaseExpiresAt || '-') + '</td></tr>'
           ).join('') +
-          '</tbody></table>';
+          '</tbody></table></div>';
     }
 
     function queueActionButtons(item) {
@@ -483,11 +502,11 @@ function dashboardHtml(): string {
     function renderJobs() {
       document.getElementById('jobs').innerHTML = state.jobs.length === 0
         ? '<p>No jobs found.</p>'
-        : '<table><thead><tr><th>Job</th><th>Status</th><th>Workflow</th><th>Control</th><th>Updated</th></tr></thead><tbody>' +
+        : '<div class="table-wrap"><table><thead><tr><th>Job</th><th>Status</th><th>Workflow</th><th>Control</th><th>Updated</th></tr></thead><tbody>' +
           state.jobs.map((job) =>
             '<tr><td><button class="rowlink" data-job-id="' + escapeHtml(job.jobId) + '">' + escapeHtml(job.title) + '</button><div class="muted">' + escapeHtml(job.jobId) + '</div></td><td>' + pill(job.status) + '</td><td>' + escapeHtml(job.workflowName || '-') + '</td><td>' + (job.controlAction ? pill(job.controlAction + ' requested') : '-') + '</td><td>' + escapeHtml(job.updatedAt) + '</td></tr>'
           ).join('') +
-          '</tbody></table>';
+          '</tbody></table></div>';
 
       document.querySelectorAll('[data-job-id]').forEach((button) => {
         button.addEventListener('click', () => {
@@ -500,11 +519,11 @@ function dashboardHtml(): string {
     function renderQueue() {
       document.getElementById('queue').innerHTML = state.queue.length === 0
         ? '<p>No queued jobs.</p>'
-        : '<table><thead><tr><th>Queue ID</th><th>Status</th><th>Attempts</th><th>Linked Job</th><th>Label</th><th>Actions</th></tr></thead><tbody>' +
+        : '<div class="table-wrap"><table><thead><tr><th>Queue ID</th><th>Status</th><th>Attempts</th><th>Linked Job</th><th>Label</th><th>Actions</th></tr></thead><tbody>' +
           state.queue.map((item) =>
             '<tr><td>' + escapeHtml(item.queueId) + '</td><td>' + pill(item.status) + (item.controlAction ? '<div class="muted">' + escapeHtml(item.controlAction) + ' requested</div>' : '') + '</td><td>' + item.attempts + '/' + item.maxAttempts + '</td><td>' + escapeHtml(item.jobId || '-') + '</td><td>' + escapeHtml(item.label) + '</td><td>' + queueActionButtons(item) + '</td></tr>'
           ).join('') +
-          '</tbody></table>';
+          '</tbody></table></div>';
 
       document.querySelectorAll('[data-queue-action]').forEach((button) => {
         button.addEventListener('click', async () => {
