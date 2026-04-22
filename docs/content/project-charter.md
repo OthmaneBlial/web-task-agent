@@ -78,6 +78,9 @@ Helpful signals to watch:
 - Update docs whenever behavior changes.
 - Treat the living roadmap as an execution checklist, not a wish list.
 - Capture a commit reference when a phase is complete.
+- Keep the roadmap entries in phase order so future progress is easy to scan.
+- Prefer one commit per roadmap phase when the work is easy to separate.
+- Update `base/roadmap.md` locally as work lands, even though it stays ignored by git.
 
 ## Runtime Layout
 
