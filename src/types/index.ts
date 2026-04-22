@@ -406,6 +406,8 @@ export interface AgentEvidenceContradiction {
   reason: string;
   sourceIds: string[];
   evidenceIds: string[];
+  leftEvidenceValues: string[];
+  rightEvidenceValues: string[];
   queries: string[];
 }
 

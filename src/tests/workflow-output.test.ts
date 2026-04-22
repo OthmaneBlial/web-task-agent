@@ -103,6 +103,8 @@ function createSampleEvidence(): AgentEvidenceBundle {
         reason: "Short-run quality differs from long-run operator feedback",
         sourceIds: ["src_1", "src_2"],
         evidenceIds: ["ext_1", "ext_3"],
+        leftEvidenceValues: ["AI summaries work well for short runs"],
+        rightEvidenceValues: ["Manual synthesis is too slow"],
         queries: ["ai summary automation demand"]
       }
     ]

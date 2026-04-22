@@ -467,6 +467,10 @@ const POSITIVE_POLARITY_TERMS = [
   "support",
   "supports",
   "supported",
+  "help",
+  "helps",
+  "helped",
+  "helping",
   "available",
   "offers",
   "offer",
@@ -491,6 +495,9 @@ const POSITIVE_POLARITY_TERMS = [
   "working",
   "good",
   "great",
+  "reduce",
+  "reduces",
+  "reduced",
   "improved",
   "improves"
 ];
@@ -3400,7 +3407,7 @@ export class JobStore {
 
         const topicSimilarity = jaccardSimilarity(leftTopicTokens, rightTopicTokens);
         const sharedTopicTokens = sharedTokens(leftTopicTokens, rightTopicTokens);
-        if (topicSimilarity < 0.34 && sharedTopicTokens.length < 2) {
+        if (topicSimilarity < 0.24 && sharedTopicTokens.length < 1) {
           continue;
         }
 
@@ -3438,6 +3445,8 @@ export class JobStore {
           reason: `Topic overlap with opposing stances: ${leftPolarity} vs ${rightPolarity} across ${sharedTopicTokens.length} shared topic tokens`,
           sourceIds: combinedSourceIds,
           evidenceIds: Array.from(new Set([...left.evidenceIds, ...right.evidenceIds])).slice(0, 8),
+          leftEvidenceValues: left.supportingValues.slice(0, 3),
+          rightEvidenceValues: right.supportingValues.slice(0, 3),
           queries: Array.from(new Set([...left.queries, ...right.queries]))
         });
       }

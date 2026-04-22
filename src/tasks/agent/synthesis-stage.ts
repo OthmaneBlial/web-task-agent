@@ -584,6 +584,12 @@ function renderContradictionSection(evidence: AgentEvidenceBundle, labels?: Map<
       `  Conflict: ${contradiction.leftKind} vs ${contradiction.rightKind} | score ${(contradiction.contradictionScore * 100).toFixed(0)}%`
     );
     lines.push(`  Reason: ${contradiction.reason}`);
+    if (contradiction.leftEvidenceValues.length > 0) {
+      lines.push(`  Left evidence: ${contradiction.leftEvidenceValues.slice(0, 3).join(" | ")}`);
+    }
+    if (contradiction.rightEvidenceValues.length > 0) {
+      lines.push(`  Right evidence: ${contradiction.rightEvidenceValues.slice(0, 3).join(" | ")}`);
+    }
     if (contradiction.queries.length > 0) {
       lines.push(`  Queries: ${contradiction.queries.slice(0, 3).join(" | ")}`);
     }
