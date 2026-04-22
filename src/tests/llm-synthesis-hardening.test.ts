@@ -222,3 +222,43 @@ test("synthesizeAgentEvidence prompt requests explicit uncertainties and recomme
     restoreEnv();
   }
 });
+
+test("synthesizeAgentEvidence normalizes duplicate uncertainty and recommendation entries", async () => {
+  const { service, restoreEnv } = createLlmServiceWithResponse(
+    JSON.stringify({
+      executiveSummary: "ok",
+      keyFindings: [
+        {
+          text: "Teams want better exports.",
+          evidenceIds: ["ext_1"]
+        },
+        {
+          text: "Teams want better exports.",
+          evidenceIds: ["ext_1"]
+        }
+      ],
+      contentAngles: [
+        {
+          text: "Surface the export gap in onboarding.",
+          evidenceIds: ["ext_1"]
+        }
+      ],
+      uncertainties: ["  Need stronger export workflows  ", "Need stronger export workflows"],
+      recommendations: ["  Ship export shortcuts  ", "Ship export shortcuts"]
+    })
+  );
+
+  try {
+    const summary = await service.synthesizeAgentEvidence({
+      instruction: "Research Android app opportunities around AI study planning.",
+      evidence: buildEvidenceBundle()
+    });
+
+    assert.deepEqual(summary.keyFindings, ["Teams want better exports."]);
+    assert.deepEqual(summary.contentAngles, ["Surface the export gap in onboarding."]);
+    assert.deepEqual(summary.uncertainties, ["Need stronger export workflows"]);
+    assert.deepEqual(summary.recommendations, ["Ship export shortcuts"]);
+  } finally {
+    restoreEnv();
+  }
+});
