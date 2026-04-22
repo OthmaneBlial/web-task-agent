@@ -31,7 +31,7 @@ export class AgentExtractStage {
     private readonly jobStore: JobStore,
     artifactDir: string,
     private readonly searchAdapter: Pick<AgentSearchAdapter, "id" | "buildSearchUrl">,
-    private readonly extractor: Pick<AgentExtractor, "id" | "extractFromResult">
+    private readonly extractor: Pick<AgentExtractor, "id" | "origin" | "extractFromResult">
   ) {
     this.researchDir = path.join(artifactDir, "raw", "research");
     ensureDir(this.researchDir);
@@ -56,6 +56,8 @@ export class AgentExtractStage {
       this.jobStore.persistAgentResearchResult(result, {
         searchProvider: metadata.searchProvider,
         searchUrl: metadata.searchUrl,
+        extractorId: this.extractor.id,
+        extractorOrigin: this.extractor.origin,
         getExtractionCandidates: (searchResult) => this.extractor.extractFromResult(searchResult)
       });
     }
@@ -75,6 +77,8 @@ export class AgentExtractStage {
     const persisted = this.jobStore.persistAgentResearchResult(result, {
       searchProvider: metadata.searchProvider,
       searchUrl: metadata.searchUrl,
+      extractorId: this.extractor.id,
+      extractorOrigin: this.extractor.origin,
       getExtractionCandidates: (searchResult) => this.extractor.extractFromResult(searchResult)
     });
 

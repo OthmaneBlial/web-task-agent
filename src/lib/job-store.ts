@@ -9,6 +9,7 @@ import type {
   AgentEvidenceContradiction,
   AgentEvidenceExtraction,
   AgentExtractionCandidate,
+  AgentExtractionOrigin,
   AgentEvidenceQuery,
   AgentResearchContentType,
   AgentEvidenceSource,
@@ -69,6 +70,8 @@ interface StepWriteOptions {
 interface PersistAgentResearchOptions {
   searchProvider?: string;
   searchUrl?: string | null;
+  extractorId?: string;
+  extractorOrigin?: AgentExtractionOrigin;
   getExtractionCandidates?: (result: AgentSearchResult) => AgentExtractionCandidate[];
 }
 
@@ -85,6 +88,26 @@ function serializeJson(value: unknown): string {
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function buildExtractionMetadata(
+  candidate: AgentExtractionCandidate,
+  options?: PersistAgentResearchOptions
+): Record<string, unknown> {
+  const metadata =
+    candidate.metadata && typeof candidate.metadata === "object" && !Array.isArray(candidate.metadata)
+      ? { ...(candidate.metadata as Record<string, unknown>) }
+      : {};
+
+  if (options?.extractorId) {
+    metadata.extractorId = options.extractorId;
+  }
+
+  if (options?.extractorOrigin) {
+    metadata.extractorOrigin = options.extractorOrigin;
+  }
+
+  return metadata;
 }
 
 function parseJsonValue<T>(value: unknown, fallback: T): T {
@@ -2912,7 +2935,7 @@ export class JobStore {
           candidate.evidenceText,
           clampConfidence(candidate.confidence),
           candidate.method,
-          serializeJson(candidate.metadata),
+          serializeJson(buildExtractionMetadata(candidate, options)),
           timestamp,
           timestamp
         );

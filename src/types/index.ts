@@ -255,6 +255,8 @@ export type AgentResearchContentType =
   | "review"
   | "general";
 
+export type AgentExtractionOrigin = "structured" | "heuristic" | "best_effort";
+
 export interface AgentSearchResult {
   title: string;
   url: string;
@@ -304,6 +306,7 @@ export interface AgentExtractionCandidate {
   evidenceText: string;
   confidence: number;
   method: string;
+  origin?: AgentExtractionOrigin;
   metadata?: unknown;
 }
 

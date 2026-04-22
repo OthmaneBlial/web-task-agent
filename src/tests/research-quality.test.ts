@@ -495,14 +495,22 @@ test("extractor filters boilerplate headings from theme extraction", () => {
 
 test("default extractor uses source-specific heuristics for docs forums and reviews", () => {
   const extractor = createDefaultAgentExtractor();
+  assert.equal(extractor.origin, "best_effort");
 
-  const docsMethods = extractor.extractFromResult(createGoodResult()).map((item) => item.method);
-  const forumMethods = extractor.extractFromResult(createForumResult()).map((item) => item.method);
-  const reviewMethods = extractor.extractFromResult(createReviewResult()).map((item) => item.method);
+  const docsResults = extractor.extractFromResult(createGoodResult());
+  const forumResults = extractor.extractFromResult(createForumResult());
+  const reviewResults = extractor.extractFromResult(createReviewResult());
+
+  const docsMethods = docsResults.map((item) => item.method);
+  const forumMethods = forumResults.map((item) => item.method);
+  const reviewMethods = reviewResults.map((item) => item.method);
 
   assert.ok(docsMethods.some((method) => method.startsWith("docs_")));
   assert.ok(forumMethods.some((method) => method.startsWith("forum_")));
   assert.ok(reviewMethods.some((method) => method.startsWith("review_")));
+  assert.ok(docsResults.every((item) => item.origin === "best_effort" || item.origin === "heuristic"));
+  assert.ok(forumResults.every((item) => item.origin === "best_effort" || item.origin === "heuristic"));
+  assert.ok(reviewResults.every((item) => item.origin === "best_effort" || item.origin === "heuristic"));
 });
 
 test("extractor skips low-quality results and persists only readable evidence", () => {

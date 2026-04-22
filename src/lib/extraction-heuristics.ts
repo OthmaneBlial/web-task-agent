@@ -2,6 +2,7 @@ import type {
   AgentExtractionCandidate,
   AgentSearchResult
 } from "../types";
+import type { AgentExtractionOrigin } from "../types";
 import { classifyResearchContentType } from "../tasks/agent/shared";
 
 function normalizeText(value: string): string {
@@ -176,7 +177,8 @@ function pushEntitiesAndThemes(
   candidates: AgentExtractionCandidate[],
   result: AgentSearchResult,
   methodPrefix: string,
-  themeConfidence: number
+  themeConfidence: number,
+  origin: AgentExtractionOrigin
 ): void {
   const titleValue = titleText(result);
 
@@ -187,6 +189,7 @@ function pushEntitiesAndThemes(
       evidenceText: titleValue,
       confidence: 0.72,
       method: `${methodPrefix}_entity`,
+      origin,
       metadata: {
         source: "title"
       }
@@ -200,6 +203,7 @@ function pushEntitiesAndThemes(
       evidenceText: theme,
       confidence: themeConfidence,
       method: `${methodPrefix}_theme`,
+      origin,
       metadata: {
         source: "headings"
       }
@@ -213,7 +217,8 @@ function pushSentenceCandidates(
   sentences: string[],
   terms: string[],
   confidence: number,
-  method: string
+  method: string,
+  origin: AgentExtractionOrigin
 ): void {
   for (const sentence of extractSentencesByTerms(sentences, terms)) {
     candidates.push({
@@ -221,7 +226,8 @@ function pushSentenceCandidates(
       value: sentence,
       evidenceText: sentence,
       confidence,
-      method
+      method,
+      origin
     });
   }
 }
@@ -264,7 +270,7 @@ export function buildHeuristicExtractionCandidates(
   const claimSentences = sentences.length > 0 ? sentences : splitSentences(combinedText);
   const candidates: AgentExtractionCandidate[] = [];
 
-  pushEntitiesAndThemes(candidates, result, "heuristic_heading", 0.68);
+  pushEntitiesAndThemes(candidates, result, "heuristic_heading", 0.68, "heuristic");
   pushSentenceCandidates(
     candidates,
     "complaint",
@@ -286,7 +292,8 @@ export function buildHeuristicExtractionCandidates(
       "expensive"
     ],
     0.77,
-    "heuristic_negative_sentence"
+    "heuristic_negative_sentence",
+    "heuristic"
   );
   pushSentenceCandidates(
     candidates,
@@ -306,7 +313,8 @@ export function buildHeuristicExtractionCandidates(
       "roadmap"
     ],
     0.79,
-    "heuristic_request_sentence"
+    "heuristic_request_sentence",
+    "heuristic"
   );
   pushSentenceCandidates(
     candidates,
@@ -314,7 +322,8 @@ export function buildHeuristicExtractionCandidates(
     claimSentences,
     [" is ", " are ", " can ", " helps ", " lets ", " uses ", " supports ", " enables ", " offers "],
     0.66,
-    "heuristic_claim_sentence"
+    "heuristic_claim_sentence",
+    "heuristic"
   );
 
   return selectUniqueExtractions(candidates);
@@ -331,7 +340,7 @@ export function buildDocumentationExtractionCandidates(
   const claimSentences = sentences.length > 0 ? sentences : splitSentences(buildDigestText(result));
   const candidates: AgentExtractionCandidate[] = [];
 
-  pushEntitiesAndThemes(candidates, result, "docs", 0.74);
+  pushEntitiesAndThemes(candidates, result, "docs", 0.74, "best_effort");
   pushSentenceCandidates(
     candidates,
     "claim",
@@ -352,7 +361,8 @@ export function buildDocumentationExtractionCandidates(
       "import"
     ],
     0.78,
-    "docs_capability_sentence"
+    "docs_capability_sentence",
+    "best_effort"
   );
   pushSentenceCandidates(
     candidates,
@@ -369,7 +379,8 @@ export function buildDocumentationExtractionCandidates(
       "hard"
     ],
     0.74,
-    "docs_gap_sentence"
+    "docs_gap_sentence",
+    "best_effort"
   );
   pushSentenceCandidates(
     candidates,
@@ -377,7 +388,8 @@ export function buildDocumentationExtractionCandidates(
     sentences,
     ["should", "could", "needs", "missing", "roadmap", "would help"],
     0.76,
-    "docs_request_sentence"
+    "docs_request_sentence",
+    "best_effort"
   );
 
   return selectUniqueExtractions(candidates);
@@ -393,7 +405,7 @@ export function buildForumExtractionCandidates(
   const sentences = sentencePool(result);
   const candidates: AgentExtractionCandidate[] = [];
 
-  pushEntitiesAndThemes(candidates, result, "forum", 0.7);
+  pushEntitiesAndThemes(candidates, result, "forum", 0.7, "best_effort");
   pushSentenceCandidates(
     candidates,
     "complaint",
@@ -413,7 +425,8 @@ export function buildForumExtractionCandidates(
       "annoying"
     ],
     0.84,
-    "forum_pain_sentence"
+    "forum_pain_sentence",
+    "best_effort"
   );
   pushSentenceCandidates(
     candidates,
@@ -430,7 +443,8 @@ export function buildForumExtractionCandidates(
       "feature request"
     ],
     0.86,
-    "forum_request_sentence"
+    "forum_request_sentence",
+    "best_effort"
   );
   pushSentenceCandidates(
     candidates,
@@ -438,7 +452,8 @@ export function buildForumExtractionCandidates(
     sentences,
     ["we use", "i use", "works", "working", "helps", "useful", "switched", "adopted"],
     0.71,
-    "forum_usage_sentence"
+    "forum_usage_sentence",
+    "best_effort"
   );
 
   return selectUniqueExtractions(candidates);
@@ -454,7 +469,7 @@ export function buildReviewExtractionCandidates(
   const sentences = sentencePool(result);
   const candidates: AgentExtractionCandidate[] = [];
 
-  pushEntitiesAndThemes(candidates, result, "review", 0.69);
+  pushEntitiesAndThemes(candidates, result, "review", 0.69, "best_effort");
   pushSentenceCandidates(
     candidates,
     "complaint",
@@ -472,7 +487,8 @@ export function buildReviewExtractionCandidates(
       "bug"
     ],
     0.83,
-    "review_pain_sentence"
+    "review_pain_sentence",
+    "best_effort"
   );
   pushSentenceCandidates(
     candidates,
@@ -480,7 +496,8 @@ export function buildReviewExtractionCandidates(
     sentences,
     ["wish", "should", "could", "needs", "want", "missing", "would like"],
     0.82,
-    "review_request_sentence"
+    "review_request_sentence",
+    "best_effort"
   );
   pushSentenceCandidates(
     candidates,
@@ -488,7 +505,8 @@ export function buildReviewExtractionCandidates(
     sentences,
     ["helps", "easy to", "useful", "best for", "good for", "works for", "saves"],
     0.74,
-    "review_value_sentence"
+    "review_value_sentence",
+    "best_effort"
   );
 
   return selectUniqueExtractions(candidates);

@@ -70,7 +70,9 @@ test("job store maintenance tracks schema version, canonical urls, and artifact 
 
     store.persistAgentResearchResult(research, {
       searchProvider: "test_search",
-      searchUrl: "https://search.example.com/?q=storage"
+      searchUrl: "https://search.example.com/?q=storage",
+      extractorId: "test_extractor",
+      extractorOrigin: "best_effort"
     });
 
     const summary = maintainJobStore({
@@ -110,6 +112,19 @@ test("job store maintenance tracks schema version, canonical urls, and artifact 
     assert.equal(metadata.exists, true);
     assert.equal(metadata.absolutePath, path.resolve(artifactPath));
     assert.ok((metadata.sizeBytes ?? 0) > 0);
+
+    const extractionRow = db.prepare(`
+      SELECT metadata_json
+      FROM extractions
+      LIMIT 1
+    `).get() as Record<string, unknown> | undefined;
+    assert.ok(extractionRow);
+    const extractionMetadata = JSON.parse(String(extractionRow?.metadata_json ?? "{}")) as {
+      extractorId?: string;
+      extractorOrigin?: string;
+    };
+    assert.equal(extractionMetadata.extractorId, "test_extractor");
+    assert.equal(extractionMetadata.extractorOrigin, "best_effort");
 
     assert.throws(() => store.setStatus("running"));
     assert.equal(getJobStoreSchemaVersion({ databasePath }), 2);
