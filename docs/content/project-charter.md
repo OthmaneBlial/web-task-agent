@@ -44,6 +44,15 @@ The canonical flow is:
 5. The workflow package is written under `reports/workflows/<template>/<topic-slug>/`
 6. The dashboard and API expose the job state back to the operator
 
+Ownership boundaries:
+
+- `src/cli.ts` should stay focused on command parsing and dispatch.
+- `src/tasks/agent-runner.ts` owns stage orchestration and resume behavior.
+- `src/lib/job-store.ts` owns durable job and evidence state.
+- `src/lib/job-queue.ts` owns queue state and claim bookkeeping.
+- `src/server/management-server.ts` owns operator-facing API and dashboard responses.
+- `src/workflows/*` owns workflow shape, presets, and output packaging.
+
 ## Success Metrics
 
 The project is healthy when:

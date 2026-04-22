@@ -15,6 +15,14 @@
 5. The workflow writer emits the final package under `reports/workflows/<template>/<topic-slug>/`.
 6. The dashboard and API expose the result for inspection and recovery.
 
+## Ownership Notes
+
+- `src/cli.ts` should not know pipeline internals beyond dispatch and command shape.
+- `src/tasks/agent-runner.ts` is the only place that should coordinate stage order.
+- `src/lib/job-store.ts` and `src/lib/job-queue.ts` are the boundary for durable state mutations.
+- `src/server/management-server.ts` should present state, not invent it.
+- `src/workflows/index.ts` and `src/workflows/output-package.ts` define workflow behavior and artifact layout.
+
 ## Task Implementations
 
 - `src/tasks/github-scanner.ts`
