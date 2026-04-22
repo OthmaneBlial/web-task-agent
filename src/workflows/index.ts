@@ -3,7 +3,7 @@ import path from "node:path";
 import type { AgentRunOptions } from "../types";
 
 export type WorkflowTemplateId = "android-opportunity" | "article-research";
-export type WorkflowPresetId = "fast" | "standard" | "deep";
+export type WorkflowPresetId = "fast" | "focused" | "standard" | "deep";
 
 export interface WorkflowPresetDefinition {
   id: WorkflowPresetId;
@@ -61,6 +61,7 @@ function slugifyPathSegment(value: string): string {
 function buildPresetSet(input: {
   standard: WorkflowPresetDefinition["options"];
   fast: WorkflowPresetDefinition["options"];
+  focused: WorkflowPresetDefinition["options"];
   deep: WorkflowPresetDefinition["options"];
 }): WorkflowPresetDefinition[] {
   return [
@@ -69,6 +70,12 @@ function buildPresetSet(input: {
       title: "Fast",
       description: "Smaller run for quick market checks and early direction.",
       options: input.fast
+    },
+    {
+      id: "focused",
+      title: "Focused",
+      description: "Balanced run for a narrower topic with better signal density.",
+      options: input.focused
     },
     {
       id: "standard",
@@ -141,6 +148,12 @@ const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
         fetchBatchSize: 5,
         maxRuntimeHours: 4
       },
+      focused: {
+        maxQueries: 7,
+        maxResultsPerQuery: 24,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 6
+      },
       standard: {
         maxQueries: 8,
         maxResultsPerQuery: 30,
@@ -198,6 +211,12 @@ const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
         maxResultsPerQuery: 18,
         fetchBatchSize: 5,
         maxRuntimeHours: 4
+      },
+      focused: {
+        maxQueries: 5,
+        maxResultsPerQuery: 20,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 5
       },
       standard: {
         maxQueries: 6,

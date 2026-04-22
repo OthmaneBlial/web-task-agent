@@ -214,6 +214,20 @@ test("workflow run options use preset budgets and topic-based output paths", () 
   assert.equal(options.researchDurationMinutes, 90);
 });
 
+test("focused workflow preset splits the difference between fast and standard runs", () => {
+  const options = buildWorkflowRunOptions({
+    templateId: "article-research",
+    topic: "AI summary automation",
+    presetId: "focused"
+  });
+
+  assert.equal(options.workflowPresetId, "focused");
+  assert.equal(options.maxQueries, 5);
+  assert.equal(options.maxResultsPerQuery, 20);
+  assert.equal(options.fetchBatchSize, 5);
+  assert.equal(options.maxRuntimeHours, 5);
+});
+
 test("android opportunity workflow uses focused research queries", () => {
   const studyPlannerQueries = buildWorkflowResearchQueries({
     templateId: "android-opportunity",
