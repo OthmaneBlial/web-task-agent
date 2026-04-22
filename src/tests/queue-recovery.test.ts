@@ -105,3 +105,89 @@ test("stale queued job recovery forces resume from saved cache state", () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test("queue recovery only restores truly stale running jobs", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-recovery-active-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const staleCachePath = path.join(tempDir, "stale-cache.json");
+  const activeCachePath = path.join(tempDir, "active-cache.json");
+  let db: DatabaseSync | null = null;
+
+  try {
+    const staleQueued = enqueueQueuedAgentJob({
+      databasePath,
+      payload: {
+        taskType: "agent",
+        mode: "workflow",
+        label: "Stale recovery test",
+        options: {
+          instruction: "Test stale queue recovery",
+          cachePath: staleCachePath,
+          reportPath: path.join(tempDir, "stale-report.md"),
+          resume: false
+        }
+      }
+    });
+    const activeQueued = enqueueQueuedAgentJob({
+      databasePath,
+      payload: {
+        taskType: "agent",
+        mode: "workflow",
+        label: "Active recovery test",
+        options: {
+          instruction: "Test active queue recovery",
+          cachePath: activeCachePath,
+          reportPath: path.join(tempDir, "active-report.md"),
+          resume: false
+        }
+      }
+    });
+
+    const staleClaimed = claimNextQueuedJob({
+      databasePath,
+      workerId: "worker-stale",
+      leaseTtlSeconds: 60
+    });
+    const activeClaimed = claimNextQueuedJob({
+      databasePath,
+      workerId: "worker-active",
+      leaseTtlSeconds: 60
+    });
+    assert.ok(staleClaimed);
+    assert.ok(activeClaimed);
+
+    db = new DatabaseSync(databasePath);
+    db.prepare(`
+      UPDATE queued_jobs
+      SET lease_expires_at = ?
+      WHERE id = ?
+    `).run("2000-01-01T00:00:00.000Z", staleQueued.queueId);
+    db.prepare(`
+      UPDATE queued_jobs
+      SET lease_expires_at = ?
+      WHERE id = ?
+    `).run("2999-01-01T00:00:00.000Z", activeQueued.queueId);
+
+    const recoveredCount = recoverStaleQueuedJobs({
+      databasePath
+    });
+    assert.equal(recoveredCount, 1);
+
+    const staleRow = db.prepare(`
+      SELECT status
+      FROM queued_jobs
+      WHERE id = ?
+    `).get(staleQueued.queueId) as Record<string, unknown> | undefined;
+    const activeRow = db.prepare(`
+      SELECT status
+      FROM queued_jobs
+      WHERE id = ?
+    `).get(activeQueued.queueId) as Record<string, unknown> | undefined;
+
+    assert.equal(staleRow?.status, "queued");
+    assert.equal(activeRow?.status, "running");
+  } finally {
+    db?.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
