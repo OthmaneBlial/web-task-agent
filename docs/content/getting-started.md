@@ -52,6 +52,8 @@ After a run, expect state in these places:
 - `.data/web-task-agent.sqlite` for durable structured storage
 - `reports/` for markdown reports and workflow handoff packages
 
+The quickest way to understand a fresh run is to open the workflow package first, then compare it with the stored job state and the local dashboard.
+
 ## 6. Start The Local Dashboard
 
 ```bash

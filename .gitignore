@@ -6,3 +6,4 @@ dist/
 reports/
 *.log
 npm-debug.log*
+base/

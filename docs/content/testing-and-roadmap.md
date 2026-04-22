@@ -14,6 +14,16 @@ The repo currently includes automated tests for:
 
 At the time this site was generated, the suite has **13 tests** and covers many of the highest-risk local operator paths.
 
+## Working Quality Bar
+
+The project is healthiest when these remain true:
+
+- recovery behavior survives interruption without data loss
+- workflow outputs stay tied to evidence and source traces
+- docs describe the current command flow and artifact layout
+- queue controls stay safe to use on long-running jobs
+- new changes add or update tests where state or recovery can regress
+
 ## Current Macro Roadmap Position
 
 Most of the large platform milestones are already complete:
@@ -41,6 +51,12 @@ This is intentionally **local-first**, not a scale-out or hosted deployment road
 - broader failure-mode coverage
 - stronger recovery and debug artifacts for long local runs
 - tighter verification around workflow and runtime outputs
+
+## Maintenance Rules
+
+- Keep the living roadmap updated as phases land.
+- Mark completed phases with `[x]` and record the commit that did the work.
+- Treat docs drift as a regression when behavior or paths change.
 
 ## Repo Source Pages
 

@@ -13,6 +13,8 @@ It is not just a browser automation script. The current repository already suppo
 - Recovering interrupted work instead of restarting from zero
 - Inspecting jobs through a local dashboard and API
 
+The working charter for the project lives in [Project Charter](project-charter.md). It defines the north star, vocabulary, architecture map, runtime layout, and quality gate that the rest of the docs follow.
+
 ## What It Is Good At
 
 - Long research runs that may take hours
@@ -43,4 +45,4 @@ Both workflow templates produce topic-based output folders under `reports/workfl
 
 ## Current Position
 
-The repository is already mature enough to be useful for deep research on one machine. The main unfinished area is the final hardening pass around tests, failure modes, and operator debugging.
+The repository is already mature enough to be useful for deep research on one machine. The main unfinished area is the final hardening pass around tests, failure modes, operator debugging, and tighter docs-to-code parity.

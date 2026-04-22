@@ -6,6 +6,8 @@ This repository is now a practical research system, not just a small browser aut
 
 `README.md` explains what the project does now and how to use it.
 `ROADMAP.md` is the clean macro roadmap.
+`base/roadmap.md` is the private living execution roadmap.
+`docs/content/project-charter.md` is the working reference for the project north star, vocabulary, and operating rules.
 
 ## What It Does Now
 
@@ -19,6 +21,7 @@ This repository is now a practical research system, not just a small browser aut
 - Supports queued execution with worker mode.
 - Exposes a local HTTP API and HTML dashboard for jobs, queue state, controls, and live logs.
 - Applies research-quality hardening with domain policies, search-result ranking, source-specific extractors, and trend-aware evidence scoring.
+- Uses a shared vocabulary for jobs, workflows, queue items, artifacts, sources, documents, snapshots, extractions, and evidence clusters.
 
 ## Main Commands
 
@@ -82,6 +85,19 @@ The project currently has these main layers:
 - Local management API and dashboard.
 - Workflow output packaging under `reports/workflows/<template>/<topic-slug>/`.
 
+The canonical flow is:
+
+1. CLI command enters through `src/cli.ts`.
+2. The job is created or queued in the local store.
+3. The agent runner executes plan, search, fetch, extract, and synthesize stages.
+4. Evidence and artifacts are persisted in SQLite and on disk.
+5. The workflow package is written under `reports/workflows/<template>/<topic-slug>/`.
+6. The dashboard and API expose the job state back to the operator.
+
+## Project Charter
+
+See [docs/content/project-charter.md](docs/content/project-charter.md) for the north star, vocabulary, maintenance rules, runtime layout, and quality gate.
+
 ## Workflow Packages
 
 Workflow runs now default to stable topic-based folders instead of generic one-off report directories. A typical workflow package looks like this:
@@ -107,8 +123,8 @@ runtime/
 
 Repo examples:
 
-- [examples/workflows/android-opportunity.md](/home/othmane/Downloads/web-task-agent/examples/workflows/android-opportunity.md)
-- [examples/workflows/article-research.md](/home/othmane/Downloads/web-task-agent/examples/workflows/article-research.md)
+- [examples/workflows/android-opportunity.md](examples/workflows/android-opportunity.md)
+- [examples/workflows/article-research.md](examples/workflows/article-research.md)
 
 ## Monitoring Surface
 
@@ -127,13 +143,13 @@ The dashboard is served from the local management server root:
 
 ## Project Layout
 
-- [src/cli.ts](/home/othmane/Downloads/web-task-agent/src/cli.ts) contains the CLI entrypoints.
-- [src/tasks/agent-runner.ts](/home/othmane/Downloads/web-task-agent/src/tasks/agent-runner.ts) orchestrates staged research jobs.
-- [src/lib/job-store.ts](/home/othmane/Downloads/web-task-agent/src/lib/job-store.ts) contains the SQLite job, evidence, and graph store.
-- [src/lib/job-queue.ts](/home/othmane/Downloads/web-task-agent/src/lib/job-queue.ts) contains queue persistence.
-- [src/tasks/queue-worker.ts](/home/othmane/Downloads/web-task-agent/src/tasks/queue-worker.ts) runs queued jobs.
-- [src/server/management-server.ts](/home/othmane/Downloads/web-task-agent/src/server/management-server.ts) serves the local API and dashboard.
-- [src/workflows/index.ts](/home/othmane/Downloads/web-task-agent/src/workflows/index.ts) defines the built-in workflow templates.
+- [src/cli.ts](src/cli.ts) contains the CLI entrypoints.
+- [src/tasks/agent-runner.ts](src/tasks/agent-runner.ts) orchestrates staged research jobs.
+- [src/lib/job-store.ts](src/lib/job-store.ts) contains the SQLite job, evidence, and graph store.
+- [src/lib/job-queue.ts](src/lib/job-queue.ts) contains queue persistence.
+- [src/tasks/queue-worker.ts](src/tasks/queue-worker.ts) runs queued jobs.
+- [src/server/management-server.ts](src/server/management-server.ts) serves the local API and dashboard.
+- [src/workflows/index.ts](src/workflows/index.ts) defines the built-in workflow templates.
 
 ## Environment
 
@@ -157,4 +173,4 @@ WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 
 ## Roadmap
 
-See [ROADMAP.md](/home/othmane/Downloads/web-task-agent/ROADMAP.md) for the simplified macro roadmap and the next priorities.
+See [ROADMAP.md](ROADMAP.md) for the simplified macro roadmap and the next priorities.

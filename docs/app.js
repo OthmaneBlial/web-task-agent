@@ -28,6 +28,13 @@ const DOC_PAGES = [
     path: "content/workflows.md"
   },
   {
+    slug: "project-charter",
+    section: "Reference",
+    title: "Project Charter",
+    summary: "North star, vocabulary, architecture map, maintenance rules, and quality gate.",
+    path: "content/project-charter.md"
+  },
+  {
     slug: "queue-worker-controls",
     section: "Operations",
     title: "Queue, Worker, And Controls",

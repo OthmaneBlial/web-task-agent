@@ -6,6 +6,15 @@
 - `src/server/management-server.ts`
 - `src/tasks/agent-runner.ts`
 
+## Canonical Flow
+
+1. A CLI command enters through `src/cli.ts`.
+2. Job or queue state is recorded locally.
+3. The agent runner drives plan, search, fetch, extract, and synthesize stages.
+4. The durable store records jobs, evidence, and artifact metadata.
+5. The workflow writer emits the final package under `reports/workflows/<template>/<topic-slug>/`.
+6. The dashboard and API expose the result for inspection and recovery.
+
 ## Task Implementations
 
 - `src/tasks/github-scanner.ts`
@@ -45,6 +54,13 @@
 - `.data/`
 - `reports/`
 - `reports/workflows/<template>/<topic-slug>/`
+
+## Runtime Boundaries
+
+- `.cache/` is for resumable local state and other ephemeral checkpoints.
+- `.data/` is for durable structured state.
+- `reports/` is for generated deliverables.
+- `base/` is intentionally local-only and ignored by git.
 
 ## Useful Mental Model
 
