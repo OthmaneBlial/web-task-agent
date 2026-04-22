@@ -743,8 +743,23 @@ function renderRecommendationSection(summary: AgentResearchSummary, evidence?: A
     (summary.contentAngleDetails ?? []).length > 0
       ? (summary.contentAngleDetails ?? [])
       : summary.contentAngles.map((text) => ({ text, evidenceIds: [] }));
+  const derivedRecommendations =
+    explicitRecommendations.length === 0 && evidence
+      ? evidence.clusters.slice(0, 5).map((cluster) => {
+          if (cluster.kind === "complaint") {
+            return `Address: ${cluster.label}`;
+          }
+          if (cluster.kind === "feature_request") {
+            return `Prototype: ${cluster.label}`;
+          }
+          if (cluster.kind === "claim") {
+            return `Lean into: ${cluster.label}`;
+          }
+          return `Research: ${cluster.label}`;
+        })
+      : [];
 
-  if (explicitRecommendations.length === 0 && contentAngleDetails.length === 0) {
+  if (explicitRecommendations.length === 0 && derivedRecommendations.length === 0 && contentAngleDetails.length === 0) {
     return "";
   }
 
@@ -752,6 +767,10 @@ function renderRecommendationSection(summary: AgentResearchSummary, evidence?: A
   const lines = ["### Recommendations", ""];
 
   for (const recommendation of explicitRecommendations.slice(0, 5)) {
+    lines.push(`- ${recommendation}`);
+  }
+
+  for (const recommendation of derivedRecommendations) {
     lines.push(`- ${recommendation}`);
   }
 
