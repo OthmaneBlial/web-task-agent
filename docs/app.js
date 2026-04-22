@@ -77,11 +77,11 @@ const DOC_PAGES = [
     path: "content/project-layout.md"
   },
   {
-    slug: "testing-and-roadmap",
+    slug: "testing-and-hardening",
     section: "Reference",
-    title: "Testing And Roadmap",
-    summary: "Current automated coverage and what remains in the macro roadmap.",
-    path: "content/testing-and-roadmap.md"
+    title: "Testing And Hardening",
+    summary: "Current automated coverage and what remains to harden the platform.",
+    path: "content/testing-and-hardening.md"
   },
   {
     slug: "repo-readme",
