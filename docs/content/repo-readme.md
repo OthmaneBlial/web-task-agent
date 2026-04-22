@@ -54,7 +54,9 @@ npm run start -- worker run --once
 npm run start -- job pause <job-id>
 npm run start -- job resume <job-id>
 npm run start -- job rerun <job-id>
+npm run start -- job inspect <job-id>
 npm run start -- job logs <job-id> --limit 100
+npm run start -- job logs <job-id> --limit 250 --output ./job-logs.txt
 
 # Monitoring API and dashboard
 npm run start -- server run --port 4317
