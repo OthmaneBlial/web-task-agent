@@ -14,3 +14,8 @@ test("cli error formatter gives env hints", () => {
   );
   assert.match(message, /Set ANTHROPIC_API_KEY/);
 });
+
+test("cli error formatter gives job and queue lookup hints", () => {
+  const message = formatCliErrorMessage(new Error("Unknown queue item: queue_123"));
+  assert.match(message, /Run `web-task-agent job inspect <job-id>` or `web-task-agent queue list`/);
+});

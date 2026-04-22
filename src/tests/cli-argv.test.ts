@@ -37,3 +37,8 @@ test("non-workflow commands stay unchanged", () => {
   const argv = ["node", "dist/cli.js", "agent", "run", "Offline PDF Editor Android apps"];
   assert.deepEqual(normalizeCliArgv(argv), argv);
 });
+
+test("debug commands stay unchanged", () => {
+  const argv = ["node", "dist/cli.js", "debug", "summary"];
+  assert.deepEqual(normalizeCliArgv(argv), argv);
+});
