@@ -1,13 +1,15 @@
 import "dotenv/config";
 
+import fs from "node:fs";
 import path from "node:path";
 
 import { Command } from "commander";
 
 import { requestAgentJobControl, resumeAgentJob, rerunAgentJob } from "./lib/job-operations";
 import { controlQueuedJob, enqueueQueuedAgentJob, getQueuedJob, listQueuedJobs } from "./lib/job-queue";
-import { listJobRunEvents } from "./lib/job-store";
+import { getStoredJobDetail, listJobRunEvents } from "./lib/job-store";
 import { normalizeCliArgv } from "./lib/cli-argv";
+import { formatCliErrorMessage } from "./lib/cli-error";
 import { ensureLlmRuntimeEnvironment } from "./lib/runtime-env";
 import { createManagementServer } from "./server/management-server";
 import { AgentRunnerTask } from "./tasks/agent-runner";
@@ -703,6 +705,7 @@ Use "web-task-agent <command> --help" for the full option list.
       (value) => parsePositiveInteger(value, "limit"),
       50
     )
+    .option("--output <path>", "Write the job log events to a file")
     .action((jobId, options) => {
       const events = listJobRunEvents({
         jobId: String(jobId),
@@ -827,7 +830,6 @@ Use "web-task-agent <command> --help" for the full option list.
 }
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
-  console.error(message);
+  console.error(formatCliErrorMessage(error));
   process.exitCode = 1;
 });
