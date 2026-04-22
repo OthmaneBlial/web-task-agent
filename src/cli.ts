@@ -8,6 +8,7 @@ import { requestAgentJobControl, resumeAgentJob, rerunAgentJob } from "./lib/job
 import { controlQueuedJob, enqueueQueuedAgentJob, getQueuedJob, listQueuedJobs } from "./lib/job-queue";
 import { listJobRunEvents } from "./lib/job-store";
 import { normalizeCliArgv } from "./lib/cli-argv";
+import { ensureLlmRuntimeEnvironment } from "./lib/runtime-env";
 import { createManagementServer } from "./server/management-server";
 import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
@@ -93,6 +94,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .option("--cache <path>", "Use a specific cache file")
     .option("--report <path>", "Write the Markdown report to a specific path")
     .action(async (options) => {
+      ensureLlmRuntimeEnvironment("github");
       const task = new GitHubScannerTask({
         url: String(options.url),
         pages: Number(options.pages),
@@ -126,6 +128,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .option("--cache <path>", "Use a specific cache file")
     .option("--report <path>", "Write the Markdown report to a specific path")
     .action(async (options) => {
+      ensureLlmRuntimeEnvironment("playstore");
       const task = new PlayStoreAnalyzerTask({
         query: String(options.query),
         analyzeTop: Number(options.analyzeTop),
@@ -190,6 +193,7 @@ Use "web-task-agent <command> --help" for the full option list.
       15
     )
     .action(async (instruction, options) => {
+      ensureLlmRuntimeEnvironment("agent run");
       const task = new AgentRunnerTask({
         instruction: normalizeText(String(instruction)),
         resume: Boolean(options.resume),
@@ -265,6 +269,7 @@ Use "web-task-agent <command> --help" for the full option list.
       0
     )
     .action((instruction, options) => {
+      ensureLlmRuntimeEnvironment("agent enqueue");
       const queued = enqueueQueuedAgentJob({
         payload: {
           taskType: "agent",
@@ -359,6 +364,7 @@ Use "web-task-agent <command> --help" for the full option list.
       if (!template) {
         throw new Error(`Unknown workflow template: ${templateId}`);
       }
+      ensureLlmRuntimeEnvironment(`workflow run ${template.id}`);
 
       const task = new AgentRunnerTask(
         buildWorkflowRunOptions({
@@ -453,6 +459,7 @@ Use "web-task-agent <command> --help" for the full option list.
       if (!template) {
         throw new Error(`Unknown workflow template: ${templateId}`);
       }
+      ensureLlmRuntimeEnvironment(`workflow enqueue ${template.id}`);
 
       const payloadOptions = buildWorkflowRunOptions({
         templateId: template.id,
@@ -713,6 +720,7 @@ Use "web-task-agent <command> --help" for the full option list.
       15
     )
     .action(async (options) => {
+      ensureLlmRuntimeEnvironment("worker run");
       const result = await new QueueWorkerTask({
         once: Boolean(options.once),
         pollIntervalSeconds: Number(options.pollIntervalSeconds),

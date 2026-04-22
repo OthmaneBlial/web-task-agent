@@ -22,6 +22,8 @@ ANTHROPIC_TIMEOUT_MS=90000
 WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 ```
 
+If you forget the API key, the job-launching commands now fail immediately with a clear error that tells you which environment variable to set.
+
 ## 3. Start Lightpanda
 
 ```bash
