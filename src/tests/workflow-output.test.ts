@@ -113,7 +113,7 @@ function createSampleEvidence(): AgentEvidenceBundle {
 
 function createWorkflowState(
   tempDir: string,
-  templateId: "android-opportunity" | "article-research"
+  templateId: "android-opportunity" | "article-research" | "market-opportunity"
 ): AgentRunState {
   const outputPaths = buildAgentOutputPaths(tempDir);
   return {
@@ -438,6 +438,39 @@ test("android opportunity workflow brief includes monetization and validation hi
     const written = writeWorkflowPackageArtifacts(state, createSampleEvidence());
     const workflowBrief = fs.readFileSync(String(written.workflowBriefPath), "utf8");
     assert.match(workflowBrief, /## Monetization Ideas/);
+    assert.match(workflowBrief, /## Validation Checklist/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("market opportunity workflow brief includes pricing and validation hints", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-market-brief-"));
+
+  try {
+    const state = createWorkflowState(tempDir, "market-opportunity");
+    fs.writeFileSync(state.reportPath, "# Final Report\n", "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.researchSummaryPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.researchSummaryPath!, "# Research Summary\n", "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.planPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.planPath!, '{"version":1}\n', "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.postDraftPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.postDraftPath!, "# Draft\n", "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.commentsDraftPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.commentsDraftPath!, "[]\n", "utf8");
+    fs.mkdirSync(path.join(tempDir, "raw", "research"), { recursive: true });
+    fs.mkdirSync(path.dirname(state.outputs.pipelineManifestPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.pipelineManifestPath!, '{"version":2}\n', "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.packageManifestPath!), { recursive: true });
+    fs.writeFileSync(state.outputs.packageManifestPath!, '{"placeholder":true}\n', "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.packageReadmePath!), { recursive: true });
+    fs.writeFileSync(state.outputs.packageReadmePath!, "# Placeholder\n", "utf8");
+    fs.mkdirSync(path.dirname(state.outputs.promptTracePath!), { recursive: true });
+    fs.writeFileSync(state.outputs.promptTracePath!, '{\n  "version": 1,\n  "updatedAt": "2026-03-20T12:00:00.000Z",\n  "traces": []\n}\n', "utf8");
+
+    const written = writeWorkflowPackageArtifacts(state, createSampleEvidence());
+    const workflowBrief = fs.readFileSync(String(written.workflowBriefPath), "utf8");
+    assert.match(workflowBrief, /## Pricing Ideas/);
     assert.match(workflowBrief, /## Validation Checklist/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });

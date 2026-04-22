@@ -184,6 +184,56 @@ function renderArticleResearchBrief(
   ].join("\n").trim();
 }
 
+function renderMarketOpportunityBrief(
+  state: AgentRunState,
+  evidence: AgentEvidenceBundle
+): string {
+  const summary = state.researchSummary;
+  const pains = topClusterLabels(evidence, ["complaint"], 6);
+  const requests = topClusterLabels(evidence, ["feature_request"], 6);
+  const concepts = topReferenceTexts(summary?.contentAngleDetails, 5);
+  const claims = topReferenceTexts(summary?.keyFindingDetails, 5);
+
+  return [
+    "# Opportunity Brief",
+    "",
+    `Topic: ${resolveWorkflowTopic(state)}`,
+    `Preset: ${state.input.workflowPresetId ?? "standard"}`,
+    "",
+    "## Market Read",
+    "",
+    summary?.executiveSummary || "Research complete. Review the linked evidence package.",
+    "",
+    "## Repeated User Pains",
+    "",
+    ...formatBulletList(pains, "No repeated complaint cluster was detected."),
+    "",
+    "## Feature Demand",
+    "",
+    ...formatBulletList(requests, "No repeated feature-request cluster was detected."),
+    "",
+    "## Opportunity Shortlist",
+    "",
+    ...formatBulletList(concepts, "No content-angle shortlist was generated."),
+    "",
+    "## Key Claims",
+    "",
+    ...formatBulletList(claims, "No evidence-backed claims were generated."),
+    "",
+    "## Pricing Ideas",
+    "",
+    `- Freemium core with premium limits around ${resolveWorkflowTopic(state)}.`,
+    "- Subscription tiers for the highest-value automation or convenience features.",
+    "- Annual plans if the product needs recurring workflow access or team usage.",
+    "",
+    "## Validation Checklist",
+    "",
+    "- Verify pricing against the closest competitors before choosing an offer.",
+    "- Confirm that the strongest pain cluster maps to a feature users will pay for.",
+    "- Check whether the MVP can be narrow enough to ship without scope creep."
+  ].join("\n").trim();
+}
+
 function renderWorkflowBrief(
   template: WorkflowTemplateDefinition,
   state: AgentRunState,
@@ -194,6 +244,9 @@ function renderWorkflowBrief(
   }
   if (template.id === "article-research") {
     return renderArticleResearchBrief(state, evidence);
+  }
+  if (template.id === "market-opportunity") {
+    return renderMarketOpportunityBrief(state, evidence);
   }
 
   return [

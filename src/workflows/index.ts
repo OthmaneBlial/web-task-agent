@@ -2,7 +2,7 @@ import path from "node:path";
 
 import type { AgentRunOptions } from "../types";
 
-export type WorkflowTemplateId = "android-opportunity" | "article-research";
+export type WorkflowTemplateId = "android-opportunity" | "article-research" | "market-opportunity";
 export type WorkflowPresetId = "fast" | "focused" | "standard" | "deep";
 
 export interface WorkflowPresetDefinition {
@@ -253,6 +253,78 @@ const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
         lines.push(`Extra context: ${input.context}.`);
       }
       return lines.join("\n");
+    }
+  },
+  {
+    id: "market-opportunity",
+    title: "Product Opportunity Research",
+    handoffTitle: "Product Opportunity Package",
+    briefFilename: "opportunity-brief.md",
+    examplePath: "examples/workflows/product-opportunity.md",
+    defaultPresetId: "standard",
+    presets: buildPresetSet({
+      fast: {
+        maxQueries: 4,
+        maxResultsPerQuery: 18,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 4
+      },
+      focused: {
+        maxQueries: 6,
+        maxResultsPerQuery: 24,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 5
+      },
+      standard: {
+        maxQueries: 8,
+        maxResultsPerQuery: 30,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 6
+      },
+      deep: {
+        maxQueries: 12,
+        maxResultsPerQuery: 40,
+        fetchBatchSize: 6,
+        maxRuntimeHours: 10
+      }
+    }),
+    description:
+      "Research a product opportunity, competitive gap, or monetization angle using docs, reviews, forums, and pricing signals.",
+    defaultOptions: {
+      maxQueries: 8,
+      maxResultsPerQuery: 30,
+      fetchBatchSize: 5,
+      maxRuntimeHours: 6
+    },
+    buildInstruction(input) {
+      const lines = [
+        `Research the market around "${input.topic}" and prepare a concise opportunity brief.`,
+        "Collect documentation, reviews, forums, competitor pages, pricing pages, and feature-request threads.",
+        "Focus on recurring pains, differentiation, monetization hints, and practical validation steps.",
+        "The final report must include: market summary, repeated pains, feature demand, competitor gaps, pricing ideas, risks, and a validation checklist."
+      ];
+      if (input.audience) {
+        lines.push(`Target audience to prioritize: ${input.audience}.`);
+      }
+      if (input.context) {
+        lines.push(`Extra context: ${input.context}.`);
+      }
+      return lines.join("\n");
+    },
+    buildResearchQueries(input) {
+      const topic = input.topic.trim();
+      return uniqueQueries(
+        [
+          `"${topic}" reviews complaints`,
+          `"${topic}" alternatives pricing`,
+          `"${topic}" feature request forum`,
+          `site:reddit.com "${topic}"`,
+          `site:play.google.com "${topic}"`,
+          `"${topic}" competitor analysis`,
+          `"${topic}" monetization`
+        ],
+        Math.max(1, Math.min(6, input.maxQueries))
+      );
     }
   }
 ];
