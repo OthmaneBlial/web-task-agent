@@ -421,7 +421,8 @@ function dashboardHtml(): string {
       detail: null,
       logs: [],
       seenLogIds: new Set(),
-      eventSource: null
+      eventSource: null,
+      streamRetryHandle: null
     };
 
     function pill(text) {
@@ -544,9 +545,6 @@ function dashboardHtml(): string {
           }
           await postJson('/api/queue/' + encodeURIComponent(queueId) + '/control', { action });
           await refresh();
-          if (state.selectedJobId) {
-            await loadJobDetail();
-          }
           renderQueueDetail();
         });
       });
@@ -603,7 +601,6 @@ function dashboardHtml(): string {
           }
           await postJson('/api/queue/' + encodeURIComponent(queueId) + '/control', { action });
           await refresh();
-          renderQueueDetail();
         });
       });
     }
@@ -695,7 +692,6 @@ function dashboardHtml(): string {
           }
           await postJson('/api/jobs/' + encodeURIComponent(state.selectedJobId) + '/control', { action });
           await refresh();
-          await loadJobDetail();
         });
       });
     }
@@ -731,6 +727,10 @@ function dashboardHtml(): string {
     }
 
     function closeEventStream() {
+      if (state.streamRetryHandle) {
+        clearTimeout(state.streamRetryHandle);
+        state.streamRetryHandle = null;
+      }
       if (state.eventSource) {
         state.eventSource.close();
         state.eventSource = null;
@@ -758,11 +758,20 @@ function dashboardHtml(): string {
         }
       });
       state.eventSource.onerror = () => {
+        if (state.selectedJobId !== jobId || state.streamRetryHandle) {
+          return;
+        }
         document.getElementById('log-status').textContent = 'stream reconnecting...';
+        state.streamRetryHandle = window.setTimeout(() => {
+          state.streamRetryHandle = null;
+          if (state.selectedJobId === jobId) {
+            openLogStream(jobId);
+          }
+        }, 1500);
       };
     }
 
-    async function loadJobDetail() {
+    async function loadJobDetail(options) {
       if (!state.selectedJobId) {
         return;
       }
@@ -772,11 +781,28 @@ function dashboardHtml(): string {
         return;
       }
       state.detail = await response.json();
-      state.logs = [];
-      state.seenLogIds = new Set();
-      appendLogs(state.detail.events || []);
+      if (!options || options.resetLogs !== false) {
+        state.logs = [];
+        state.seenLogIds = new Set();
+        appendLogs(state.detail.events || []);
+      }
       renderJobSummary();
-      openLogStream(state.selectedJobId);
+      if (!options || options.openStream !== false) {
+        openLogStream(state.selectedJobId);
+      }
+    }
+
+    async function refreshSelectedJobDetail() {
+      if (!state.selectedJobId) {
+        return;
+      }
+      const response = await fetch('/api/jobs/' + encodeURIComponent(state.selectedJobId));
+      if (!response.ok) {
+        flash('failed to refresh job detail', 'warning');
+        return;
+      }
+      state.detail = await response.json();
+      renderJobSummary();
     }
 
     async function refresh() {
@@ -813,7 +839,7 @@ function dashboardHtml(): string {
       if (state.selectedJobId) {
         const stillExists = state.jobs.some((job) => job.jobId === state.selectedJobId);
         if (stillExists) {
-          await loadJobDetail();
+          await refreshSelectedJobDetail();
         }
       }
     }
@@ -879,9 +905,15 @@ export function createManagementServer(options?: ManagementServerOptions): http.
             }
           }
         }, 1500);
+        const heartbeat = setInterval(() => {
+          if (!res.writableEnded) {
+            res.write(": keep-alive\n\n");
+          }
+        }, 15000);
 
         req.on("close", () => {
           clearInterval(timer);
+          clearInterval(heartbeat);
           res.end();
         });
         return;
