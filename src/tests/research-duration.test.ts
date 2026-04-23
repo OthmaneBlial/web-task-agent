@@ -209,7 +209,7 @@ test("research duration front-loads durable queries and filters repeated sites",
         entry.results.some((result) => result.site === "covered.example.com")
     );
 
-    assert.equal(result.status, "waiting_review");
+    assert.equal(result.status, "completed");
     assert.ok(fs.existsSync(reportPath));
     assert.ok(savedState.plan?.researchQueries.includes(initialQueryWithYear));
     assert.ok(

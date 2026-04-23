@@ -209,7 +209,7 @@ function isValidStepStatusTransition(fromStatus: JobStepStatus, toStatus: JobSte
     case "completed":
     case "failed":
     case "skipped":
-      return toStatus === "pending";
+      return toStatus === "pending" || toStatus === "running";
   }
 }
 
@@ -2195,11 +2195,14 @@ export class JobStore {
         `invalid job step status transition for ${step.stepKey}: ${previousStatus} -> ${nextStatus}`
       );
     }
+    const restartedStep = Boolean(existing && previousStatus !== "running" && nextStatus === "running");
     const startedAt =
-      existing?.started_at ??
-      (nextStatus === "running" || nextStatus === "completed" || nextStatus === "failed"
+      restartedStep
         ? updatedAt
-        : null);
+        : existing?.started_at ??
+          (nextStatus === "running" || nextStatus === "completed" || nextStatus === "failed"
+            ? updatedAt
+            : null);
     const completedAt =
       typeof options.completedAt === "string"
         ? options.completedAt

@@ -1898,7 +1898,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       this.saveState(cachePath, state);
       this.checkpointRequestedControl(jobStore, state, cachePath);
 
-      const hasDrafts = Boolean(state.outputs.postDraftPath || state.outputs.commentsDraftPath);
+      const hasDrafts = Boolean(
+        (state.outputs.postDraftPath && fs.existsSync(state.outputs.postDraftPath)) ||
+          (state.outputs.commentsDraftPath && fs.existsSync(state.outputs.commentsDraftPath))
+      );
       state.status = state.plan.approvalRequired || hasDrafts ? "waiting_review" : "completed";
       if (hasStep(state.plan, "review")) {
         updateStepStatus(state.plan, "review", state.status === "waiting_review" ? "pending" : "completed");
