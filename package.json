@@ -13,7 +13,7 @@
     "clean": "rm -rf dist",
     "start": "npm run build && node dist/cli.js",
     "test": "npm run test:ci",
-    "test:unit": "node --test $(find dist/tests -maxdepth 1 -name '*.test.js' ! -name 'agent-runner-interruptions.test.js' ! -name 'research-duration.test.js' ! -name 'research-quality.test.js' | sort)",
+    "test:unit": "node --test $(find dist/tests -maxdepth 1 -name '*.test.js' | sort)",
     "test:integration": "node --test dist/tests/integration/*.test.js",
     "test:ci": "npm run build && npm run test:unit && npm run test:integration",
     "lightpanda:start": "./scripts/start-lightpanda.sh start",
