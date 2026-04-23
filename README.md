@@ -17,36 +17,35 @@ It is built for long jobs that need durable state, evidence, recovery, queueing,
 ## Quick Start
 
 ```bash
-npm install
-npm run lightpanda:start
-npm run start -- workflow run article-research --topic "browser automation with Lightpanda and CDP"
-npm run start -- server run --port 4317
+curl -fsSL https://raw.githubusercontent.com/OthmaneBlial/web-task-agent/main/install.sh | bash
+web-task-agent workflow run article-research --topic "browser automation with Lightpanda and CDP"
+web-task-agent server run --port 4317
 ```
 
 If you want a direct job instead of a template, use:
 
 ```bash
-npm run start -- agent run "Research cheerful launch ideas for our product and write one evidence-backed post"
+web-task-agent agent run "Research cheerful launch ideas for our product and write one evidence-backed post"
 ```
 
 ## Common Commands
 
 ```bash
-npm run start -- workflow list
-npm run start -- workflow run android-opportunity --topic "budgeting app for couples"
-npm run start -- workflow enqueue android-opportunity --topic "budgeting app for couples"
-npm run start -- agent enqueue "Research a local-first note app"
-npm run start -- queue list
-npm run start -- queue stats
-npm run start -- job inspect <job-id>
-npm run start -- job report <job-id>
-npm run start -- job budget <job-id>
-npm run start -- job logs <job-id> --limit 100
-npm run start -- storage maintain
-npm run start -- storage cleanup --prompt-traces <path>
-npm run start -- storage gate
-npm run start -- worker run --once
-npm run start -- server run --port 4317
+web-task-agent workflow list
+web-task-agent workflow run android-opportunity --topic "budgeting app for couples"
+web-task-agent workflow enqueue android-opportunity --topic "budgeting app for couples"
+web-task-agent agent enqueue "Research a local-first note app"
+web-task-agent queue list
+web-task-agent queue stats
+web-task-agent job inspect <job-id>
+web-task-agent job report <job-id>
+web-task-agent job budget <job-id>
+web-task-agent job logs <job-id> --limit 100
+web-task-agent storage maintain
+web-task-agent storage cleanup --prompt-traces <path>
+web-task-agent storage gate
+web-task-agent worker run --once
+web-task-agent server run --port 4317
 ```
 
 ## Output Locations

@@ -1,12 +1,14 @@
 # Getting Started
 
-## 1. Install Dependencies
+## 1. Install The App
 
 ```bash
-npm install
+curl -fsSL https://raw.githubusercontent.com/OthmaneBlial/web-task-agent/main/install.sh | bash
 ```
 
-If the install fails, fix the local environment first rather than trying to debug the agent itself.
+The installer downloads the source, prepares a local launcher named `web-task-agent`, and keeps jobs, reports, and other state outside the app code so upgrades do not wipe your work.
+
+If you already have a system Node.js 22 install, the installer uses it. Otherwise it downloads a portable Node 22 runtime for you.
 
 ## 2. Configure Environment
 
@@ -22,13 +24,9 @@ ANTHROPIC_TIMEOUT_MS=90000
 WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 ```
 
-If you forget the API key, the job-launching commands now fail immediately with a clear error that tells you which environment variable to set.
+If you forget the API key, the installer prompts for it during setup and the job-launching commands still fail immediately with a clear error that tells you which environment variable to set.
 
 ## 3. Start Lightpanda
-
-```bash
-npm run lightpanda:start
-```
 
 The agent relies on a CDP server, and the repo is currently designed around Lightpanda.
 
@@ -37,14 +35,14 @@ The agent relies on a CDP server, and the repo is currently designed around Ligh
 ### Direct Agent Run
 
 ```bash
-npm run start -- agent run \
+web-task-agent agent run \
   "Research cheerful launch ideas for our product and write one evidence-backed post"
 ```
 
 ### Workflow Run
 
 ```bash
-npm run start -- workflow run article-research \
+web-task-agent workflow run article-research \
   --topic "browser automation with Lightpanda and CDP"
 ```
 
@@ -55,7 +53,7 @@ If you are learning the system, run the workflow template first. It exercises th
 If you want the least surprising first experience, use:
 
 ```bash
-npm run start -- workflow run article-research \
+web-task-agent workflow run article-research \
   --topic "browser automation with Lightpanda and CDP"
 ```
 
@@ -88,7 +86,7 @@ The main distinction to remember is:
 ## 6. Start The Local Dashboard
 
 ```bash
-npm run start -- server run --port 4317
+web-task-agent server run --port 4317
 ```
 
 Then open the local management UI at `http://127.0.0.1:4317`.
@@ -96,14 +94,14 @@ Then open the local management UI at `http://127.0.0.1:4317`.
 ## First Commands Worth Memorizing
 
 ```bash
-npm run start -- workflow list
-npm run start -- queue list
-npm run start -- job inspect <job-id>
-npm run start -- job report <job-id>
-npm run start -- job budget <job-id>
-npm run start -- job logs <job-id> --limit 100
-npm run start -- storage cleanup --prompt-traces <path>
-npm run start -- worker run --once
+web-task-agent workflow list
+web-task-agent queue list
+web-task-agent job inspect <job-id>
+web-task-agent job report <job-id>
+web-task-agent job budget <job-id>
+web-task-agent job logs <job-id> --limit 100
+web-task-agent storage cleanup --prompt-traces <path>
+web-task-agent worker run --once
 ```
 
 ## Where Workflow Packages Land
