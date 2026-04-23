@@ -452,6 +452,9 @@ function buildAsoAuditNotes(input: {
   category: string;
   developer: string;
 }): string[] {
+  const listingText = [input.appName, input.shortDescription, input.longDescription]
+    .filter(Boolean)
+    .join(" ");
   const titleKeywords = input.appName
     .toLowerCase()
     .split(/[^a-z0-9]+/i)
@@ -472,6 +475,9 @@ function buildAsoAuditNotes(input: {
         .slice(0, 2)
         .join(". ")}.`
     : "";
+  const atsNote = /\b(resume|cv)\b/i.test(listingText)
+    ? "ATS compatibility: Verify exported resumes stay machine-readable and keep clean formatting."
+    : "";
   const metadataNote = [
     input.category ? `Category: ${input.category}.` : "",
     input.developer ? `Developer: ${input.developer}.` : "",
@@ -481,7 +487,7 @@ function buildAsoAuditNotes(input: {
     .join(" ");
 
   return uniqueStrings(
-    [shortDescriptionNote, keywordNote, positioningNote, metadataNote].filter(Boolean),
+    [shortDescriptionNote, keywordNote, positioningNote, atsNote, metadataNote].filter(Boolean),
     6
   );
 }
