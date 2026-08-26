@@ -94,6 +94,7 @@ web-task-agent job budget <job-id>
 web-task-agent job export <job-id> --format markdown --redact --dry-run
 web-task-agent job compare <earlier-job-id> <later-job-id> --redact --dry-run
 web-task-agent storage gate
+web-task-agent storage backup --output ./web-task-agent-backup.sqlite
 web-task-agent server run --port 4317
 ```
 
@@ -102,6 +103,8 @@ The dashboard is local at `http://127.0.0.1:4317`. Runtime data is kept outside 
 - `.cache/` — resumable work state.
 - `.data/web-task-agent.sqlite` — durable jobs, queue data, source/evidence metadata, and artifacts.
 - `reports/` — human-facing packages.
+
+Use `storage backup --output <path>` for a consistent local SQLite snapshot. `storage restore --input <path> --force` always writes a safety backup of the database it replaces.
 
 ## Safety and privacy
 

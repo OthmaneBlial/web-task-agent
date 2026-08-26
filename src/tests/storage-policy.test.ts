@@ -7,8 +7,10 @@ import { DatabaseSync } from "node:sqlite";
 
 import {
   closeSharedJobDatabase,
+  backupJobStore,
   getJobStoreSchemaVersion,
   maintainJobStore,
+  restoreJobStore,
   JobStore
 } from "../lib/job-store";
 import type { AgentResearchResult } from "../types";
@@ -134,6 +136,54 @@ test("job store maintenance tracks schema version, canonical urls, and artifact 
     assert.equal(getJobStoreSchemaVersion({ databasePath }), 2);
   } finally {
     db?.close();
+    closeSharedJobDatabase(databasePath);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("storage backup and restore preserve a consistent prior database with a safety copy", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-storage-backup-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const backupPath = path.join(tempDir, "backup.sqlite");
+
+  try {
+    new JobStore({
+      databasePath,
+      jobId: "job_original",
+      taskType: "agent",
+      workflowName: null,
+      title: "Original job",
+      instruction: null,
+      status: "completed",
+      startedAt: "2026-08-26T10:00:00.000Z",
+      input: {},
+      budget: {},
+      output: {}
+    });
+    const backup = backupJobStore({ databasePath, outputPath: backupPath });
+    assert.ok(backup.sizeBytes > 0);
+
+    new JobStore({
+      databasePath,
+      jobId: "job_after_backup",
+      taskType: "agent",
+      workflowName: null,
+      title: "Later job",
+      instruction: null,
+      status: "completed",
+      startedAt: "2026-08-26T10:01:00.000Z",
+      input: {},
+      budget: {},
+      output: {}
+    });
+    const restored = restoreJobStore({ databasePath, inputPath: backupPath, force: true });
+    assert.ok(restored.safetyBackupPath);
+    assert.equal(maintainJobStore({ databasePath }).jobs, 1);
+    assert.throws(
+      () => restoreJobStore({ databasePath, inputPath: backupPath, force: false }),
+      /pass --force/
+    );
+  } finally {
     closeSharedJobDatabase(databasePath);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

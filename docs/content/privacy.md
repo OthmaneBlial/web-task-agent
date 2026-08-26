@@ -32,4 +32,4 @@ Use a redacted preview before writing an export:
 web-task-agent job export <job-id> --format markdown --redact --dry-run
 ```
 
-The redactor recognizes common secret formats but cannot decide whether the surrounding content is safe to share. Review every export. Bound local prompt traces with `storage cleanup --prompt-traces <path> --max-traces <count>` and delete local databases, caches, and reports through your normal retention process.
+The redactor recognizes common secret formats but cannot decide whether the surrounding content is safe to share. Review every export. Bound local prompt traces with `storage cleanup --prompt-traces <path> --max-traces <count>`. Use `storage backup --output <path>` before a risky local change; `storage restore --input <path> --force` creates a safety copy before replacing the active database. Delete local databases, caches, and reports through your normal retention process.

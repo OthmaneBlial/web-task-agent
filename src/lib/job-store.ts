@@ -1096,6 +1096,83 @@ export function maintainJobStore(options?: {
   };
 }
 
+function quoteSqlString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function assertSqliteBackupFile(filePath: string): void {
+  const header = fs.readFileSync(filePath).subarray(0, 16).toString("utf8");
+  if (header !== "SQLite format 3\u0000") {
+    throw new Error(`backup is not a SQLite database: ${filePath}`);
+  }
+}
+
+export function backupJobStore(options: {
+  databasePath?: string;
+  outputPath: string;
+}): { databasePath: string; backupPath: string; sizeBytes: number } {
+  const { db, databasePath } = getDatabase(options.databasePath);
+  const backupPath = path.resolve(options.outputPath);
+  if (backupPath === databasePath) {
+    throw new Error("backup output must be different from the active database path");
+  }
+  if (fs.existsSync(backupPath)) {
+    throw new Error(`refusing to overwrite existing backup: ${backupPath}`);
+  }
+  ensureParentDir(backupPath);
+  db.exec(`VACUUM INTO ${quoteSqlString(backupPath)}`);
+  assertSqliteBackupFile(backupPath);
+  return {
+    databasePath,
+    backupPath,
+    sizeBytes: fs.statSync(backupPath).size
+  };
+}
+
+export function restoreJobStore(options: {
+  databasePath?: string;
+  inputPath: string;
+  backupPath?: string;
+  force: boolean;
+}): { databasePath: string; restoredFrom: string; safetyBackupPath: string | null } {
+  const databasePath = resolveJobDatabasePath(options.databasePath);
+  const inputPath = path.resolve(options.inputPath);
+  if (!options.force) {
+    throw new Error("restoring a database replaces local state; pass --force after confirming the source backup");
+  }
+  if (!fs.existsSync(inputPath)) {
+    throw new Error(`restore input does not exist: ${inputPath}`);
+  }
+  assertSqliteBackupFile(inputPath);
+  if (inputPath === databasePath) {
+    throw new Error("restore input must be different from the active database path");
+  }
+
+  let safetyBackupPath: string | null = null;
+  if (fs.existsSync(databasePath)) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    safetyBackupPath = path.resolve(
+      options.backupPath ?? `${databasePath}.before-restore-${timestamp}.sqlite`
+    );
+    backupJobStore({ databasePath, outputPath: safetyBackupPath });
+  }
+  closeSharedJobDatabase(databasePath);
+
+  ensureParentDir(databasePath);
+  const temporaryPath = `${databasePath}.restore-${process.pid}-${Date.now()}.tmp`;
+  try {
+    fs.copyFileSync(inputPath, temporaryPath, fs.constants.COPYFILE_EXCL);
+    assertSqliteBackupFile(temporaryPath);
+    fs.renameSync(temporaryPath, databasePath);
+  } finally {
+    if (fs.existsSync(temporaryPath)) {
+      fs.rmSync(temporaryPath, { force: true });
+    }
+  }
+
+  return { databasePath, restoredFrom: inputPath, safetyBackupPath };
+}
+
 function ensureTableColumns(
   database: DatabaseSync,
   tableName: string,

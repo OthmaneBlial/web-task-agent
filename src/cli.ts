@@ -18,7 +18,9 @@ import {
   listRecoverableJobs,
   listJobRunEvents,
   listStoredJobs,
-  maintainJobStore
+  maintainJobStore,
+  backupJobStore,
+  restoreJobStore
 } from "./lib/job-store";
 import { normalizeCliArgv } from "./lib/cli-argv";
 import { formatCliErrorMessage } from "./lib/cli-error";
@@ -1199,6 +1201,36 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log(`  After: ${summary.afterCount}`);
       console.log(`  Removed: ${summary.removedCount}`);
       console.log(`  Dry run: ${summary.dryRun ? "yes" : "no"}`);
+    });
+
+  storage
+    .command("backup")
+    .description("Create a consistent local SQLite backup without uploading any data")
+    .requiredOption("--output <path>", "Destination SQLite backup path")
+    .action((options) => {
+      const backup = backupJobStore({ outputPath: String(options.output) });
+      console.log("Local storage backup created.");
+      console.log(`  Database: ${backup.databasePath}`);
+      console.log(`  Backup: ${backup.backupPath}`);
+      console.log(`  Size: ${backup.sizeBytes} bytes`);
+    });
+
+  storage
+    .command("restore")
+    .description("Restore a local SQLite backup and create a safety backup of current state")
+    .requiredOption("--input <path>", "Existing SQLite backup to restore")
+    .option("--backup <path>", "Safety backup destination for the current database")
+    .option("--force", "Confirm replacement of the current local database")
+    .action((options) => {
+      const restored = restoreJobStore({
+        inputPath: String(options.input),
+        backupPath: options.backup ? String(options.backup) : undefined,
+        force: Boolean(options.force)
+      });
+      console.log("Local storage restore completed.");
+      console.log(`  Database: ${restored.databasePath}`);
+      console.log(`  Restored from: ${restored.restoredFrom}`);
+      console.log(`  Safety backup: ${restored.safetyBackupPath ?? "not needed (no prior database)"}`);
     });
 
   storage

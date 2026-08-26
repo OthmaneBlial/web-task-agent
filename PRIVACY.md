@@ -28,7 +28,7 @@ An unavailable `robots.txt` is recorded as a signal and rate limiting still appl
 
 Structured logs and prompt traces redact common API, GitHub, AWS, and bearer-token formats. Before sharing, use `web-task-agent job export <job-id> --redact --dry-run` to inspect the local export plan. Redaction is defense in depth, not a substitute for reviewing sensitive data.
 
-Prompt-trace manifests can be bounded with `web-task-agent storage cleanup --prompt-traces <path> --max-traces <count>`. Delete local reports, cache files, and the SQLite database through your normal local retention process when they are no longer needed. The project does not retain a remote copy on your behalf.
+Prompt-trace manifests can be bounded with `web-task-agent storage cleanup --prompt-traces <path> --max-traces <count>`. Create a consistent local SQLite backup with `storage backup --output <path>` before a risky local change; `storage restore --input <path> --force` keeps a safety copy before replacement. Delete local reports, cache files, and the SQLite database through your normal local retention process when they are no longer needed. The project does not retain a remote copy on your behalf.
 
 ## Contact
 

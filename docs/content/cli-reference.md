@@ -33,6 +33,8 @@ web-task-agent job budget <job-id>
 web-task-agent job export <job-id> --format markdown --redact --dry-run
 web-task-agent job compare <earlier-job-id> <later-job-id> --redact --dry-run
 web-task-agent storage maintain
+web-task-agent storage backup --output <path>
+web-task-agent storage restore --input <path> --force
 web-task-agent storage cleanup --prompt-traces <path>
 web-task-agent storage gate
 web-task-agent worker run --once
@@ -98,6 +100,22 @@ Use `storage cleanup --prompt-traces <path>` when you want to trim an existing p
 
 - `--max-traces` keeps the newest records and drops older ones
 - `--dry-run` previews the change without rewriting the file
+
+## Backup And Restore
+
+Create a consistent SQLite copy without uploading any data:
+
+```bash
+web-task-agent storage backup --output ./web-task-agent-backup.sqlite
+```
+
+Restoration is intentionally explicit because it replaces the local database. It requires `--force`, validates the SQLite input, and first creates a safety backup of the current state (or writes it to `--backup <path>` when you choose the location):
+
+```bash
+web-task-agent storage restore \
+  --input ./web-task-agent-backup.sqlite \
+  --force
+```
 
 ## Hardening Gate
 
