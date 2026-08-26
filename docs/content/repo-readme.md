@@ -28,7 +28,14 @@ Not a hosted scraper. Not an access-control bypass. Not another generic browser-
 
 **See the full product story:** [live documentation](https://othmaneblial.github.io/web-task-agent/) · [eight inspectable receipts](RESEARCH_RECEIPTS.md) · [latest release](https://github.com/OthmaneBlial/web-task-agent/releases/latest)
 
-The GitHub Packages mirror is available as `@othmaneblial/web-task-agent`. Add `@othmaneblial:registry=https://npm.pkg.github.com` to your `.npmrc`, then run `npm install @othmaneblial/web-task-agent`.
+The GitHub Packages mirror is available as `@othmaneblial/web-task-agent`. GitHub's npm registry requires a classic personal access token with `read:packages` even for public packages. Authenticate without committing that token, then install the mirror:
+
+```bash
+npm login --scope=@othmaneblial --auth-type=legacy --registry=https://npm.pkg.github.com
+npm install @othmaneblial/web-task-agent
+```
+
+See [GitHub's npm-registry authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry); never commit the token to `.npmrc` or the repository.
 
 ## Get a real package in two minutes — no key, browser, or network
 

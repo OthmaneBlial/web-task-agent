@@ -2,6 +2,11 @@
 
 This file is intentionally lightweight.
 
+## 0.3.3 — 2026-08-26
+
+- Published the scoped GitHub Packages mirror `@othmaneblial/web-task-agent` from a repository-owned manual workflow using the ephemeral GitHub Actions token.
+- Documented the GitHub Packages authentication requirement so the install command is explicit about the required `read:packages` token scope.
+
 ## 0.3.2 — 2026-08-26
 
 - Included the decision-pack runtime in the published npm tarball, fixing a missing `dist/packs` module at CLI startup.

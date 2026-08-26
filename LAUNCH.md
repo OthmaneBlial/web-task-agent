@@ -1,4 +1,4 @@
-# Launch kit — Web Task Agent v0.3.2
+# Launch kit — Web Task Agent v0.3.3
 
 This is a factual, reusable launch kit for maintainers. Adapt the audience and keep the links intact; do not claim adoption, benchmark results, or fresh research that has not been independently verified.
 
@@ -18,7 +18,7 @@ web-task-agent demo export browser-agent-landscape
 
 - Project site: https://othmaneblial.github.io/web-task-agent/
 - README and installation: https://github.com/OthmaneBlial/web-task-agent#readme
-- Latest release: https://github.com/OthmaneBlial/web-task-agent/releases/tag/v0.3.2
+- Latest release: https://github.com/OthmaneBlial/web-task-agent/releases/tag/v0.3.3
 - Workflow catalog: https://github.com/OthmaneBlial/web-task-agent/blob/main/examples/workflows/CATALOG.md
 - Contributing: https://github.com/OthmaneBlial/web-task-agent/blob/main/CONTRIBUTING.md
 
