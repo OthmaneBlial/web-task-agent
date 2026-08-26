@@ -31,5 +31,8 @@ jobs:
       - name: Build, unit test, and integration test
         run: npm run test:ci
 
+      - name: Audit publishable files for secrets
+        run: npm run audit:secrets
+
       - name: Audit production dependencies
         run: npm run audit:prod

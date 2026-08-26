@@ -48,7 +48,7 @@ This page maps the main product surfaces to the current automated coverage.
 
 ## CI Contract
 
-`npm test` builds the project, runs unit and integration tests, regenerates the workflow catalog, verifies that `site/` mirrors the canonical `docs/` tree, and checks local Markdown links. The test fixtures do not depend on live Play Store/AppBrain content or an LLM API key.
+`npm test` builds the project, runs unit and integration tests, regenerates the workflow catalog, verifies that `site/` mirrors the canonical `docs/` tree, and checks local Markdown links. GitHub Actions then audits publishable files for secrets and production dependencies. The test fixtures do not depend on live Play Store/AppBrain content or an LLM API key.
 
 ## Coverage Gaps To Watch
 
