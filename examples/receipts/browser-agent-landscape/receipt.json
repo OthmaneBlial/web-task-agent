@@ -41,7 +41,7 @@
       "collectedAt": "2026-08-26",
       "captureType": "fixture-synthetic",
       "snapshotPath": "evidence/snapshots/source-1.md",
-      "snapshotSha256": "eddbe20c9c6a715b50a4d8a4a7d372e4c02f17ed035a6829be8ef5fe4597f8b8"
+      "snapshotSha256": "29a54b9371cab7dce27adc98dc5099c5896c52fe80de1385e85979d2f0c284b0"
     },
     {
       "id": "source-2",
@@ -52,7 +52,7 @@
       "collectedAt": "2026-08-26",
       "captureType": "fixture-synthetic",
       "snapshotPath": "evidence/snapshots/source-2.md",
-      "snapshotSha256": "4d28808229d55849aad12cda094a19bdff3604d5ad3daf9413c214e3c2bf584c"
+      "snapshotSha256": "469eafb3ac78ff7841a76902d790ce80d43b80a720b9ba80cddef168bc6b3d42"
     },
     {
       "id": "source-3",
@@ -63,7 +63,7 @@
       "collectedAt": "2026-08-26",
       "captureType": "fixture-synthetic",
       "snapshotPath": "evidence/snapshots/source-3.md",
-      "snapshotSha256": "2888d63b746e9c8ab22d69129da38b5c6c30e5f0ed49a0d2d5053ee60ed887a8"
+      "snapshotSha256": "87f19bb21466b1d5b2b44b9699ce875842c6e6986118dbddbd58e449d6e0b014"
     }
   ],
   "contradictions": [

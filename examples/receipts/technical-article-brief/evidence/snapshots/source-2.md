@@ -7,6 +7,8 @@
 
 This snapshot is bundled evidence for the deterministic demo. It is not a live copy of the linked page.
 
+Scenario: Prepare an article about browser automation and local research infrastructure without flattening implementation trade-offs into unsupported claims.
+
 # Technical Article Brief
 
 ## Decision

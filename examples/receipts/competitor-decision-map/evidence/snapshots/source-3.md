@@ -7,6 +7,8 @@
 
 This snapshot is bundled evidence for the deterministic demo. It is not a live copy of the linked page.
 
+Scenario: Decide how to position a research product alongside browser automation, web extraction, and durable agent frameworks without claiming unverified superiority.
+
 # Competitor Decision Map
 
 ## Decision

@@ -249,20 +249,32 @@ export interface JobComparison {
   decisionChanged: boolean;
   leftDecisionExcerpt: string | null;
   rightDecisionExcerpt: string | null;
+  changedBecause: string[];
 }
 
 export function compareJobExports(left: JobExportData, right: JobExportData): JobComparison {
   const leftByUrl = new Map(left.sources.map((source) => [source.url, source]));
   const rightByUrl = new Map(right.sources.map((source) => [source.url, source]));
+  const changedBecause: string[] = [];
+  const newSources = right.sources.filter((source) => !leftByUrl.has(source.url));
+  const disappearedSources = left.sources.filter((source) => !rightByUrl.has(source.url));
+  const reportChanged = left.reportSha256 !== right.reportSha256;
+  const decisionChanged = left.decisionExcerpt !== right.decisionExcerpt;
+  if (newSources.length > 0) changedBecause.push(`${newSources.length} source(s) were added`);
+  if (disappearedSources.length > 0) changedBecause.push(`${disappearedSources.length} source(s) disappeared`);
+  if (reportChanged && !decisionChanged) changedBecause.push("the report changed while its decision excerpt stayed the same");
+  if (decisionChanged) changedBecause.push("the decision excerpt changed after synthesis");
+  if (changedBecause.length === 0) changedBecause.push("no source or decision change was detected");
   return {
     leftJobId: left.job.id,
     rightJobId: right.job.id,
-    newSources: right.sources.filter((source) => !leftByUrl.has(source.url)),
-    disappearedSources: left.sources.filter((source) => !rightByUrl.has(source.url)),
-    reportChanged: left.reportSha256 !== right.reportSha256,
-    decisionChanged: left.decisionExcerpt !== right.decisionExcerpt,
+    newSources,
+    disappearedSources,
+    reportChanged,
+    decisionChanged,
     leftDecisionExcerpt: left.decisionExcerpt,
-    rightDecisionExcerpt: right.decisionExcerpt
+    rightDecisionExcerpt: right.decisionExcerpt,
+    changedBecause
   };
 }
 
@@ -276,6 +288,10 @@ export function renderJobComparison(comparison: JobComparison, format: "markdown
     "",
     `- Report changed: ${safeComparison.reportChanged ? "yes" : "no"}`,
     `- Decision excerpt changed: ${safeComparison.decisionChanged ? "yes" : "no"}`,
+    "",
+    "## Decision changed because",
+    "",
+    ...safeComparison.changedBecause.map((reason) => `- ${reason}.`),
     "",
     "## New sources",
     "",

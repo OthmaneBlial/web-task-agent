@@ -7,6 +7,8 @@
 
 This snapshot is bundled evidence for the deterministic demo. It is not a live copy of the linked page.
 
+Scenario: Review public GitHub feedback to decide whether it is a reproducible issue, a workflow proposal, a request for evidence, or a broader community discussion.
+
 # GitHub Issue Opportunity
 
 ## Decision

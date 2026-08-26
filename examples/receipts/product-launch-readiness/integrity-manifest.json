@@ -7,18 +7,18 @@
   "files": [
     {
       "path": "evidence/snapshots/source-1.md",
-      "sha256": "c6e6a73eb91231201671206692d9b8ef5def6a534cdf9d31f1fc5accd2fef40e",
-      "bytes": 1370
+      "sha256": "b8c4e042aa6144bcbc2da0433ad416381c0351deadc1c3e6f641f79ecc532b22",
+      "bytes": 1541
     },
     {
       "path": "evidence/snapshots/source-2.md",
-      "sha256": "e6f22ffc31a9b423c9023cc06c8b1dff19bc85e96510d0ff0af881109b85c418",
-      "bytes": 1372
+      "sha256": "1916637420c514c171ffa05ba3b17eec5cd6ff67569da540412a76cc6081a2c5",
+      "bytes": 1543
     },
     {
       "path": "evidence/snapshots/source-3.md",
-      "sha256": "8e82f8bf1bd60da64015916f87b2b6561fe636e0d18f34a022bf6d83834f9a4e",
-      "bytes": 1363
+      "sha256": "94fe43fa0b7f3ff0617d4a0b2b07bf47b4c1a919bf56d51e797329330fb9d8e6",
+      "bytes": 1534
     },
     {
       "path": "evidence/sources.json",
@@ -47,7 +47,7 @@
     },
     {
       "path": "receipt.json",
-      "sha256": "1a14f5017e0cd91aa98ce692f77626e0b1128ddd0621a8946129730879fe33d6",
+      "sha256": "0a589b9d6c7dfec83b49d6c400a9f9ba018546228c9eac2afff90021c51a8a65",
       "bytes": 3258
     },
     {

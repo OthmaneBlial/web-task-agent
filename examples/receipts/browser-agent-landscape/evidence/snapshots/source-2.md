@@ -7,6 +7,8 @@
 
 This snapshot is bundled evidence for the deterministic demo. It is not a live copy of the linked page.
 
+Scenario: Compare the current public positioning of browser automation, web extraction, and durable agent execution tools.
+
 # Browser Agent Landscape
 
 ## Decision

@@ -491,6 +491,8 @@ export function writeDemoPackage(input: {
         "",
         "This snapshot is bundled evidence for the deterministic demo. It is not a live copy of the linked page.",
         "",
+        `Scenario: ${demo.scenario}`,
+        "",
         demo.report
       ].join("\n") + "\n",
       force

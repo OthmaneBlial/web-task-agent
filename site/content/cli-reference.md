@@ -15,6 +15,7 @@ The root help output is organized around the main operator paths:
 web-task-agent demo list
 web-task-agent demo export <demo-id>
 web-task-agent receipt verify <directory>
+web-task-agent receipt compare <earlier-directory> <later-directory>
 web-task-agent browser status
 web-task-agent workflow list
 web-task-agent workflow list --category <name>
@@ -48,6 +49,7 @@ web-task-agent server run --port 4317
 
 - `demo export` when you want to inspect the exact output contract with no key, browser, or network request. Each exported demo includes `receipt.html`, `receipt.json`, source snapshots, and an integrity manifest.
 - `receipt verify` when you want to validate a package offline. It checks schema, claim-to-source references, excerpts, snapshot hashes, and exported file hashes. It does not prove that a source is true, complete, authorized, or fresh.
+- `receipt compare` when you have two verified packages for the same decision. It renders a portable diff with added/removed sources, changed claims, and an explicit explanation of why the decision changed.
 - `browser status` when you want to confirm the local CDP backend without starting, restarting, or attaching to a browser.
 - `workflow list --category` or `--search` when you want to find one of the 240 catalog workflows.
 - `workflow preview` when you need to inspect one workflow's source strategy, queries, outputs, and budgets before doing work.

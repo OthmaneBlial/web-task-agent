@@ -38,7 +38,11 @@ import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
 import { maintainPromptTraceRetention } from "./lib/prompt-trace";
 import { logStructured } from "./lib/local-logging";
 import { assessStorageHealth } from "./lib/storage-validation";
-import { verifyReceiptDirectory } from "./lib/receipt";
+import {
+  compareDecisionReceipts,
+  renderDecisionReceiptComparison,
+  verifyReceiptDirectory
+} from "./lib/receipt";
 import {
   buildJobExportData,
   compareJobExports,
@@ -229,6 +233,45 @@ Use "web-task-agent <command> --help" for the full option list.
         console.log("Evidence references, source snapshots, and integrity hashes are consistent.");
         console.log("Note: hashes do not prove that a source is true, complete, authorized, or fresh.");
       }
+    });
+
+  receipt
+    .command("compare <earlierDirectory> <laterDirectory>")
+    .description("Compare two verified decision receipts and explain why the decision changed")
+    .option("--format <format>", "Comparison format: markdown or json", "markdown")
+    .option("--output <path>", "Destination file path")
+    .option("--dry-run", "Preview the comparison without writing")
+    .option("--force", "Replace an existing output file")
+    .action((earlierDirectory, laterDirectory, options) => {
+      const earlierVerification = verifyReceiptDirectory(String(earlierDirectory));
+      const laterVerification = verifyReceiptDirectory(String(laterDirectory));
+      if (!earlierVerification.valid) {
+        throw new Error(`earlier receipt is invalid: ${earlierVerification.errors.join("; ")}`);
+      }
+      if (!laterVerification.valid) {
+        throw new Error(`later receipt is invalid: ${laterVerification.errors.join("; ")}`);
+      }
+      const format = parseJobExportFormat(String(options.format), ["markdown", "json"]) as "markdown" | "json";
+      const comparison = compareDecisionReceipts(
+        earlierVerification.receipt!,
+        laterVerification.receipt!
+      );
+      const outputPath = options.output
+        ? path.resolve(String(options.output))
+        : path.resolve("reports", "receipts", "decision-diff", `receipt-diff.${exportExtension(format)}`);
+      writeLocalExport({
+        outputPath,
+        content: renderDecisionReceiptComparison(comparison, format),
+        force: Boolean(options.force),
+        dryRun: Boolean(options.dryRun),
+        summary: [
+          `Earlier: ${comparison.earlierTitle}`,
+          `Later: ${comparison.laterTitle}`,
+          `New sources: ${comparison.newSources.length}`,
+          `Sources no longer present: ${comparison.disappearedSources.length}`,
+          `Decision changed: ${comparison.decisionChanged ? "yes" : "no"}`
+        ]
+      });
     });
 
   const browser = program

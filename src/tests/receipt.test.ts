@@ -5,7 +5,11 @@ import path from "node:path";
 import test from "node:test";
 
 import { listDemoFixtures, writeDemoPackage } from "../demos";
-import { verifyReceiptDirectory } from "../lib/receipt";
+import {
+  compareDecisionReceipts,
+  renderDecisionReceiptComparison,
+  verifyReceiptDirectory
+} from "../lib/receipt";
 
 test("deterministic demo packages include a verifiable decision receipt", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-"));
@@ -47,5 +51,28 @@ test("receipt verification identifies tampered artifacts and unsupported source 
     assert.ok(unsafe.errors.some((error) => error.includes("unsafe source URL")));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("decision receipt comparison explains source, claim, and decision changes", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-diff-"));
+  try {
+    const earlierDir = path.join(root, "earlier");
+    const laterDir = path.join(root, "later");
+    writeDemoPackage({ id: "browser-agent-landscape", outputDir: earlierDir });
+    writeDemoPackage({ id: "local-first-risk-review", outputDir: laterDir });
+    const earlier = verifyReceiptDirectory(earlierDir);
+    const later = verifyReceiptDirectory(laterDir);
+    assert.equal(earlier.valid, true, earlier.errors.join("; "));
+    assert.equal(later.valid, true, later.errors.join("; "));
+
+    const comparison = compareDecisionReceipts(earlier.receipt!, later.receipt!);
+    assert.equal(comparison.decisionChanged, true);
+    assert.equal(comparison.newSources.length, 3);
+    assert.equal(comparison.disappearedSources.length, 3);
+    assert.ok(comparison.changedBecause.length >= 3);
+    assert.match(renderDecisionReceiptComparison(comparison), /Decision changed because/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

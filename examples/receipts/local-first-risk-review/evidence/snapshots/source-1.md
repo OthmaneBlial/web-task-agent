@@ -7,6 +7,8 @@
 
 This snapshot is bundled evidence for the deterministic demo. It is not a live copy of the linked page.
 
+Scenario: Review a local research run for unsafe targets, secret exposure, source manipulation, and unsafe sharing before treating its output as ready.
+
 # Local-First Risk Review
 
 ## Decision

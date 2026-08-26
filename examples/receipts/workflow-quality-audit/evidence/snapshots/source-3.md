@@ -7,6 +7,8 @@
 
 This snapshot is bundled evidence for the deterministic demo. It is not a live copy of the linked page.
 
+Scenario: Review a proposed research workflow for a repeated decision, a distinct source strategy, an explicit output contract, and disconfirming evidence.
+
 # Workflow Quality Audit
 
 ## Decision

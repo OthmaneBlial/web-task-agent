@@ -7,6 +7,8 @@
 
 This snapshot is bundled evidence for the deterministic demo. It is not a live copy of the linked page.
 
+Scenario: Prepare a public release for a developer tool by checking the experience a visitor can verify, the claims that are supported, and the next evidence to collect.
+
 # Product Launch Readiness
 
 ## Decision
