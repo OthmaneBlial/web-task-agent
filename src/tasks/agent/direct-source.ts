@@ -534,7 +534,7 @@ function buildPlayStoreFallbackPage(input: {
   };
 }
 
-async function fetchPlayStoreAppMetadata(url: string): Promise<{
+export interface DirectAppMetadata {
   appName: string;
   fullTitle: string;
   shortDescription: string;
@@ -543,7 +543,22 @@ async function fetchPlayStoreAppMetadata(url: string): Promise<{
   developer: string;
   appId: string | null;
   normalizedUrl: string;
-} | null> {
+}
+
+export interface DirectSourceEnrichmentOptions {
+  /**
+   * Optional transport seam for deterministic tests and alternative app-store
+   * clients. Production defaults to a direct Google Play metadata request.
+   */
+  fetchAppMetadata?: (url: string) => Promise<DirectAppMetadata | null>;
+}
+
+export interface DirectAppBenchmarkOptions extends DirectSourceEnrichmentOptions {
+  maxKeywords?: number;
+  fetchSearchAppIds?: (query: string, limit: number) => Promise<string[]>;
+}
+
+async function fetchPlayStoreAppMetadata(url: string): Promise<DirectAppMetadata | null> {
   const normalizedUrl = normalizePlayStoreUrl(url);
   const appId = parsePlayStoreAppId(normalizedUrl);
 
@@ -731,14 +746,16 @@ export function buildProvidedSourceSeedResult(url: string): AgentSearchResult {
 }
 
 export async function enrichProvidedSourceSeedResult(
-  result: AgentSearchResult
+  result: AgentSearchResult,
+  options?: DirectSourceEnrichmentOptions
 ): Promise<AgentSearchResult> {
   const appId = parseDirectAppId(result.url);
   if (!appId) {
     return result;
   }
 
-  const metadata = await fetchPlayStoreAppMetadata(normalizePlayStoreUrl(result.url));
+  const fetchAppMetadata = options?.fetchAppMetadata ?? fetchPlayStoreAppMetadata;
+  const metadata = await fetchAppMetadata(normalizePlayStoreUrl(result.url));
   if (!metadata) {
     if (isPlaceholderProvidedSourceTitle(result.title)) {
       const fallbackTitle = humanizePackageId(appId);
@@ -779,9 +796,11 @@ export async function enrichProvidedSourceSeedResult(
 }
 
 export async function buildDirectAppBenchmarkResearch(
-  result: AgentSearchResult
+  result: AgentSearchResult,
+  options?: Omit<DirectAppBenchmarkOptions, "maxKeywords">
 ): Promise<AgentResearchResult | null> {
   const [benchmark] = await buildDirectAppBenchmarkResearches(result, {
+    ...options,
     maxKeywords: 1
   });
   return benchmark ?? null;
@@ -789,9 +808,7 @@ export async function buildDirectAppBenchmarkResearch(
 
 export async function buildDirectAppBenchmarkResearches(
   result: AgentSearchResult,
-  options?: {
-    maxKeywords?: number;
-  }
+  options?: DirectAppBenchmarkOptions
 ): Promise<AgentResearchResult[]> {
   const appId = parseDirectAppId(result.url);
   const appName = pickMeaningfulSourceTitle(result);
@@ -804,9 +821,11 @@ export async function buildDirectAppBenchmarkResearches(
     Math.max(1, Math.min(options?.maxKeywords ?? 3, 5))
   );
   const researchResults: AgentResearchResult[] = [];
+  const fetchSearchAppIds = options?.fetchSearchAppIds ?? fetchPlayStoreSearchAppIds;
+  const fetchAppMetadata = options?.fetchAppMetadata ?? fetchPlayStoreAppMetadata;
 
   for (const keyword of benchmarkKeywords) {
-    const rankedAppIds = await fetchPlayStoreSearchAppIds(keyword, 24);
+    const rankedAppIds = await fetchSearchAppIds(keyword, 24);
     if (rankedAppIds.length === 0) {
       continue;
     }
@@ -817,7 +836,7 @@ export async function buildDirectAppBenchmarkResearches(
 
     for (let index = 0; index < competitorIds.length; index += 1) {
       const competitorId = competitorIds[index]!;
-      const metadata = await fetchPlayStoreAppMetadata(buildPlayStoreDetailsUrl(competitorId));
+      const metadata = await fetchAppMetadata(buildPlayStoreDetailsUrl(competitorId));
       if (!metadata) {
         continue;
       }

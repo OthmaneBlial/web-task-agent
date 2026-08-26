@@ -16,6 +16,11 @@ import {
   parseAppBrainAppId,
   extractInstructionUrls
 } from "../tasks/agent/direct-source";
+import {
+  fetchBenchmarkAppIds,
+  fetchBenchmarkMetadata,
+  fetchNanoCvMetadata
+} from "./fixtures/direct-app";
 import { createDefaultAgentExtractor } from "../tasks/agent/extractors/heuristic-extractor";
 import {
   assessDocumentQuality,
@@ -28,6 +33,10 @@ import {
   rankSearchResultsForQuery
 } from "../tasks/agent/shared";
 import type { AgentResearchResult, AgentSearchResult } from "../types";
+
+// Freshness is intentionally relative to the test run; all content remains a
+// local fixture and no network request is made while testing trend scoring.
+const FRESH_CAPTURED_AT = new Date().toISOString();
 
 function createGoodResult(): AgentSearchResult {
   return {
@@ -98,7 +107,7 @@ function createForumResult(): AgentSearchResult {
         "We wish the pipeline would save evidence, summarize the strongest signals, and show which claims are trending across sources.",
         "Today the workaround is exporting notes manually, which is frustrating when the research job keeps running for hours."
       ],
-      capturedAt: "2026-03-20T12:00:00.000Z"
+      capturedAt: FRESH_CAPTURED_AT
     }
   };
 }
@@ -123,7 +132,7 @@ function createForumResultVariant(): AgentSearchResult {
         "A useful next step would be better ranking so the pipeline reads the strongest sources first and highlights what is trending now.",
         "The current process is hard to review because evidence gets scattered across notes and exports."
       ],
-      capturedAt: "2026-03-20T12:08:00.000Z"
+      capturedAt: FRESH_CAPTURED_AT
     }
   };
 }
@@ -423,7 +432,8 @@ test("direct source query builder ignores placeholder titles and falls back to p
 
 test("play store seed enrichment builds rich aso evidence without browser fetch", async () => {
   const seeded = await enrichProvidedSourceSeedResult(
-    buildProvidedSourceSeedResult("https://play.google.com/store/apps/details?id=com.nanocv.app")
+    buildProvidedSourceSeedResult("https://play.google.com/store/apps/details?id=com.nanocv.app"),
+    { fetchAppMetadata: fetchNanoCvMetadata }
   );
 
   assert.equal(seeded.title, "Resume Builder Offline");
@@ -444,7 +454,8 @@ test("appbrain direct links resolve app ids and use the direct app audit path", 
   assert.equal(isDirectAppUrl(appBrainUrl), true);
 
   const seeded = await enrichProvidedSourceSeedResult(
-    buildProvidedSourceSeedResult(appBrainUrl)
+    buildProvidedSourceSeedResult(appBrainUrl),
+    { fetchAppMetadata: fetchNanoCvMetadata }
   );
 
   assert.equal(seeded.title, "Resume Builder Offline");
@@ -470,9 +481,13 @@ test("appbrain direct links resolve app ids and use the direct app audit path", 
 
 test("direct app benchmark research finds market visibility and competitors", async () => {
   const seeded = await enrichProvidedSourceSeedResult(
-    buildProvidedSourceSeedResult("https://www.appbrain.com/app/nanocv-offline-resume-builder/com.nanocv.app")
+    buildProvidedSourceSeedResult("https://www.appbrain.com/app/nanocv-offline-resume-builder/com.nanocv.app"),
+    { fetchAppMetadata: fetchNanoCvMetadata }
   );
-  const benchmark = await buildDirectAppBenchmarkResearch(seeded);
+  const benchmark = await buildDirectAppBenchmarkResearch(seeded, {
+    fetchAppMetadata: fetchBenchmarkMetadata,
+    fetchSearchAppIds: fetchBenchmarkAppIds
+  });
 
   assert.ok(benchmark);
   assert.match(benchmark?.query ?? "", /Play Store benchmark/i);

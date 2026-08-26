@@ -156,8 +156,10 @@ function installControlTrigger(input: {
 
 function installRunnerTestStubs() {
   const { LlmService } = require("../lib/llm") as typeof import("../lib/llm");
+  const { AgentSearchStage } = require("../tasks/agent/search-stage") as typeof import("../tasks/agent/search-stage");
   const originalEnsureDebuggerReady = cdpModule.ensureDebuggerReady;
   const originalSynthesizeAgentEvidence = LlmService.prototype.synthesizeAgentEvidence;
+  const originalSearch = AgentSearchStage.prototype.search;
 
   cdpModule.ensureDebuggerReady = async () => {};
   LlmService.prototype.synthesizeAgentEvidence = async function synthesizeStub() {
@@ -170,10 +172,40 @@ function installRunnerTestStubs() {
       referencedEvidence: []
     } satisfies AgentResearchSummary;
   };
+  AgentSearchStage.prototype.search = async function searchStub(query: string) {
+    return {
+      query,
+      searchedAt: "2026-03-21T09:01:00.000Z",
+      searchUrl: `https://search.example.com?q=${encodeURIComponent(query)}`,
+      searchProvider: "fixture_search",
+      pagesVisited: 1,
+      exhausted: true,
+      results: [
+        {
+          title: "Fixture source for interruption testing",
+          url: "https://docs.example.com/interruption-fixture",
+          snippet: "Teams repeatedly ask for durable research recovery.",
+          site: "docs.example.com",
+          reviewStatus: "read",
+          contentType: "documentation",
+          page: {
+            title: "Interruption fixture",
+            url: "https://docs.example.com/interruption-fixture",
+            description: "A deterministic fixture for interrupted research tests.",
+            h1: "Interruption fixture",
+            headings: ["Recovery"],
+            paragraphs: ["Teams repeatedly ask for durable research recovery and clear evidence trails."],
+            capturedAt: "2026-03-21T09:01:00.000Z"
+          }
+        }
+      ]
+    } as Awaited<ReturnType<typeof originalSearch>>;
+  };
 
   return () => {
     cdpModule.ensureDebuggerReady = originalEnsureDebuggerReady;
     LlmService.prototype.synthesizeAgentEvidence = originalSynthesizeAgentEvidence;
+    AgentSearchStage.prototype.search = originalSearch;
   };
 }
 
