@@ -63,6 +63,29 @@ export const WORKFLOW_CATALOG_MISSIONS: WorkflowCatalogMission[] = [
   { id: "retention-churn", title: "Retention and Churn", description: "Research why users stay, leave, or downgrade, then turn findings into retention experiments.", researchFocus: "churn language, missing value, switching triggers, habit loops, and win-back opportunities", deliverables: ["churn-risk themes", "retention drivers", "experiment backlog", "metric and cohort questions"], querySuffixes: ["churn complaints", "cancel subscription", "why users leave", "retention feature requests", "switching alternatives"] }
 ];
 
+const PREFERRED_SOURCES_BY_MISSION: Record<string, string[]> = {
+  "voice-of-customer": ["public user reviews", "feature-request forums", "practitioner and community discussions"],
+  "competitor-map": ["first-party product and pricing pages", "release notes and documentation", "independent comparison and review sources"],
+  "feature-gap": ["public issue trackers", "feature-request threads", "review and workaround discussions"],
+  "pricing-packaging": ["first-party pricing pages", "public plan comparisons", "pricing-objection and subscription-review threads"],
+  "audience-segmentation": ["role-specific communities", "first-party customer stories", "public interviews and use-case discussions"],
+  "buyer-journey": ["onboarding and evaluation discussions", "product documentation", "public reviews describing adoption or abandonment"],
+  "launch-positioning": ["competitor launch pages", "customer-language discussions", "credible proof assets and case studies"],
+  "content-demand": ["official documentation", "repeated technical questions", "maintainer issues and practitioner discussions"],
+  "integration-partnership": ["integration directories and documentation", "public API and ecosystem pages", "community connector requests"],
+  "market-entry": ["incumbent product and pricing pages", "vertical community discussions", "public market and regulatory sources"],
+  "product-validation": ["problem-owner discussions", "current-alternative reviews", "public evidence that can falsify demand"],
+  "retention-churn": ["cancellation and downgrade reviews", "support and feature-request discussions", "switching and retention case studies"]
+};
+
+export function getPreferredSourcesForMission(missionId: string): string[] {
+  const sources = PREFERRED_SOURCES_BY_MISSION[missionId];
+  if (!sources) {
+    throw new Error(`catalog mission ${missionId} has no preferred-source strategy`);
+  }
+  return [...sources];
+}
+
 function toTitleCase(value: string): string {
   return value
     .split("-")

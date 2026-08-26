@@ -19,6 +19,7 @@ test("workflow catalog exposes hundreds of distinct executable use cases", () =>
   assert.equal(catalogTemplates.length, WORKFLOW_CATALOG.length);
   assert.equal(ids.size, catalogTemplates.length);
   assert.equal(examplePaths.size, catalogTemplates.length);
+  assert.ok(catalogTemplates.every((template) => (template.preferredSources?.length ?? 0) >= 3));
 });
 
 test("catalog workflow has its own decision focus, queries, and durable output path", () => {
@@ -38,6 +39,7 @@ test("catalog workflow has its own decision focus, queries, and durable output p
   assert.ok(template);
   assert.equal(template?.category, "Voice of Customer");
   assert.ok(template?.expectedDeliverables?.includes("ranked pain clusters"));
+  assert.ok(template?.preferredSources?.includes("public user reviews"));
   assert.equal(queries.length, 5);
   assert.ok(queries.every((query) => query.includes("security review workflow for SaaS teams")));
   assert.ok(queries.some((query) => query.includes("cybersecurity teams")));

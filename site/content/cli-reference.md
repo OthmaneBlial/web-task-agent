@@ -45,7 +45,7 @@ web-task-agent server run --port 4317
 
 - `demo export` when you want to inspect the exact output contract with no key, browser, or network request.
 - `workflow list --category` or `--search` when you want to find one of the 240 catalog workflows.
-- `workflow preview` when you need to inspect one workflow's queries, outputs, and budgets before doing work.
+- `workflow preview` when you need to inspect one workflow's source strategy, queries, outputs, and budgets before doing work.
 - `pack plan --dry-run` when you need the full ordered plan and its aggregate run bounds without writing a file.
 - `workflow run` when you want a full research package immediately.
 - `agent run` when you want a free-form instruction without a template.

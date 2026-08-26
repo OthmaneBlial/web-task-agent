@@ -12,7 +12,7 @@ web-task-agent workflow preview cybersecurity-voice-of-customer \
   --preset focused
 ```
 
-`preview` is a dry run: it displays the expected work and does not invoke an LLM or browser. The generated [workflow catalog](../../examples/workflows/CATALOG.md) contains one page per catalog workflow.
+`preview` is a dry run: it displays the decision focus, preferred public source families, expected work, and output path without invoking an LLM or browser. The generated [workflow catalog](../../examples/workflows/CATALOG.md) contains one page per catalog workflow, including its source strategy.
 
 ## 1. Android Opportunity Research
 

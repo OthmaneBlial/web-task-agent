@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - test sequence
 - stop or proceed criteria
 
+## Source strategy
+
+- problem-owner discussions
+- current-alternative reviews
+- public evidence that can falsify demand
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows

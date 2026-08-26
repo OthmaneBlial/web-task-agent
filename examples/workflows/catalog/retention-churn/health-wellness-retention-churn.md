@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - experiment backlog
 - metric and cohort questions
 
+## Source strategy
+
+- cancellation and downgrade reviews
+- support and feature-request discussions
+- switching and retention case studies
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows

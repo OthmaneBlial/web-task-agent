@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - priority segment recommendation
 - messages to validate
 
+## Source strategy
+
+- role-specific communities
+- first-party customer stories
+- public interviews and use-case discussions
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows

@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - MVP scope proposal
 - disconfirming evidence
 
+## Source strategy
+
+- public issue trackers
+- feature-request threads
+- review and workaround discussions
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows

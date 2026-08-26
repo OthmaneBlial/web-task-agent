@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - feature and pricing comparison
 - avoidance and differentiation advice
 
+## Source strategy
+
+- first-party product and pricing pages
+- release notes and documentation
+- independent comparison and review sources
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows

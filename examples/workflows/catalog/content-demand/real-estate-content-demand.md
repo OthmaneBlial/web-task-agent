@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - claim checklist
 - distribution communities
 
+## Source strategy
+
+- official documentation
+- repeated technical questions
+- maintainer issues and practitioner discussions
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows

@@ -1,7 +1,11 @@
 import path from "node:path";
 
 import type { AgentRunOptions } from "../types";
-import { WORKFLOW_CATALOG, type WorkflowCatalogEntry } from "./catalog";
+import {
+  getPreferredSourcesForMission,
+  WORKFLOW_CATALOG,
+  type WorkflowCatalogEntry
+} from "./catalog";
 
 export type WorkflowTemplateId = string;
 export type WorkflowPresetId = "fast" | "focused" | "standard" | "deep";
@@ -30,6 +34,7 @@ export interface WorkflowTemplateDefinition {
   category?: string;
   tags?: string[];
   decisionFocus?: string;
+  preferredSources?: string[];
   expectedDeliverables?: string[];
   defaultPresetId: WorkflowPresetId;
   presets: WorkflowPresetDefinition[];
@@ -174,6 +179,7 @@ const CORE_WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
     }),
     description:
       "Find promising Android app opportunities by combining Play Store-style competitor research with broader web pain-point discovery.",
+    preferredSources: ["public app-store listings and reviews", "public product communities", "competitor product and pricing pages"],
     defaultOptions: {
       maxQueries: 8,
       maxResultsPerQuery: 30,
@@ -238,6 +244,7 @@ const CORE_WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
     }),
     description:
       "Build an evidence-backed article research package around a technical or trend topic discussed heavily on the web.",
+    preferredSources: ["official documentation", "release notes and issue trackers", "credible practitioner commentary"],
     defaultOptions: {
       maxQueries: 6,
       maxResultsPerQuery: 25,
@@ -295,6 +302,7 @@ const CORE_WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
     }),
     description:
       "Research a product opportunity, competitive gap, or monetization angle using docs, reviews, forums, and pricing signals.",
+    preferredSources: ["first-party product and pricing pages", "public user reviews", "community discussions"],
     defaultOptions: {
       maxQueries: 8,
       maxResultsPerQuery: 30,
@@ -345,6 +353,7 @@ function buildCatalogWorkflowTemplate(entry: WorkflowCatalogEntry): WorkflowTemp
     category: entry.category,
     tags: [entry.domain.id, entry.mission.id, "catalog"],
     decisionFocus: entry.mission.researchFocus,
+    preferredSources: getPreferredSourcesForMission(entry.mission.id),
     expectedDeliverables: entry.mission.deliverables,
     defaultPresetId: "standard",
     presets: buildPresetSet({

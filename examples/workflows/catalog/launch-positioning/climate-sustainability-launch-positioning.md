@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - proof asset brief
 - launch channel hypotheses
 
+## Source strategy
+
+- competitor launch pages
+- customer-language discussions
+- credible proof assets and case studies
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows

@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - plan and limit ideas
 - pricing risks to test
 
+## Source strategy
+
+- first-party pricing pages
+- public plan comparisons
+- pricing-objection and subscription-review threads
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows

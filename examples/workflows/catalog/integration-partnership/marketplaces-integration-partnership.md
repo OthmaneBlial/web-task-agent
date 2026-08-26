@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - partnership thesis
 - technical and commercial risks
 
+## Source strategy
+
+- integration directories and documentation
+- public API and ecosystem pages
+- community connector requests
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows

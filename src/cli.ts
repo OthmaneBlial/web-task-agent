@@ -428,6 +428,7 @@ Use "web-task-agent <command> --help" for the full option list.
       const resolved = buildWorkflowRunOptions({ templateId: template.id, topic: normalizeText(String(options.topic)), presetId: normalizeText(String(options.preset)).toLowerCase() });
       console.log(`Workflow preview: ${template.title}`);
       console.log(`Decision focus: ${template.decisionFocus ?? template.description}`);
+      console.log(`Prefer sources: ${(template.preferredSources ?? ["official documentation", "public product pages", "public community discussions"]).join("; ")}`);
       console.log(`Preset: ${resolved.workflowPresetId}`);
       console.log(`Budget: ${resolved.maxQueries} queries, ${resolved.maxResultsPerQuery} results/query, ${resolved.fetchBatchSize} fetches/batch, ${resolved.maxRuntimeHours}h soft maximum`);
       console.log(`Output: ${resolved.reportPath}`);

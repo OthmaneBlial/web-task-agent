@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - channel hypotheses
 - risk and research checklist
 
+## Source strategy
+
+- incumbent product and pricing pages
+- vertical community discussions
+- public market and regulatory sources
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows

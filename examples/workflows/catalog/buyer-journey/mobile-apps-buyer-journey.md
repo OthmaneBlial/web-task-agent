@@ -25,6 +25,12 @@ Use `--preset deep` when the decision is high-stakes or you need broader source 
 - trust requirements
 - activation experiments
 
+## Source strategy
+
+- onboarding and evaluation discussions
+- product documentation
+- public reviews describing adoption or abandonment
+
 The run also saves the report, source evidence, contradictions, prompt trace, and a resumable state under `reports/workflows/` and `.data/`.
 
 ## Explore related workflows
