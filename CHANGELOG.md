@@ -6,6 +6,7 @@ This file is intentionally lightweight.
 
 - Included the decision-pack runtime in the published npm tarball, fixing a missing `dist/packs` module at CLI startup.
 - Added a tarball-content check for the CLI, demos, packs, server, tasks, and workflows required by the public command.
+- Reworked the README opening around the inspectable decision package rather than a large product screenshot.
 
 ## 0.3.1 — 2026-08-26
 
