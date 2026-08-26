@@ -1,6 +1,6 @@
 {
   "name": "web-task-agent",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Local-first, evidence-backed web research workflows with durable state and decision packages",
   "license": "MIT",
   "type": "commonjs",
