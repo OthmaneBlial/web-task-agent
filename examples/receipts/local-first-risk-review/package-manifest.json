@@ -7,8 +7,13 @@
   "generatedAt": "2026-08-26",
   "files": [
     "receipt.html",
+    "receipt.json",
+    "integrity-manifest.json",
     "report.md",
     "handoff/workflow-brief.md",
-    "evidence/sources.json"
-  ]
+    "evidence/sources.json",
+    "evidence/snapshots/"
+  ],
+  "receiptPath": "receipt.json",
+  "integrityManifestPath": "integrity-manifest.json"
 }

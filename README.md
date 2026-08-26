@@ -24,6 +24,8 @@ Local decision package
   ├─ report.md                     Findings, uncertainty, and contradictions
   ├─ evidence/sources.json         Source trail, role, and collection date
   ├─ package-manifest.json         Explicit, versioned file contract
+  ├─ receipt.json                  Claim-to-evidence decision contract
+  ├─ integrity-manifest.json       Offline SHA-256 file verification
   └─ runtime/                      Durable state for inspection and recovery
 ```
 
@@ -59,6 +61,16 @@ You get a complete, source-linked handoff:
 - `report.md` — findings, uncertainty, and the next validation.
 - `evidence/sources.json` — the source trail with role and collection date.
 - `package-manifest.json` — an explicit, versioned file contract.
+- `receipt.json` — a versioned claim-to-evidence contract with source snapshots and explicit limitations.
+- `integrity-manifest.json` — SHA-256 hashes that can be checked offline.
+
+Verify the package without network access:
+
+```bash
+web-task-agent receipt verify reports/demos/browser-agent-landscape
+```
+
+The verifier checks the receipt structure, evidence references, source snapshots, and exported file hashes. It cannot prove that a source is true, complete, authorized, or fresh.
 
 Try the other deterministic demos with `web-task-agent demo list`. Every export includes a standalone `receipt.html` you can open locally or attach to a handoff. They are fixtures, clearly marked as such; they never pretend to be fresh research.
 

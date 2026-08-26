@@ -536,6 +536,8 @@ export interface AgentRunState {
     workflowBriefPath: string | null;
     packageManifestPath: string | null;
     packageReadmePath: string | null;
+    receiptPath?: string | null;
+    integrityManifestPath?: string | null;
     promptTracePath: string | null;
   };
   notes: string[];

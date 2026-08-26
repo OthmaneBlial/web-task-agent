@@ -11,6 +11,10 @@ import {
   getWorkflowTemplate,
   type WorkflowTemplateDefinition
 } from "./index";
+import {
+  buildAgentDecisionReceipt,
+  writeReceiptIntegrityManifest
+} from "../lib/receipt";
 
 export interface AgentOutputPaths {
   planPath: string;
@@ -22,6 +26,8 @@ export interface AgentOutputPaths {
   workflowBriefPath: string;
   packageManifestPath: string;
   packageReadmePath: string;
+  receiptPath: string;
+  integrityManifestPath: string;
   researchDir: string;
 }
 
@@ -325,7 +331,9 @@ function renderWorkflowPackageReadme(
     `- Drafts: ${relativeArtifactPath(state.artifactDir, outputPaths.postDraftPath)} and ${relativeArtifactPath(state.artifactDir, outputPaths.commentsDraftPath)}`,
     `- Raw research snapshots: ${relativeArtifactPath(state.artifactDir, outputPaths.researchDir)}`,
     `- Runtime manifest: ${relativeArtifactPath(state.artifactDir, outputPaths.pipelineManifestPath)}`,
-    `- Prompt traces: ${relativeArtifactPath(state.artifactDir, outputPaths.promptTracePath)}`
+    `- Prompt traces: ${relativeArtifactPath(state.artifactDir, outputPaths.promptTracePath)}`,
+    `- Decision receipt: ${relativeArtifactPath(state.artifactDir, outputPaths.receiptPath)}`,
+    `- Integrity manifest: ${relativeArtifactPath(state.artifactDir, outputPaths.integrityManifestPath)}`
   ];
 
   const readingOrder = [
@@ -396,7 +404,7 @@ function validateWorkflowPackageStructure(outputPaths: AgentOutputPaths): {
     ["rawResearchDir", outputPaths.researchDir],
     ["runtimeManifest", outputPaths.pipelineManifestPath],
     ["promptTraces", outputPaths.promptTracePath],
-    ["packageManifest", outputPaths.packageManifestPath],
+    ["receipt", outputPaths.receiptPath],
     ["packageReadme", outputPaths.packageReadmePath]
   ] as const;
 
@@ -426,6 +434,8 @@ export function buildAgentOutputPaths(artifactDir: string): AgentOutputPaths {
     workflowBriefPath: path.join(artifactDir, "handoff", "workflow-brief.md"),
     packageManifestPath: path.join(artifactDir, "handoff", "package-manifest.json"),
     packageReadmePath: path.join(artifactDir, "handoff", "README.md"),
+    receiptPath: path.join(artifactDir, "receipt.json"),
+    integrityManifestPath: path.join(artifactDir, "integrity-manifest.json"),
     researchDir: path.join(artifactDir, "raw", "research")
   };
 }
@@ -447,6 +457,9 @@ export function applyAgentOutputPaths(state: AgentRunState): AgentOutputPaths {
     state.outputs.packageManifestPath ?? layout.packageManifestPath;
   state.outputs.packageReadmePath =
     state.outputs.packageReadmePath ?? layout.packageReadmePath;
+  state.outputs.receiptPath = state.outputs.receiptPath ?? layout.receiptPath;
+  state.outputs.integrityManifestPath =
+    state.outputs.integrityManifestPath ?? layout.integrityManifestPath;
   return layout;
 }
 
@@ -472,9 +485,20 @@ export function writeWorkflowPackageArtifacts(
   const outputPaths = applyAgentOutputPaths(state);
   ensureDir(path.dirname(outputPaths.workflowBriefPath));
   ensureDir(path.dirname(outputPaths.packageManifestPath));
+  ensureDir(path.dirname(outputPaths.receiptPath));
 
   const workflowBrief = renderWorkflowBrief(template, state, evidence);
   fs.writeFileSync(outputPaths.workflowBriefPath, `${workflowBrief.trim()}\n`, "utf8");
+
+  const receipt = buildAgentDecisionReceipt({
+    state,
+    evidence,
+    receiptPath: outputPaths.receiptPath
+  });
+  writeJsonAtomic(outputPaths.receiptPath, receipt);
+
+  const packageReadme = renderWorkflowPackageReadme(template, state, evidence, outputPaths);
+  fs.writeFileSync(outputPaths.packageReadmePath, `${packageReadme.trim()}\n`, "utf8");
 
   const manifest = {
     generatedAt: state.updatedAt,
@@ -494,15 +518,31 @@ export function writeWorkflowPackageArtifacts(
       commentsDraft: relativeArtifactPath(state.artifactDir, outputPaths.commentsDraftPath),
       rawResearchDir: relativeArtifactPath(state.artifactDir, outputPaths.researchDir),
       runtimeManifest: relativeArtifactPath(state.artifactDir, outputPaths.pipelineManifestPath),
-      promptTraces: relativeArtifactPath(state.artifactDir, outputPaths.promptTracePath)
+      promptTraces: relativeArtifactPath(state.artifactDir, outputPaths.promptTracePath),
+      receipt: relativeArtifactPath(state.artifactDir, outputPaths.receiptPath),
+      integrityManifest: relativeArtifactPath(state.artifactDir, outputPaths.integrityManifestPath)
     },
+    receiptPath: relativeArtifactPath(state.artifactDir, outputPaths.receiptPath),
+    integrityManifestPath: relativeArtifactPath(state.artifactDir, outputPaths.integrityManifestPath),
     evidenceCounts: evidence.counts,
     layoutChecks: validateWorkflowPackageStructure(outputPaths)
   };
   writeJsonAtomic(outputPaths.packageManifestPath, manifest);
-
-  const packageReadme = renderWorkflowPackageReadme(template, state, evidence, outputPaths);
-  fs.writeFileSync(outputPaths.packageReadmePath, `${packageReadme.trim()}\n`, "utf8");
+  writeReceiptIntegrityManifest({
+    rootDir: state.artifactDir,
+    files: [
+      state.reportPath,
+      outputPaths.workflowBriefPath,
+      outputPaths.packageManifestPath,
+      outputPaths.packageReadmePath,
+      outputPaths.receiptPath,
+      outputPaths.planPath,
+      outputPaths.pipelineManifestPath,
+      outputPaths.researchSummaryPath,
+      outputPaths.promptTracePath
+    ],
+    generatedAt: state.updatedAt
+  });
 
   state.outputs.workflowBriefPath = outputPaths.workflowBriefPath;
   state.outputs.packageManifestPath = outputPaths.packageManifestPath;

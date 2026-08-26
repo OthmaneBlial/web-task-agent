@@ -38,6 +38,7 @@ import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
 import { maintainPromptTraceRetention } from "./lib/prompt-trace";
 import { logStructured } from "./lib/local-logging";
 import { assessStorageHealth } from "./lib/storage-validation";
+import { verifyReceiptDirectory } from "./lib/receipt";
 import {
   buildJobExportData,
   compareJobExports,
@@ -205,6 +206,29 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log(`Receipt: ${written.receiptPath}`);
       console.log(`Report: ${written.reportPath}`);
       console.log(`Sources: ${written.sourcesPath}`);
+    });
+
+  const receipt = program
+    .command("receipt")
+    .description("Inspect and verify a portable decision receipt");
+
+  receipt
+    .command("verify <directory>")
+    .description("Verify receipt structure, evidence references, and exported file hashes offline")
+    .action((directory) => {
+      const result = verifyReceiptDirectory(String(directory));
+      console.log(`Receipt: ${path.resolve(String(directory))}`);
+      console.log(`Checked files: ${result.checkedFiles}`);
+      console.log(`Status: ${result.valid ? "valid" : "invalid"}`);
+      if (!result.valid) {
+        for (const error of result.errors) {
+          console.error(`- ${error}`);
+        }
+        process.exitCode = 1;
+      } else {
+        console.log("Evidence references, source snapshots, and integrity hashes are consistent.");
+        console.log("Note: hashes do not prove that a source is true, complete, authorized, or fresh.");
+      }
     });
 
   const browser = program

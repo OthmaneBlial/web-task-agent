@@ -4,4 +4,4 @@ This is a deterministic, bundled demo package. It proves the package shape and s
 
 Scenario: Prepare an article about browser automation and local research infrastructure without flattening implementation trade-offs into unsupported claims.
 
-Start with [receipt.html](receipt.html) for the visual decision handoff, then read [handoff/workflow-brief.md](handoff/workflow-brief.md), [report.md](report.md), and [evidence/sources.json](evidence/sources.json).
+Start with [receipt.html](receipt.html) for the visual decision handoff, then inspect [receipt.json](receipt.json), run `web-task-agent receipt verify .`, and read [handoff/workflow-brief.md](handoff/workflow-brief.md), [report.md](report.md), and [evidence/sources.json](evidence/sources.json).

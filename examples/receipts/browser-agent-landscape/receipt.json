@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-26",
+  "provenance": {
+    "kind": "deterministic-demo",
+    "runId": null,
+    "cliVersion": null,
+    "workflowId": "browser-agent-landscape",
+    "policyVersion": null,
+    "promptVersion": null,
+    "model": null,
+    "fixture": true
+  },
+  "decision": {
+    "title": "Browser Agent Landscape",
+    "summary": "Position Web Task Agent around local, evidence-backed decision packages rather than generic browser control or crawling."
+  },
+  "claims": [
+    {
+      "id": "claim-1",
+      "text": "Browser Use publicly positions natural-language web automation across extraction, multi-step workflows, research, monitoring, testing, and scheduling.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "evidence-1",
+          "sourceId": "source-1",
+          "excerpt": "Browser Use publicly positions natural-language web automation across extraction, multi-step workflows, research, monitoring, testing, and scheduling.",
+          "relation": "supports"
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source-1",
+      "title": "Browser Use introduction",
+      "url": "https://docs.browser-use.com/cloud/agent/quickstart",
+      "publisher": "Browser Use",
+      "role": "browser-agent capability reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-1.md",
+      "snapshotSha256": "eddbe20c9c6a715b50a4d8a4a7d372e4c02f17ed035a6829be8ef5fe4597f8b8"
+    },
+    {
+      "id": "source-2",
+      "title": "Choosing the Data Extractor",
+      "url": "https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor",
+      "publisher": "Firecrawl",
+      "role": "web discovery and extraction reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-2.md",
+      "snapshotSha256": "4d28808229d55849aad12cda094a19bdff3604d5ad3daf9413c214e3c2bf584c"
+    },
+    {
+      "id": "source-3",
+      "title": "Deep Agents overview",
+      "url": "https://docs.langchain.com/oss/python/deepagents/overview",
+      "publisher": "LangChain",
+      "role": "durable execution and review reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-3.md",
+      "snapshotSha256": "2888d63b746e9c8ab22d69129da38b5c6c30e5f0ed49a0d2d5053ee60ed887a8"
+    }
+  ],
+  "contradictions": [
+    {
+      "id": "limitation-1",
+      "topic": "invalidation",
+      "evidenceIds": [],
+      "note": "A competing product could expose an equally usable local evidence graph and resumable decision package."
+    }
+  ],
+  "nextValidation": "Run the article-research workflow on a current agent topic, then ask an operator whether they can trace every recommendation to a source without opening the database.",
+  "limitations": [
+    "This is a deterministic fixture; it is not fresh web research.",
+    "Hashes prove artifact integrity, not the truth, completeness, authorization, or freshness of a source."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "The manifest covers exported files; receipt structure and evidence references are validated separately."
+  }
+}

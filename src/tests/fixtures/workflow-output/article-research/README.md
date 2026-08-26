@@ -27,6 +27,8 @@ Research shows repeated demand for AI summary automation in long-running workflo
 - Raw research snapshots: raw/research
 - Runtime manifest: runtime/pipeline-manifest.json
 - Prompt traces: runtime/llm-prompt-traces.json
+- Decision receipt: receipt.json
+- Integrity manifest: integrity-manifest.json
 
 ## Research Snapshot
 

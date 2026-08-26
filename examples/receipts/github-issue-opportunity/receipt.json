@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-26",
+  "provenance": {
+    "kind": "deterministic-demo",
+    "runId": null,
+    "cliVersion": null,
+    "workflowId": "github-issue-opportunity",
+    "policyVersion": null,
+    "promptVersion": null,
+    "model": null,
+    "fixture": true
+  },
+  "decision": {
+    "title": "GitHub Issue Opportunity",
+    "summary": "Route incoming repository feedback to the smallest public space that preserves its evidence and makes review expectations clear."
+  },
+  "claims": [
+    {
+      "id": "claim-1",
+      "text": "Issues work best for reproducible bugs and focused implementation changes.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "evidence-1",
+          "sourceId": "source-1",
+          "excerpt": "Issues work best for reproducible bugs and focused implementation changes.",
+          "relation": "supports"
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source-1",
+      "title": "About issues",
+      "url": "https://docs.github.com/en/issues/tracking-your-work-with-issues/learning-about-issues/about-issues",
+      "publisher": "GitHub Docs",
+      "role": "issue-tracking reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-1.md",
+      "snapshotSha256": "82607881cebb11505455320338adf5477cc46ef8cd4216b7d94c26b9e17959c6"
+    },
+    {
+      "id": "source-2",
+      "title": "Managing labels",
+      "url": "https://docs.github.com/en/issues/using-labels-and-milestones-to-track-work/managing-labels",
+      "publisher": "GitHub Docs",
+      "role": "review-state reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-2.md",
+      "snapshotSha256": "0550fa5e0b660761a77d4d6c05ec4e2a2a6bbe32dcba2b70ea982a5b9a2bb41b"
+    },
+    {
+      "id": "source-3",
+      "title": "About discussions",
+      "url": "https://docs.github.com/en/discussions/collaborating-with-your-community-using-discussions/about-discussions",
+      "publisher": "GitHub Docs",
+      "role": "community discussion reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-3.md",
+      "snapshotSha256": "d0423a4567c870118215ffe6d6fa41efb789c6fb7a447dc1efe32f0d359b0bc1"
+    }
+  ],
+  "contradictions": [
+    {
+      "id": "limitation-1",
+      "topic": "invalidation",
+      "evidenceIds": [],
+      "note": "A contributor may need a lightweight issue before they can produce a full workflow proposal."
+    }
+  ],
+  "nextValidation": "Take three incoming requests, route them using the documented rules, and ask the authors whether the expected next step was clear within five minutes.",
+  "limitations": [
+    "This is a deterministic fixture; it is not fresh web research.",
+    "Hashes prove artifact integrity, not the truth, completeness, authorization, or freshness of a source."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "The manifest covers exported files; receipt structure and evidence references are validated separately."
+  }
+}

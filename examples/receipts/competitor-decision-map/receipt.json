@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-26",
+  "provenance": {
+    "kind": "deterministic-demo",
+    "runId": null,
+    "cliVersion": null,
+    "workflowId": "competitor-decision-map",
+    "policyVersion": null,
+    "promptVersion": null,
+    "model": null,
+    "fixture": true
+  },
+  "decision": {
+    "title": "Competitor Decision Map",
+    "summary": "Position a product by the operator decision and retained artifact it improves, not by copying a competitor feature list."
+  },
+  "claims": [
+    {
+      "id": "claim-1",
+      "text": "Browser automation, extraction, and durable agent execution solve overlapping but different operator problems.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "evidence-1",
+          "sourceId": "source-1",
+          "excerpt": "Browser automation, extraction, and durable agent execution solve overlapping but different operator problems.",
+          "relation": "supports"
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source-1",
+      "title": "Browser Use introduction",
+      "url": "https://docs.browser-use.com/cloud/agent/quickstart",
+      "publisher": "Browser Use",
+      "role": "browser automation capability reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-1.md",
+      "snapshotSha256": "57b27630cb04ad4be3d83e31bd91360762cbd6fa0761690ee7d6e78158f2fd4a"
+    },
+    {
+      "id": "source-2",
+      "title": "Choosing the Data Extractor",
+      "url": "https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor",
+      "publisher": "Firecrawl",
+      "role": "web extraction capability reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-2.md",
+      "snapshotSha256": "9b7dbe0455bac974817bdc861967c813779cbc7fa8d6ad9e42550e3bf5ded091"
+    },
+    {
+      "id": "source-3",
+      "title": "Deep Agents overview",
+      "url": "https://docs.langchain.com/oss/python/deepagents/overview",
+      "publisher": "LangChain",
+      "role": "durable agent execution reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-3.md",
+      "snapshotSha256": "0e58781989f565b83aedf2187690d041b91ceb1f702d4c60dcd6b3680a5fadf3"
+    }
+  ],
+  "contradictions": [
+    {
+      "id": "limitation-1",
+      "topic": "invalidation",
+      "evidenceIds": [],
+      "note": "A competing tool may already provide an equally usable local source trail and handoff."
+    }
+  ],
+  "nextValidation": "Re-check the linked primary documentation, choose one operator decision, and compare the artifacts produced by each approach rather than only their feature lists.",
+  "limitations": [
+    "This is a deterministic fixture; it is not fresh web research.",
+    "Hashes prove artifact integrity, not the truth, completeness, authorization, or freshness of a source."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "The manifest covers exported files; receipt structure and evidence references are validated separately."
+  }
+}

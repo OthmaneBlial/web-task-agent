@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import {
+  buildFixtureDecisionReceipt,
+  writeReceiptIntegrityManifest
+} from "../lib/receipt";
+
 export interface DemoFixture {
   id: string;
   title: string;
@@ -24,6 +29,8 @@ export interface WrittenDemoPackage {
   sourcesPath: string;
   manifestPath: string;
   receiptPath: string;
+  receiptJsonPath: string;
+  integrityManifestPath: string;
 }
 
 const FIXTURE_DATE = "2026-08-26";
@@ -461,22 +468,80 @@ export function writeDemoPackage(input: {
   const sourcesPath = path.join(outputDir, "evidence", "sources.json");
   const manifestPath = path.join(outputDir, "package-manifest.json");
   const receiptPath = path.join(outputDir, "receipt.html");
+  const receiptJsonPath = path.join(outputDir, "receipt.json");
+  const integrityManifestPath = path.join(outputDir, "integrity-manifest.json");
   const readmePath = path.join(outputDir, "README.md");
+  const snapshotPaths = demo.sources.map((source, index) =>
+    path.join(outputDir, "evidence", "snapshots", `source-${index + 1}.md`)
+  );
 
   writeFile(reportPath, `${demo.report}\n`, force);
   writeFile(workflowBriefPath, `${demo.workflowBrief}\n`, force);
   writeFile(sourcesPath, `${JSON.stringify(demo.sources, null, 2)}\n`, force);
+  demo.sources.forEach((source, index) => {
+    writeFile(
+      snapshotPaths[index]!,
+      [
+        `# Deterministic fixture snapshot — ${source.title}`,
+        "",
+        `- URL: ${source.url}`,
+        `- Publisher: ${source.publisher}`,
+        `- Captured: ${source.accessedAt}`,
+        "- Capture type: fixture-synthetic",
+        "",
+        "This snapshot is bundled evidence for the deterministic demo. It is not a live copy of the linked page.",
+        "",
+        demo.report
+      ].join("\n") + "\n",
+      force
+    );
+  });
   writeFile(
     manifestPath,
-    `${JSON.stringify({ version: 1, type: "deterministic-demo", id: demo.id, title: demo.title, scenario: demo.scenario, generatedAt: FIXTURE_DATE, files: ["receipt.html", "report.md", "handoff/workflow-brief.md", "evidence/sources.json"] }, null, 2)}\n`,
+    `${JSON.stringify({ version: 1, type: "deterministic-demo", id: demo.id, title: demo.title, scenario: demo.scenario, generatedAt: FIXTURE_DATE, files: ["receipt.html", "receipt.json", "integrity-manifest.json", "report.md", "handoff/workflow-brief.md", "evidence/sources.json", "evidence/snapshots/"], receiptPath: "receipt.json", integrityManifestPath: "integrity-manifest.json" }, null, 2)}\n`,
     force
   );
   writeFile(receiptPath, renderDemoReceiptHtml(demo), force);
   writeFile(
     readmePath,
-    `# ${demo.title}\n\nThis is a deterministic, bundled demo package. It proves the package shape and source-trace reading flow without using an API key, browser session, or live network request. It is not a claim that a fresh live run produced these findings.\n\nScenario: ${demo.scenario}\n\nStart with [receipt.html](receipt.html) for the visual decision handoff, then read [handoff/workflow-brief.md](handoff/workflow-brief.md), [report.md](report.md), and [evidence/sources.json](evidence/sources.json).\n`,
+    `# ${demo.title}\n\nThis is a deterministic, bundled demo package. It proves the package shape and source-trace reading flow without using an API key, browser session, or live network request. It is not a claim that a fresh live run produced these findings.\n\nScenario: ${demo.scenario}\n\nStart with [receipt.html](receipt.html) for the visual decision handoff, then inspect [receipt.json](receipt.json), run \`web-task-agent receipt verify .\`, and read [handoff/workflow-brief.md](handoff/workflow-brief.md), [report.md](report.md), and [evidence/sources.json](evidence/sources.json).\n`,
     force
   );
+  const receipt = buildFixtureDecisionReceipt(
+    {
+      id: demo.id,
+      title: demo.title,
+      scenario: demo.scenario,
+      report: demo.report,
+      sources: demo.sources,
+      generatedAt: FIXTURE_DATE
+    },
+    {
+      receiptPath: receiptJsonPath,
+      integrityManifestPath,
+      reportPath,
+      workflowBriefPath,
+      sourcesPath,
+      packageManifestPath: manifestPath,
+      packageReadmePath: readmePath,
+      snapshotPaths
+    }
+  );
+  writeFile(receiptJsonPath, `${JSON.stringify(receipt, null, 2)}\n`, force);
+  writeReceiptIntegrityManifest({
+    rootDir: outputDir,
+    files: [reportPath, workflowBriefPath, sourcesPath, manifestPath, readmePath, receiptPath, receiptJsonPath, ...snapshotPaths],
+    generatedAt: FIXTURE_DATE
+  });
 
-  return { outputDir, reportPath, workflowBriefPath, sourcesPath, manifestPath, receiptPath };
+  return {
+    outputDir,
+    reportPath,
+    workflowBriefPath,
+    sourcesPath,
+    manifestPath,
+    receiptPath,
+    receiptJsonPath,
+    integrityManifestPath
+  };
 }

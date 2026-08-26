@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-26",
+  "provenance": {
+    "kind": "deterministic-demo",
+    "runId": null,
+    "cliVersion": null,
+    "workflowId": "app-review-opportunity",
+    "policyVersion": null,
+    "promptVersion": null,
+    "model": null,
+    "fixture": true
+  },
+  "decision": {
+    "title": "App Review Opportunity",
+    "summary": "Treat app reviews as discovery evidence for repeated pains and workarounds, then validate the proposed opportunity before committing to a product direction."
+  },
+  "claims": [
+    {
+      "id": "claim-1",
+      "text": "Review feedback can reveal repeated language, friction, and missing expectations that are worth clustering.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "evidence-1",
+          "sourceId": "source-1",
+          "excerpt": "Review feedback can reveal repeated language, friction, and missing expectations that are worth clustering.",
+          "relation": "supports"
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source-1",
+      "title": "Android app quality",
+      "url": "https://developer.android.com/quality",
+      "publisher": "Android Developers",
+      "role": "platform quality reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-1.md",
+      "snapshotSha256": "60d6b61d6f93e2828171586081372e3b9e7c68a56a12f237d868cf2dfd0a63b5"
+    },
+    {
+      "id": "source-2",
+      "title": "View and analyze your app's ratings and reviews",
+      "url": "https://support.google.com/googleplay/android-developer/answer/138230?hl=en",
+      "publisher": "Google Play Console Help",
+      "role": "review-system reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-2.md",
+      "snapshotSha256": "cd2b01eb503d7a7e01ba079446b42a2b75e8867903c11cd036e17d447a2fd314"
+    },
+    {
+      "id": "source-3",
+      "title": "Web Task Agent Android opportunity example",
+      "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/docs/content/example-android-opportunity.md",
+      "publisher": "Web Task Agent",
+      "role": "project workflow reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-3.md",
+      "snapshotSha256": "836c8139c918e283a51b376ecfec118a231461fb314a4d06b104d161c7f83999"
+    }
+  ],
+  "contradictions": [
+    {
+      "id": "limitation-1",
+      "topic": "invalidation",
+      "evidenceIds": [],
+      "note": "Reviews may be old, unrepresentative, manipulated, or about a resolved version."
+    }
+  ],
+  "nextValidation": "Collect fresh reviews with dates and app versions, compare against release notes and official product behavior, then test one narrow problem statement with target users.",
+  "limitations": [
+    "This is a deterministic fixture; it is not fresh web research.",
+    "Hashes prove artifact integrity, not the truth, completeness, authorization, or freshness of a source."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "The manifest covers exported files; receipt structure and evidence references are validated separately."
+  }
+}

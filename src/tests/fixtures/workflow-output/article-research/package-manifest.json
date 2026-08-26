@@ -16,8 +16,12 @@
     "commentsDraft": "drafts/comments-draft.md",
     "rawResearchDir": "raw/research",
     "runtimeManifest": "runtime/pipeline-manifest.json",
-    "promptTraces": "runtime/llm-prompt-traces.json"
+    "promptTraces": "runtime/llm-prompt-traces.json",
+    "receipt": "receipt.json",
+    "integrityManifest": "integrity-manifest.json"
   },
+  "receiptPath": "receipt.json",
+  "integrityManifestPath": "integrity-manifest.json",
   "evidenceCounts": {
     "queries": 1,
     "sources": 2,
@@ -36,7 +40,7 @@
       "rawResearchDir",
       "runtimeManifest",
       "promptTraces",
-      "packageManifest",
+      "receipt",
       "packageReadme"
     ],
     "present": [
@@ -48,7 +52,7 @@
       "rawResearchDir",
       "runtimeManifest",
       "promptTraces",
-      "packageManifest",
+      "receipt",
       "packageReadme"
     ],
     "missing": [],

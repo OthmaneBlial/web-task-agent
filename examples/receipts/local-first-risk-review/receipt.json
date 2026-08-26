@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-26",
+  "provenance": {
+    "kind": "deterministic-demo",
+    "runId": null,
+    "cliVersion": null,
+    "workflowId": "local-first-risk-review",
+    "policyVersion": null,
+    "promptVersion": null,
+    "model": null,
+    "fixture": true
+  },
+  "decision": {
+    "title": "Local-First Risk Review",
+    "summary": "Treat browser pages, search snippets, files, and LLM responses as untrusted inputs. Keep operator approval at the boundary where data leaves the machine or a sensitive action could occur."
+  },
+  "claims": [
+    {
+      "id": "claim-1",
+      "text": "Review a local research run for unsafe targets, secret exposure, source manipulation, and unsafe sharing before treating its output as ready.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "evidence-1",
+          "sourceId": "source-1",
+          "excerpt": "Review a local research run for unsafe targets, secret exposure, source manipulation, and unsafe sharing before treating its output as ready.",
+          "relation": "supports"
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source-1",
+      "title": "OWASP Top 10 for LLM Applications",
+      "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+      "publisher": "OWASP",
+      "role": "prompt-injection and data-handling reference",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-1.md",
+      "snapshotSha256": "06823973252dbdd145b609a94c8d340db0cbcd18fdf811780be15e73ddffff55"
+    },
+    {
+      "id": "source-2",
+      "title": "Web Task Agent security policy",
+      "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/SECURITY.md",
+      "publisher": "Web Task Agent",
+      "role": "project security boundary",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-2.md",
+      "snapshotSha256": "eeb996eeabc3da5b248d8d05dc2ac469ce74103cedc4338a13ed934ee58a53e1"
+    },
+    {
+      "id": "source-3",
+      "title": "Web Task Agent privacy contract",
+      "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/PRIVACY.md",
+      "publisher": "Web Task Agent",
+      "role": "local-data boundary",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-3.md",
+      "snapshotSha256": "914f2077b0f24a7441b53e74f15bbed298efe7cea5112a9a3b67557229d63d2a"
+    }
+  ],
+  "contradictions": [],
+  "nextValidation": "Run source-policy and redaction tests for every new fetcher, output writer, and provider adapter.",
+  "limitations": [
+    "This is a deterministic fixture; it is not fresh web research.",
+    "Hashes prove artifact integrity, not the truth, completeness, authorization, or freshness of a source."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "The manifest covers exported files; receipt structure and evidence references are validated separately."
+  }
+}

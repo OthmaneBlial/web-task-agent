@@ -8,7 +8,7 @@ npm run start -- demo list
 npm run start -- demo export browser-agent-landscape
 ```
 
-The bundled demos use checked-in fixtures. They do not call an LLM, open a browser, or request a source. Open `reports/demos/browser-agent-landscape/receipt.html` first for a visual decision handoff, then inspect its brief, report, evidence file, and manifest. The receipt is standalone: it has no scripts, analytics, or live requests.
+The bundled demos use checked-in fixtures. They do not call an LLM, open a browser, or request a source. Open `reports/demos/browser-agent-landscape/receipt.html` first for a visual decision handoff, then inspect `receipt.json`, the source snapshots, and `integrity-manifest.json`. Verify it with `web-task-agent receipt verify reports/demos/browser-agent-landscape`. The receipt is standalone: it has no scripts, analytics, or live requests.
 
 For a source installation, use Node.js 22 or later. The `install.sh` helper can also create a local launcher; add `--skip-llm-setup` if you only want demos and local commands.
 

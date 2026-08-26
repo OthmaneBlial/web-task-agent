@@ -647,6 +647,18 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       });
     }
 
+    if (state.outputs.receiptPath && fs.existsSync(state.outputs.receiptPath)) {
+      jobStore.registerArtifact("decision_receipt", "json_decision_receipt", state.outputs.receiptPath, {
+        kind: "decision_receipt"
+      });
+    }
+
+    if (state.outputs.integrityManifestPath && fs.existsSync(state.outputs.integrityManifestPath)) {
+      jobStore.registerArtifact("receipt_integrity_manifest", "json_integrity_manifest", state.outputs.integrityManifestPath, {
+        kind: "receipt_integrity_manifest"
+      });
+    }
+
     if (fs.existsSync(state.reportPath)) {
       jobStore.registerArtifact("report", "markdown_report", state.reportPath, {
         kind: "report"

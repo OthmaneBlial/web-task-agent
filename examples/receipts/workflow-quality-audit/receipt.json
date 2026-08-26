@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-26",
+  "provenance": {
+    "kind": "deterministic-demo",
+    "runId": null,
+    "cliVersion": null,
+    "workflowId": "workflow-quality-audit",
+    "policyVersion": null,
+    "promptVersion": null,
+    "model": null,
+    "fixture": true
+  },
+  "decision": {
+    "title": "Workflow Quality Audit",
+    "summary": "Accept a workflow only when it addresses a repeated operator decision and produces a stable evidence-backed handoff."
+  },
+  "claims": [
+    {
+      "id": "claim-1",
+      "text": "Review a proposed research workflow for a repeated decision, a distinct source strategy, an explicit output contract, and disconfirming evidence.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "evidence-1",
+          "sourceId": "source-1",
+          "excerpt": "Review a proposed research workflow for a repeated decision, a distinct source strategy, an explicit output contract, and disconfirming evidence.",
+          "relation": "supports"
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source-1",
+      "title": "Web Task Agent workflow contribution guidance",
+      "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/CONTRIBUTING.md",
+      "publisher": "Web Task Agent",
+      "role": "contribution contract",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-1.md",
+      "snapshotSha256": "eed7f11afc9451f9831cff911c4d36b46c7e72110d93e650d86ddf92fb9f53d7"
+    },
+    {
+      "id": "source-2",
+      "title": "Web Task Agent workflow catalog",
+      "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/examples/workflows/CATALOG.md",
+      "publisher": "Web Task Agent",
+      "role": "existing workflow comparison",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-2.md",
+      "snapshotSha256": "c2c84620a27f5c17b0585bcafd971714480e752b94c034596270de240f0fc642"
+    },
+    {
+      "id": "source-3",
+      "title": "Web Task Agent workflow proposal form",
+      "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/.github/ISSUE_TEMPLATE/workflow-proposal.yml",
+      "publisher": "Web Task Agent",
+      "role": "review intake contract",
+      "collectedAt": "2026-08-26",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/snapshots/source-3.md",
+      "snapshotSha256": "0cf792ce36b091b4be5c1390b5ebe11bad9bb7877c14f92bbc4d8324e0fe5afb"
+    }
+  ],
+  "contradictions": [],
+  "nextValidation": "Use this rubric against a contributor proposal and record the reviewer decision in the pull request.",
+  "limitations": [
+    "This is a deterministic fixture; it is not fresh web research.",
+    "Hashes prove artifact integrity, not the truth, completeness, authorization, or freshness of a source."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "The manifest covers exported files; receipt structure and evidence references are validated separately."
+  }
+}

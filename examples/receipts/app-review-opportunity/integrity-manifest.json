@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "type": "receipt-integrity-manifest",
+  "algorithm": "sha256",
+  "receiptPath": "receipt.json",
+  "generatedAt": "2026-08-26",
+  "files": [
+    {
+      "path": "evidence/snapshots/source-1.md",
+      "sha256": "60d6b61d6f93e2828171586081372e3b9e7c68a56a12f237d868cf2dfd0a63b5",
+      "bytes": 1346
+    },
+    {
+      "path": "evidence/snapshots/source-2.md",
+      "sha256": "cd2b01eb503d7a7e01ba079446b42a2b75e8867903c11cd036e17d447a2fd314",
+      "bytes": 1418
+    },
+    {
+      "path": "evidence/snapshots/source-3.md",
+      "sha256": "836c8139c918e283a51b376ecfec118a231461fb314a4d06b104d161c7f83999",
+      "bytes": 1428
+    },
+    {
+      "path": "evidence/sources.json",
+      "sha256": "e0ccd5d3b830a999d069e460fdd4cf3716601ed11965215add9416d1c25c7fe4",
+      "bytes": 781
+    },
+    {
+      "path": "handoff/workflow-brief.md",
+      "sha256": "8c536124555dd4a14376d20b89bf522b611310ed949ed35a2e4c223421c28cbe",
+      "bytes": 493
+    },
+    {
+      "path": "package-manifest.json",
+      "sha256": "b9ff8be1296aa4824acdaaa02a602da81909d185d222a18d2327e8b68d257bda",
+      "bytes": 602
+    },
+    {
+      "path": "README.md",
+      "sha256": "a9810f707bac5f768ace0e64dfd2df24721a42b64198475f5bcc29d296e7b35a",
+      "bytes": 723
+    },
+    {
+      "path": "receipt.html",
+      "sha256": "b76fb264c5d8d0b1ae61df7fa4ee820538a8da6d218cbfc9e5fac98a4dcdf310",
+      "bytes": 7062
+    },
+    {
+      "path": "receipt.json",
+      "sha256": "b1a47783aad4dc108d0506b917554445ec11d79e6f4eaa7dbcd4451be8595204",
+      "bytes": 3355
+    },
+    {
+      "path": "report.md",
+      "sha256": "89d588f27f2d3ef8586d79371ec555e8e2e6aa17197a2d0e0f3b52206e04736a",
+      "bytes": 1048
+    }
+  ]
+}
