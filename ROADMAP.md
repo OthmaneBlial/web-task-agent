@@ -17,7 +17,7 @@ Cette roadmap sert aussi de contrat de livraison. Les statuts ci-dessous disting
 | Fondation open source | Livré localement | MIT, sécurité, support, code de conduite, templates GitHub, Dependabot et métadonnées npm `0.2.0` versionnés |
 | Première minute produit | Livré localement | Trois démos déterministes, receipts sources, README orienté package et site local contrôlé visuellement |
 | Catalogue de cas d'usage | Livré | 243 workflows exécutables : 3 historiques et 240 scénarios générés, filtrables et documentés |
-| Packs, exports et comparaison | Livré | 5 packs à revue humaine, `workflow scaffold`, exports Markdown/JSON/CSV, redaction et diff de runs |
+| Packs, exports et comparaison | Livré | 5 packs à revue humaine, `workflow scaffold`/validation de décision-sources-fraîcheur-coût-risques, exports Markdown/JSON/CSV, redaction et diff de runs |
 | Confiance et confidentialité | Livré localement | Politique de sources, `robots.txt`, cadence et plafond par domaine, liste de revue humaine, redirections signalées, détection d'injection, contrat de confidentialité et sauvegarde/restauration SQLite |
 | Qualité et dérive | Livré localement | Build, 117 tests unitaires, 4 intégrations, génération, 305 liens Markdown, audit des secrets de publication et audit des dépendances de production dans la CI |
 | Publication et distribution | Bloqué par décision explicite | Le dépôt est encore privé : ouverture, release GitHub/npm, Topics, image sociale, Pages et discussions exigent l'autorisation du mainteneur |

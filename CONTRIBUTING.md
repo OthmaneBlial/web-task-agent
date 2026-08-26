@@ -56,7 +56,7 @@ It creates a proposal definition, run example, fixture, and test plan under `wor
 npm run start -- workflow validate workflows/proposals/developer-tool-review/workflow.json
 ```
 
-Validation checks the required id, decision, source-policy, query, deliverable, and risk fields. It does not register or run anything, and it intentionally cannot decide whether your workflow is semantically distinct. A proposal becomes executable only after a reviewer verifies all of the following:
+Validation checks the required id, decision, source-policy, query, deliverable, freshness, bounded cost, and risk fields. It does not register or run anything, and it intentionally cannot decide whether your workflow is semantically distinct. A proposal becomes executable only after a reviewer verifies all of the following:
 
 - the operator decision is repeated and specific;
 - queries and deliverables are materially distinct from the closest catalog workflow;

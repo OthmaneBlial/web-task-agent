@@ -12,7 +12,7 @@ The repo currently includes automated tests for:
 - workflow output packaging
 - interrupted agent checkpoints
 
-At the time this site was generated, the standard suite has **115 unit tests and 4 integration tests** and covers many of the highest-risk local operator paths.
+At the time this site was generated, the standard suite has **117 unit tests and 4 integration tests** and covers many of the highest-risk local operator paths.
 
 ## Working Quality Bar
 

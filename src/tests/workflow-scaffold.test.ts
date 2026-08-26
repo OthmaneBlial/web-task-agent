@@ -39,6 +39,8 @@ test("workflow proposal validation requires a complete, reviewable source and ri
     },
     deliverables: ["decision-ready summary", "evidence links", "contradictions"],
     queries: ["developer tool pilot evaluation criteria", "developer tool rollout complaints"],
+    freshness: { maxAgeDays: 90, rationale: "Evaluate recent operator feedback and current product capabilities." },
+    cost: { maxQueries: 8, maxCandidates: 40, maxRuntimeMinutes: 20 },
     risks: ["Source freshness and marketing claims can bias the recommendation"]
   });
 
@@ -54,8 +56,24 @@ test("workflow proposal validation requires a complete, reviewable source and ri
     sourcePolicy: { preferred: ["docs", "issues", "discussions"], excluded: ["private pages"] },
     deliverables: ["summary", "evidence", "risks"],
     queries: ["same query", "same query"],
+    freshness: { maxAgeDays: 90, rationale: "Use recent evidence." },
+    cost: { maxQueries: 8, maxCandidates: 40, maxRuntimeMinutes: 20 },
     risks: ["Freshness"]
   });
   assert.equal(duplicateQuery.valid, false);
   assert.ok(duplicateQuery.errors.some((error) => error.includes("queries must not repeat")));
+
+  const missingFreshnessAndCost = validateWorkflowProposalDefinition({
+    id: "developer-tool-review",
+    title: "Developer Tool Review",
+    category: "Product Validation",
+    decision: "Choose whether a developer tool deserves a focused pilot.",
+    sourcePolicy: { preferred: ["docs", "issues", "discussions"], excluded: ["private pages"] },
+    deliverables: ["summary", "evidence", "risks"],
+    queries: ["developer tool pilot criteria", "developer tool rollout complaints"],
+    risks: ["Freshness"]
+  });
+  assert.equal(missingFreshnessAndCost.valid, false);
+  assert.ok(missingFreshnessAndCost.errors.some((error) => error.startsWith("freshness must define")));
+  assert.ok(missingFreshnessAndCost.errors.some((error) => error.startsWith("cost must define")));
 });

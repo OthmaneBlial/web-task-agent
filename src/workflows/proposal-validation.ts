@@ -52,6 +52,45 @@ function validateStringList(
   return values;
 }
 
+function validateBoundedPositiveInteger(
+  value: unknown,
+  label: string,
+  maximum: number,
+  errors: string[]
+): number | null {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > maximum) {
+    errors.push(`${label} must be a positive whole number no greater than ${maximum}`);
+    return null;
+  }
+  return value;
+}
+
+function validateFreshnessContract(value: unknown, errors: string[]): void {
+  const freshness = asObject(value);
+  if (!freshness) {
+    errors.push("freshness must define maxAgeDays and rationale");
+    return;
+  }
+  validateBoundedPositiveInteger(freshness.maxAgeDays, "freshness.maxAgeDays", 3_650, errors);
+  const rationale = nonEmptyString(freshness.rationale);
+  if (!rationale) {
+    errors.push("freshness.rationale must be a non-empty string");
+  } else if (!nonPlaceholder(rationale)) {
+    errors.push("freshness.rationale still contains a scaffold placeholder");
+  }
+}
+
+function validateCostContract(value: unknown, errors: string[]): void {
+  const cost = asObject(value);
+  if (!cost) {
+    errors.push("cost must define maxQueries, maxCandidates, and maxRuntimeMinutes");
+    return;
+  }
+  validateBoundedPositiveInteger(cost.maxQueries, "cost.maxQueries", 50, errors);
+  validateBoundedPositiveInteger(cost.maxCandidates, "cost.maxCandidates", 500, errors);
+  validateBoundedPositiveInteger(cost.maxRuntimeMinutes, "cost.maxRuntimeMinutes", 1_440, errors);
+}
+
 export function validateWorkflowProposalDefinition(
   definition: unknown,
   definitionPath: string | null = null
@@ -95,6 +134,8 @@ export function validateWorkflowProposalDefinition(
 
   validateStringList(value.deliverables, "deliverables", 3, errors, { unique: true });
   validateStringList(value.queries, "queries", 2, errors, { placeholders: true, unique: true });
+  validateFreshnessContract(value.freshness, errors);
+  validateCostContract(value.cost, errors);
   validateStringList(value.risks, "risks", 1, errors, { placeholders: true, unique: true });
 
   warnings.push("Schema validation cannot prove semantic distinction; a reviewer must compare the proposal with nearby catalog workflows.");
