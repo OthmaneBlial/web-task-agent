@@ -2,20 +2,22 @@
 
 [![CI](https://github.com/OthmaneBlial/web-task-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/OthmaneBlial/web-task-agent/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![243 executable workflows](https://img.shields.io/badge/workflows-243%20executable-0f766e)](examples/workflows/CATALOG.md)
+[![Local-first](https://img.shields.io/badge/privacy-local--first-164e63)](PRIVACY.md)
 
-**Turn a messy web question into a local, evidence-backed decision package.**
+> **Turn a messy web question into an evidence-backed decision you can challenge, resume, and share — without losing the source trail.**
 
-Web Task Agent is a local-first research runner for work that needs more than a chat answer: durable jobs, source snapshots, evidence clusters, contradictions, resumability, queue workers, and a handoff a teammate can actually inspect.
+Research agents can browse. Web Task Agent is built for the harder part: leaving behind a decision package another person can inspect, dispute, and continue.
 
-It is not a hosted scraper, an access-control bypass tool, or a generic browser-agent framework. Its job is to preserve the trail from a recommendation back to the evidence that supports — or challenges — it.
+It is a local-first research runner with durable jobs, source snapshots, evidence clusters, contradictions, recovery, queue workers, and a handoff a teammate can actually use. It is not a hosted scraper, an access-control bypass tool, or a generic browser-agent framework.
 
 ![Web Task Agent local product proof](docs/assets/product-proof.jpg)
 
-The capture is generated from the versioned local documentation site; it shows the deterministic demo path and product surface before a visitor configures a browser or LLM.
+The capture comes from the versioned local documentation site. Everything it promises is inspectable in this repository before you connect a browser or model.
 
-## See a package before configuring anything
+## Get a real package in two minutes — no key, browser, or network
 
-The bundled demos have no API key, browser session, or network request. They show the exact report, evidence, and handoff shape a live workflow produces.
+Start with a deterministic research receipt. It has no API key, browser session, or network request, and shows the exact package shape a live workflow produces.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/OthmaneBlial/web-task-agent/main/install.sh \
@@ -25,16 +27,27 @@ web-task-agent demo export browser-agent-landscape
 open reports/demos/browser-agent-landscape/handoff/workflow-brief.md
 ```
 
-The package contains:
+You get a complete, source-linked handoff:
 
 - `handoff/workflow-brief.md` — the decision-ready reading start.
 - `report.md` — findings, uncertainty, and the next validation.
 - `evidence/sources.json` — the source trail with role and collection date.
 - `package-manifest.json` — an explicit, versioned file contract.
 
-Try the other deterministic demos with `web-task-agent demo list`. They are fixtures, clearly marked as such; they do not pretend to be fresh live research.
+Try the other deterministic demos with `web-task-agent demo list`. They are fixtures, clearly marked as such; they never pretend to be fresh research.
 
-Read all three versioned [research receipts](RESEARCH_RECEIPTS.md) directly in the repository.
+Read all three versioned [research receipts](RESEARCH_RECEIPTS.md) directly in the repository: browser-agent positioning, workflow quality, and a local-first risk review.
+
+## Why teams keep the package instead of just the answer
+
+| When research goes wrong | What stays available |
+| --- | --- |
+| A run crashes halfway through | SQLite state, leases, heartbeats, queue recovery, and stage resume |
+| A recommendation gets challenged | Source snapshots, quality signals, citations, evidence clusters, and contradictions |
+| A teammate needs to act | A stable brief, report, raw evidence, manifest, drafts, and smallest next validation |
+| A workflow becomes routine | 243 executable workflows, reusable presets, stable output paths, and deterministic fixtures |
+
+The point is not to automate a web page. The point is to make the decision defensible after the browser closes.
 
 ## Run live research
 
@@ -70,11 +83,11 @@ Browser automation and extraction are necessary infrastructure. Web Task Agent a
 | Work stays understandable on one machine | Local CLI, local dashboard, local storage, explicit output paths, and no required hosted control plane |
 | A workflow is reusable | Presets, catalog metadata, topic-scoped output paths, examples, and deterministic package fixtures |
 
-Use a crawler or a browser agent when you only need page control or extraction. Use Web Task Agent when the result needs to remain reviewable, resumable, and decision-ready.
+Use a crawler or a browser agent when you only need page control or extraction. Use Web Task Agent when the result must remain reviewable, resumable, and decision-ready.
 
-## Catalog families
+## Find the research decision you actually need
 
-Each catalog entry carries a distinct decision focus, source strategy, query set, expected deliverables, output package and example. They are grouped by the decision to make:
+Each catalog entry carries a distinct decision focus, source strategy, query set, expected deliverables, output package, and example. They are grouped by the decision to make:
 
 - Voice of customer and feature-gap discovery
 - Competitor mapping and market entry
