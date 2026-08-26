@@ -69,7 +69,7 @@ jobs:
             gh release upload "${RELEASE_TAG}" release/* --clobber
           else
             gh release create "${RELEASE_TAG}" release/* \
-              --verify-tag "${RELEASE_TAG}" \
+              --verify-tag \
               --generate-notes \
               --title "Web Task Agent ${RELEASE_TAG}"
           fi
