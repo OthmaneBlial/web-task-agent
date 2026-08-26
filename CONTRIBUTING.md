@@ -73,6 +73,18 @@ Use the workflow proposal issue form for the discussion. Maintainers should appl
 - inspect the README and CLI reference for stale examples
 - update the stored roadmap entry if the change is part of an active phase
 
+## Contribution Loop
+
+The smallest useful contribution is a reproducible decision artifact:
+
+1. Start from one of the [golden paths](examples/golden-paths/) or propose a distinct workflow with the issue form.
+2. Attach a redacted receipt, source policy, limitation, and smallest next validation.
+3. Add or update the deterministic fixture and its test before changing the catalog.
+4. Run `npm test`, `npm run first-success`, and `npm run evaluate:receipts`.
+5. Open a focused pull request. Reviewers should be able to verify the claim links and reproduce the output without your credentials.
+
+Do not optimize for star count, benchmark theater, or a large prompt catalog. A contribution is ready when another operator can inspect it, disagree with it, and run the next validation.
+
 ## Project Shape
 
 - `reports/` is for human-facing output.

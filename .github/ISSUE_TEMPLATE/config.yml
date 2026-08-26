@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a setup or workflow question
+    url: https://github.com/OthmaneBlial/web-task-agent/discussions
+    about: Use Discussions for questions, ideas, and sharing a useful receipt.
+  - name: Report a security vulnerability
+    url: https://github.com/OthmaneBlial/web-task-agent/security/advisories/new
+    about: Use the private advisory flow; do not post secrets or exploit details publicly.

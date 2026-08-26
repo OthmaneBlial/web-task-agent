@@ -1,0 +1,41 @@
+name: Golden-path feedback
+description: Share a reproducible first-success, receipt review, or decision-diff observation.
+title: "golden path: "
+labels: [golden-path, needs-evidence]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use a redacted command and fixture. Never include API keys, cookies, private reports, database files, or authenticated URLs.
+  - type: dropdown
+    id: path
+    attributes:
+      label: Path reviewed
+      options:
+        - Decision Change Review
+        - Competitor Map
+        - Launch Risk Review
+        - First-success install
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.4.0 or abc1234
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Reproducible evidence
+      description: Include the exact redacted command, expected result, actual result, and receipt verification output.
+    validations:
+      required: true
+  - type: textarea
+    id: next_step
+    attributes:
+      label: Smallest useful next step
+      description: Suggest one focused documentation, test, or workflow change.
+    validations:
+      required: true

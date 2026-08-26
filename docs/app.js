@@ -91,6 +91,13 @@ const DOC_PAGES = [
     path: "content/examples.md"
   },
   {
+    slug: "case-studies",
+    section: "Use Cases",
+    title: "Case Studies",
+    summary: "Three deterministic studies showing decision change, competitor mapping, and launch-risk review.",
+    path: "content/case-studies.md"
+  },
+  {
     slug: "project-layout",
     section: "Reference",
     title: "Project Layout",

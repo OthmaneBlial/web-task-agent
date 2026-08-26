@@ -1,0 +1,36 @@
+name: Receipt case study
+description: Propose a public, redacted decision receipt that others can inspect and reproduce.
+title: "case study: "
+labels: [case-study, needs-evidence]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A case study must be safe to publish. Keep credentials, private data, login-only URLs, and unsupported freshness claims out of the issue.
+  - type: input
+    id: decision
+    attributes:
+      label: Decision being reviewed
+      placeholder: Which segment should we validate first?
+    validations:
+      required: true
+  - type: textarea
+    id: receipt
+    attributes:
+      label: Receipt and source policy
+      description: Link a public fixture or attach a redacted receipt, and list preferred/excluded sources.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Before, after, and invalidation condition
+      description: Explain what changed, what did not, and what would disprove the decision.
+    validations:
+      required: true
+  - type: input
+    id: validation
+    attributes:
+      label: Smallest next validation
+    validations:
+      required: true
