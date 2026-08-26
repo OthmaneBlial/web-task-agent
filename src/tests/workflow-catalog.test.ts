@@ -46,3 +46,25 @@ test("catalog workflow has its own decision focus, queries, and durable output p
   assert.ok(options.reportPath?.includes("cybersecurity-voice-of-customer"));
   assert.equal(options.workflowPresetId, "focused");
 });
+
+test("decision change review is a focused golden-path workflow", () => {
+  const template = getWorkflowTemplate("decision-change-review");
+  const queries = buildWorkflowResearchQueries({
+    templateId: "decision-change-review",
+    topic: "local browser research",
+    maxQueries: 6
+  });
+  const options = buildWorkflowRunOptions({
+    templateId: "decision-change-review",
+    topic: "local browser research",
+    presetId: "focused"
+  });
+
+  assert.ok(template);
+  assert.equal(template?.category, "Decision Change");
+  assert.ok(template?.tags?.includes("decision-receipt"));
+  assert.ok(template?.expectedDeliverables?.includes("decision diff"));
+  assert.equal(queries.length, 5);
+  assert.ok(queries.every((query) => query.includes("local browser research")));
+  assert.ok(options.reportPath?.includes("decision-change-review"));
+});

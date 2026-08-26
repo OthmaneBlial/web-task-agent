@@ -110,7 +110,13 @@ web-task-agent workflow list --search ecommerce
 web-task-agent workflow list --category "Pricing and Packaging"
 ```
 
-There are three focused core workflows plus 240 executable catalog workflows. Browse them in [examples/workflows/CATALOG.md](examples/workflows/CATALOG.md).
+There are four focused core workflows plus 240 executable catalog workflows. Start with the three [golden paths](examples/golden-paths/) before browsing the full [workflow catalog](examples/workflows/CATALOG.md).
+
+The three golden paths are deliberately opinionated:
+
+- [Decision Change Review](examples/golden-paths/decision-change-review/) — explain what changed between two decision receipts.
+- [Competitor Map](examples/golden-paths/competitor-map/) — choose where not to compete with evidence attached.
+- [Launch Risk Review](examples/golden-paths/launch-risk-review/) — test a public promise before announcing it.
 
 ## Why this instead of a crawler or generic browser agent?
 

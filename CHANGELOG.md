@@ -2,6 +2,10 @@
 
 This file is intentionally lightweight.
 
+## Unreleased
+
+- Added three curated golden paths: [Decision Change Review](examples/golden-paths/decision-change-review/), [Competitor Map](examples/golden-paths/competitor-map/), and [Launch Risk Review](examples/golden-paths/launch-risk-review/). Each path links a runnable workflow to an inspectable receipt and explicit invalidation conditions.
+
 ## 0.4.0 — 2026-08-26
 
 - Added a visual, standalone `receipt.html` to every deterministic demo: decision, supporting evidence, invalidation conditions, source cards, and the smallest next validation in one portable handoff.

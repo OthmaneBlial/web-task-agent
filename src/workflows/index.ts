@@ -145,6 +145,74 @@ function buildAndroidOpportunityResearchQueries(input: {
 
 const CORE_WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
   {
+    id: "decision-change-review",
+    title: "Decision Change Review",
+    description: "Compare a prior decision package with new evidence and make the reason for change inspectable.",
+    handoffTitle: "Decision Change Review Package",
+    briefFilename: "decision-change-brief.md",
+    examplePath: "examples/golden-paths/decision-change-review/README.md",
+    category: "Decision Change",
+    tags: ["decision-receipt", "change-diff", "golden-path"],
+    decisionFocus: "Determine whether new public evidence materially changes a prior product or market decision.",
+    preferredSources: ["first-party product and pricing updates", "public user and practitioner discussions", "dated issue trackers and release notes"],
+    expectedDeliverables: ["baseline decision and assumptions", "new and disappeared evidence", "changed or unresolved claims", "decision diff", "smallest next validation"],
+    defaultPresetId: "focused",
+    presets: buildPresetSet({
+      fast: {
+        maxQueries: 4,
+        maxResultsPerQuery: 18,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 3
+      },
+      focused: {
+        maxQueries: 6,
+        maxResultsPerQuery: 24,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 5
+      },
+      standard: {
+        maxQueries: 8,
+        maxResultsPerQuery: 30,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 6
+      },
+      deep: {
+        maxQueries: 12,
+        maxResultsPerQuery: 40,
+        fetchBatchSize: 6,
+        maxRuntimeHours: 10
+      }
+    }),
+    defaultOptions: {
+      maxQueries: 6,
+      maxResultsPerQuery: 24,
+      fetchBatchSize: 5,
+      maxRuntimeHours: 5
+    },
+    buildInstruction(input) {
+      const lines = [
+        `Review whether new public evidence changes the decision around "${input.topic}".`,
+        "Treat the prior direction as a falsifiable baseline, not as a conclusion. Search dated first-party updates, pricing or product changes, public user discussions, issue trackers, release notes, and credible practitioner sources.",
+        "Separate new evidence, disappeared evidence, unchanged evidence, and contradictions. Preserve collection dates and explain whether a change comes from the source, freshness, policy, model interpretation, or synthesis.",
+        "The final report must include: baseline decision and assumptions, decision-relevant changes, supporting and contrary claims, what could invalidate the conclusion, and the smallest next validation before acting."
+      ];
+      if (input.audience) lines.push(`Decision owner or audience: ${input.audience}.`);
+      if (input.context) lines.push(`Extra context and constraints: ${input.context}.`);
+      return lines.join("\n");
+    },
+    buildResearchQueries(input) {
+      const topic = input.topic.trim();
+      return uniqueQueries([
+        `"${topic}" latest changes release notes`,
+        `"${topic}" product update pricing`,
+        `"${topic}" user complaints new feature`,
+        `"${topic}" alternatives comparison current`,
+        `"${topic}" forum discussion change`,
+        `"${topic}" what changed this year`
+      ], Math.max(1, Math.min(6, input.maxQueries)));
+    }
+  },
+  {
     id: "android-opportunity",
     title: "Android Opportunity Research",
     handoffTitle: "Android Opportunity Package",
