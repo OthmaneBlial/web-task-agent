@@ -2,7 +2,7 @@
 
 This file is intentionally lightweight.
 
-## 0.2.0 — Unreleased
+## 0.2.0 — 2026-08-26
 
 - Added 240 executable catalog workflows, filters, generated examples, and catalog tests.
 - Added deterministic, source-linked demo packages that work without an API key or browser session.
@@ -13,6 +13,8 @@ This file is intentionally lightweight.
 - Added local Markdown, JSON, and CSV job exports, redaction previews, and source/conclusion comparisons between runs.
 - Added responsible source acquisition controls: public-target policy, `robots.txt` signals, per-domain pacing, redirect quarantine, and page-instruction detection.
 - Added a local-data contract, safe SQLite backup/restore, and a reproducible release preflight checklist.
+- Added proposal validation for decision, source, query, deliverable, risk, freshness, and work-cost contracts before review.
+- Added a public documentation site and repository launch assets.
 
 ## Process
 
