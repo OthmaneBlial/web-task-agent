@@ -2,6 +2,12 @@
 
 This file is intentionally lightweight.
 
+## 0.3.0 — 2026-08-26
+
+- Added five deterministic, source-linked receipts for launch readiness, competitor mapping, GitHub feedback, technical article claims, and app-review opportunities.
+- Expanded the public demo gallery to eight receipts, each with a decision, limits, next validation, and three accessible sources.
+- Added a repository Discussion for workflow ideas, reviewable receipts, and first-run questions.
+
 ## 0.2.0 — 2026-08-26
 
 - Added 240 executable catalog workflows, filters, generated examples, and catalog tests.
