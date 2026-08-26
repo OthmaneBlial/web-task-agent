@@ -320,6 +320,9 @@ export function shouldExtractFromResult(result: AgentSearchResult): boolean {
 export function buildHeuristicExtractionCandidates(
   result: AgentSearchResult
 ): AgentExtractionCandidate[] {
+  if ((result.page?.safetySignals?.length ?? 0) > 0) {
+    return [];
+  }
   if (!shouldExtractFromResult(result)) {
     return [];
   }
@@ -696,6 +699,9 @@ export function buildGeneralExtractionCandidates(
 export function buildContentAwareExtractionCandidates(
   result: AgentSearchResult
 ): AgentExtractionCandidate[] {
+  if ((result.page?.safetySignals?.length ?? 0) > 0) {
+    return [];
+  }
   const contentType = result.contentType ?? classifyResearchContentType(result);
 
   if (contentType === "documentation") {

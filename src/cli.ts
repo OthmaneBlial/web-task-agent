@@ -40,12 +40,14 @@ import { GitHubScannerTask } from "./tasks/github-scanner";
 import { PlayStoreAnalyzerTask } from "./tasks/playstore-analyzer";
 import { QueueWorkerTask } from "./tasks/queue-worker";
 import { listDemoFixtures, writeDemoPackage } from "./demos";
+import { DECISION_PACKS, getDecisionPack, renderDecisionPackPlan } from "./packs";
 import {
   buildWorkflowRunOptions,
   getWorkflowTemplate,
   getWorkflowPreset,
   listWorkflowTemplates
 } from "./workflows";
+import { writeWorkflowProposalScaffold } from "./workflows/scaffold";
 
 function parsePositiveInteger(value: string, label: string): number {
   const parsed = Number(value);
@@ -370,6 +372,82 @@ Use "web-task-agent <command> --help" for the full option list.
   const workflow = program
     .command("workflow")
     .description("Run opinionated long-form research templates");
+
+  workflow
+    .command("preview <template>")
+    .description("Show a workflow's budget, output path, and source-policy boundary without running it")
+    .requiredOption("--topic <text>", "Topic, niche, or seed question to research")
+    .option("--preset <name>", "Workflow preset: fast, focused, standard, or deep", "standard")
+    .action((templateId, options) => {
+      const template = getWorkflowTemplate(String(templateId));
+      if (!template) throw new Error(`Unknown workflow template: ${templateId}`);
+      const resolved = buildWorkflowRunOptions({ templateId: template.id, topic: normalizeText(String(options.topic)), presetId: normalizeText(String(options.preset)).toLowerCase() });
+      console.log(`Workflow preview: ${template.title}`);
+      console.log(`Decision focus: ${template.decisionFocus ?? template.description}`);
+      console.log(`Preset: ${resolved.workflowPresetId}`);
+      console.log(`Budget: ${resolved.maxQueries} queries, ${resolved.maxResultsPerQuery} results/query, ${resolved.fetchBatchSize} fetches/batch, ${resolved.maxRuntimeHours}h soft maximum`);
+      console.log(`Output: ${resolved.reportPath}`);
+      console.log("Safety: public HTTP(S) URLs only; private/local targets, credentials in URLs, configured blocked domains, and detected prompt-injection pages are quarantined.");
+      console.log("Permission: no browser, source fetch, LLM request, or file write occurs during preview.");
+    });
+
+  workflow
+    .command("scaffold <id>")
+    .description("Create a reviewable workflow proposal with definition, example, and test plan")
+    .requiredOption("--title <text>", "Operator-facing workflow title")
+    .requiredOption("--category <text>", "Decision category")
+    .option("--output <path>", "Proposal root directory", "workflows/proposals")
+    .option("--force", "Replace an existing proposal scaffold")
+    .action((id, options) => {
+      const written = writeWorkflowProposalScaffold({
+        id: String(id),
+        title: normalizeText(String(options.title)),
+        category: normalizeText(String(options.category)),
+        outputDir: String(options.output),
+        force: Boolean(options.force)
+      });
+      console.log("Workflow proposal scaffold created.");
+      console.log(`Definition: ${written.definitionPath}`);
+      console.log(`Example: ${written.examplePath}`);
+      console.log(`Test plan: ${written.testPlanPath}`);
+      console.log("It is intentionally not executable until a reviewer verifies distinct evidence, source policy, and fixture coverage.");
+    });
+
+  const pack = program
+    .command("pack")
+    .description("Create review-gated, multi-step decision plans without automatically launching work");
+
+  pack
+    .command("list")
+    .description("List decision packs")
+    .action(() => {
+      console.log(`Available packs: ${DECISION_PACKS.length}`);
+      for (const definition of DECISION_PACKS) {
+        console.log(`- ${definition.id}: ${definition.title}`);
+        console.log(`  ${definition.description}`);
+      }
+    });
+
+  pack
+    .command("plan <id>")
+    .description("Write a review-gated pack plan; it never launches browser or LLM work")
+    .requiredOption("--topic <text>", "Topic, niche, or seed question to research")
+    .option("--audience <text>", "Optional audience to optimize the plan for")
+    .option("--context <text>", "Optional business context or constraint")
+    .option("--preset <name>", "Preset for generated workflow commands", "standard")
+    .option("--output <path>", "Write the plan to a specific Markdown file")
+    .action((id, options) => {
+      const definition = getDecisionPack(String(id));
+      if (!definition) throw new Error(`Unknown decision pack: ${id}`);
+      const topic = normalizeText(String(options.topic));
+      const content = renderDecisionPackPlan({ pack: definition, topic, preset: normalizeText(String(options.preset)).toLowerCase(), audience: options.audience ? normalizeText(String(options.audience)) : null, context: options.context ? normalizeText(String(options.context)) : null });
+      const outputPath = options.output ? path.resolve(String(options.output)) : path.join(process.cwd(), "reports", "packs", definition.id, topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "topic", "plan.md");
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, `${content}\n`, "utf8");
+      console.log("Review-gated decision pack plan created.");
+      console.log(`Plan: ${outputPath}`);
+      console.log("Next: preview or run only the first listed workflow, then review its evidence package before continuing.");
+    });
 
   workflow
     .command("list")

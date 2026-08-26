@@ -1,4 +1,4 @@
-const WORKFLOW_SUBCOMMANDS = new Set(["list", "run", "enqueue", "help"]);
+const WORKFLOW_SUBCOMMANDS = new Set(["list", "preview", "run", "enqueue", "scaffold", "help"]);
 
 export function normalizeCliArgv(argv: readonly string[]): string[] {
   const normalized = [...argv];

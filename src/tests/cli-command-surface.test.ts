@@ -27,6 +27,11 @@ test("storage gate commands stay unchanged by argv normalization", () => {
   assert.deepEqual(normalizeCliArgv(argv), argv);
 });
 
+test("workflow preview commands stay unchanged by legacy workflow argv normalization", () => {
+  const argv = ["node", "dist/cli.js", "workflow", "preview", "market-opportunity", "--topic", "local research"];
+  assert.deepEqual(normalizeCliArgv(argv), argv);
+});
+
 test("job budget commands stay unchanged by argv normalization", () => {
   const argv = ["node", "dist/cli.js", "job", "budget", "job_1"];
   assert.deepEqual(normalizeCliArgv(argv), argv);

@@ -247,6 +247,7 @@ export interface AgentPageDigest {
   headings: string[];
   paragraphs: string[];
   capturedAt: string;
+  safetySignals?: string[];
 }
 
 export type AgentResearchContentType =

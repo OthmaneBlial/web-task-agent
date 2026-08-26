@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ensureDir, writeJsonAtomic } from "./cache";
+import { redactSensitiveText } from "./redaction";
 import type {
   LlmTraceErrorRecord,
   LlmTraceHooks,
@@ -102,11 +103,11 @@ function toBaseRecord(record: LlmTraceStartRecord): PromptTraceRecord {
     completedAt: null,
     durationMs: null,
     status: "running",
-    systemHash: hashValue(record.system),
-    promptHash: hashValue(record.prompt),
+    systemHash: hashValue(redactSensitiveText(record.system)),
+    promptHash: hashValue(redactSensitiveText(record.prompt)),
     responseHash: null,
-    system: record.system,
-    prompt: record.prompt,
+    system: redactSensitiveText(record.system),
+    prompt: redactSensitiveText(record.prompt),
     responseText: null,
     responsePreview: null,
     errorMessage: null
@@ -167,9 +168,9 @@ export class PromptTraceRecorder {
           completedAt: record.completedAt,
           durationMs: record.durationMs,
           status: "completed",
-          responseHash: hashValue(record.responseText),
-          responseText: record.responseText,
-          responsePreview: normalizeText(record.responseText).slice(0, 280) || null
+          responseHash: hashValue(redactSensitiveText(record.responseText)),
+          responseText: redactSensitiveText(record.responseText),
+          responsePreview: normalizeText(redactSensitiveText(record.responseText)).slice(0, 280) || null
         }));
         this.appendRunEvent?.(
           "llm_prompt_complete",
@@ -188,7 +189,7 @@ export class PromptTraceRecorder {
           completedAt: record.completedAt,
           durationMs: record.durationMs,
           status: "failed",
-          errorMessage: record.errorMessage
+          errorMessage: redactSensitiveText(record.errorMessage)
         }));
         this.appendRunEvent?.(
           "llm_prompt_error",

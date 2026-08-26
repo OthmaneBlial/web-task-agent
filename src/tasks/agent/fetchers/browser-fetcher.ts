@@ -6,6 +6,7 @@ import {
   withLightpandaRecovery
 } from "../../../lib/cdp";
 import { humanScroll } from "../../../lib/humanizer";
+import { detectPromptInjectionSignals, evaluateSourceUrlPolicy } from "../../../lib/source-policy";
 import type {
   AgentPageDigest,
   AgentSearchResult,
@@ -100,6 +101,11 @@ export class BrowserPageFetcher implements AgentFetcher {
     result: AgentSearchResult,
     page: AgentPageDigest
   ): Promise<Pick<AgentSearchResult, "reviewStatus" | "dwellSeconds" | "skipReason">> {
+    if ((page.safetySignals?.length ?? 0) > 0) {
+      const skipReason = `potential prompt injection detected: ${page.safetySignals!.join(", ")}`;
+      this.log(`quarantining page before extraction: ${page.title || result.title} (${skipReason})`);
+      return { reviewStatus: "skipped", dwellSeconds: 0, skipReason };
+    }
     const quality = assessDocumentQuality(result, page);
     result.qualityScore = quality.score;
     result.qualitySignals = quality.signals;
@@ -168,6 +174,19 @@ export class BrowserPageFetcher implements AgentFetcher {
       if (normalizedUrl) {
         result.url = normalizedUrl;
       }
+      const sourcePolicy = evaluateSourceUrlPolicy(result.url);
+      if (sourcePolicy.action === "deny") {
+        result.policyAction = "skip";
+        result.policyReason = sourcePolicy.reason;
+        result.qualitySignals = sourcePolicy.signals;
+        result.reviewStatus = "skipped";
+        result.dwellSeconds = 0;
+        result.skipReason = sourcePolicy.reason;
+        result.qualityScore = 0;
+        this.log(`skipping unsafe source before open: ${result.title} (${sourcePolicy.reason})`);
+        enriched.push(result);
+        continue;
+      }
       result.contentType = result.contentType ?? classifyResearchContentType(result);
       const policy = evaluateDomainPolicy(result);
       result.policyAction = policy.action;
@@ -201,6 +220,13 @@ export class BrowserPageFetcher implements AgentFetcher {
               this.log(`opening article: ${result.title}`);
               client = await createPageSession(result.url);
               const page = await this.scrapePageDigest(client);
+              page.safetySignals = detectPromptInjectionSignals([
+                page.title,
+                page.description,
+                page.h1 ?? "",
+                ...page.headings,
+                ...page.paragraphs
+              ]);
               const review = await this.readOpenedPage(client, result, page);
               return {
                 page,
