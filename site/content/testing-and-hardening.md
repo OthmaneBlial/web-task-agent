@@ -12,7 +12,7 @@ The repo currently includes automated tests for:
 - workflow output packaging
 - interrupted agent checkpoints
 
-At the time this site was generated, the suite has **13 tests** and covers many of the highest-risk local operator paths.
+At the time this site was generated, the standard suite has **111 unit tests and 3 integration tests** and covers many of the highest-risk local operator paths.
 
 ## Working Quality Bar
 
@@ -79,6 +79,6 @@ This site also includes copied versions of:
 
 - the repository `README.md`
 - the repository `ROADMAP.md`
-- the two workflow example files
+- generated catalog workflow examples and the mirrored static site
 
 Use those when you want the exact project-authored source text inside the portable site.

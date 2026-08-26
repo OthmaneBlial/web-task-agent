@@ -19,7 +19,7 @@ Cette roadmap sert aussi de contrat de livraison. Les statuts ci-dessous disting
 | Catalogue de cas d'usage | Livré | 243 workflows exécutables : 3 historiques et 240 scénarios générés, filtrables et documentés |
 | Packs, exports et comparaison | Livré | 5 packs à revue humaine, `workflow scaffold`, exports Markdown/JSON/CSV, redaction et diff de runs |
 | Confiance et confidentialité | Livré localement | Politique de sources, `robots.txt`, cadence par domaine, redirections signalées, détection d'injection, contrat de confidentialité et sauvegarde/restauration SQLite |
-| Qualité et dérive | Livré localement | Build, 110 tests unitaires, 3 intégrations, génération, 304 liens Markdown et audit des dépendances de production dans la CI |
+| Qualité et dérive | Livré localement | Build, 111 tests unitaires, 3 intégrations, génération, 305 liens Markdown et audit des dépendances de production dans la CI |
 | Publication et distribution | Bloqué par décision explicite | Le dépôt est encore privé : ouverture, release GitHub/npm, Topics, image sociale, Pages et discussions exigent l'autorisation du mainteneur |
 
 Le mot « livré » ne veut pas dire que le projet a déjà gagné des étoiles : cela signifie que le comportement est présent dans `main` et couvert par les contrôles indiqués. La visibilité et les signaux publics restent une étape distincte.
