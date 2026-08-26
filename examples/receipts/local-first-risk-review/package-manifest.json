@@ -6,6 +6,7 @@
   "scenario": "Review a local research run for unsafe targets, secret exposure, source manipulation, and unsafe sharing before treating its output as ready.",
   "generatedAt": "2026-08-26",
   "files": [
+    "receipt.html",
     "report.md",
     "handoff/workflow-brief.md",
     "evidence/sources.json"

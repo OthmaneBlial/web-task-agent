@@ -6,6 +6,7 @@
   "scenario": "Prepare an article about browser automation and local research infrastructure without flattening implementation trade-offs into unsupported claims.",
   "generatedAt": "2026-08-26",
   "files": [
+    "receipt.html",
     "report.md",
     "handoff/workflow-brief.md",
     "evidence/sources.json"

@@ -2,6 +2,12 @@
 
 This file is intentionally lightweight.
 
+## 0.4.0 — 2026-08-26
+
+- Added a visual, standalone `receipt.html` to every deterministic demo: decision, supporting evidence, invalidation conditions, source cards, and the smallest next validation in one portable handoff.
+- Published the featured receipt in the static site and reshaped the README around proof before setup instead of a large hero image.
+- Added an explicit strict `typecheck` command, shared editor settings, and CI coverage for the static quality gate.
+
 ## 0.3.4 — 2026-08-26
 
 - Denied source hostnames that resolve to private, reserved, documentation, or otherwise unsafe addresses before robots lookup or browser navigation.

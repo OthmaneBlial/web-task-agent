@@ -6,6 +6,7 @@
   "scenario": "Prepare a public release for a developer tool by checking the experience a visitor can verify, the claims that are supported, and the next evidence to collect.",
   "generatedAt": "2026-08-26",
   "files": [
+    "receipt.html",
     "report.md",
     "handoff/workflow-brief.md",
     "evidence/sources.json"

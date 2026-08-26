@@ -202,6 +202,7 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log("Demo package exported.");
       console.log(`Package: ${written.outputDir}`);
       console.log(`Brief: ${written.workflowBriefPath}`);
+      console.log(`Receipt: ${written.receiptPath}`);
       console.log(`Report: ${written.reportPath}`);
       console.log(`Sources: ${written.sourcesPath}`);
     });

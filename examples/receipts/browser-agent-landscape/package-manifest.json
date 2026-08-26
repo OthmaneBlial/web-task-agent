@@ -6,6 +6,7 @@
   "scenario": "Compare the current public positioning of browser automation, web extraction, and durable agent execution tools.",
   "generatedAt": "2026-08-26",
   "files": [
+    "receipt.html",
     "report.md",
     "handoff/workflow-brief.md",
     "evidence/sources.json"

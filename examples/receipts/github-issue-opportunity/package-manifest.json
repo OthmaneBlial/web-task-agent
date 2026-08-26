@@ -6,6 +6,7 @@
   "scenario": "Review public GitHub feedback to decide whether it is a reproducible issue, a workflow proposal, a request for evidence, or a broader community discussion.",
   "generatedAt": "2026-08-26",
   "files": [
+    "receipt.html",
     "report.md",
     "handoff/workflow-brief.md",
     "evidence/sources.json"

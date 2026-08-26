@@ -1,6 +1,6 @@
 {
   "name": "web-task-agent",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "Local-first, evidence-backed web research workflows with durable state and decision packages",
   "license": "MIT",
   "type": "commonjs",
@@ -41,12 +41,13 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
     "start": "npm run build && node dist/cli.js",
     "test": "npm run test:ci",
     "test:unit": "node --test $(find dist/tests -maxdepth 1 -name '*.test.js' | sort)",
     "test:integration": "node --test dist/tests/integration/*.test.js",
-    "test:ci": "npm run build && npm run test:unit && npm run test:integration && npm run check:generated",
+    "test:ci": "npm run typecheck && npm run build && npm run test:unit && npm run test:integration && npm run check:generated",
     "generate:workflows": "npm run build && node scripts/generate-workflow-examples.mjs",
     "generate:receipts": "npm run build && node scripts/generate-demo-receipts.mjs",
     "generate:docs": "node scripts/sync-docs.mjs",

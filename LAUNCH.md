@@ -1,10 +1,10 @@
-# Launch kit — Web Task Agent v0.3.4
+# Launch kit — Web Task Agent v0.4.0
 
 This is a factual, reusable launch kit for maintainers. Adapt the audience and keep the links intact; do not claim adoption, benchmark results, or fresh research that has not been independently verified.
 
 ## The short version
 
-Web Task Agent turns a messy web question into a local, evidence-backed decision package. A run leaves behind the brief, source trail, contradictions, report, and next validation so that a teammate can inspect and resume it after the browser closes.
+Web Task Agent turns a messy web question into a local, evidence-backed decision package. A run leaves behind a visual decision receipt, the brief, source trail, contradictions, report, and next validation so that a teammate can inspect and resume it after the browser closes.
 
 Try a deterministic demo without an API key or browser:
 
@@ -12,13 +12,15 @@ Try a deterministic demo without an API key or browser:
 curl -fsSL https://raw.githubusercontent.com/OthmaneBlial/web-task-agent/main/install.sh \
   | bash -s -- --skip-llm-setup
 web-task-agent demo export browser-agent-landscape
+open reports/demos/browser-agent-landscape/receipt.html
 ```
 
 ## Links to share
 
 - Project site: https://othmaneblial.github.io/web-task-agent/
+- Featured decision receipt: https://othmaneblial.github.io/web-task-agent/receipt.html
 - README and installation: https://github.com/OthmaneBlial/web-task-agent#readme
-- Latest release: https://github.com/OthmaneBlial/web-task-agent/releases/tag/v0.3.4
+- Latest release: https://github.com/OthmaneBlial/web-task-agent/releases/tag/v0.4.0
 - Workflow catalog: https://github.com/OthmaneBlial/web-task-agent/blob/main/examples/workflows/CATALOG.md
 - Contributing: https://github.com/OthmaneBlial/web-task-agent/blob/main/CONTRIBUTING.md
 

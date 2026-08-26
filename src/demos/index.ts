@@ -23,6 +23,7 @@ export interface WrittenDemoPackage {
   workflowBriefPath: string;
   sourcesPath: string;
   manifestPath: string;
+  receiptPath: string;
 }
 
 const FIXTURE_DATE = "2026-08-26";
@@ -305,6 +306,144 @@ function writeFile(destination: string, content: string, force: boolean): void {
   fs.writeFileSync(destination, content, "utf8");
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeExternalUrl(value: string): string {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : "#";
+  } catch {
+    return "#";
+  }
+}
+
+function readMarkdownSection(markdown: string, title: string): string {
+  const heading = `## ${title}`;
+  const start = markdown.indexOf(heading);
+  if (start < 0) return "";
+  const contentStart = start + heading.length;
+  const nextHeading = markdown.indexOf("\n## ", contentStart);
+  return markdown.slice(contentStart, nextHeading < 0 ? undefined : nextHeading).trim();
+}
+
+function renderMarkdownFragment(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  const output: string[] = [];
+  let bullets: string[] = [];
+
+  const flushBullets = () => {
+    if (bullets.length === 0) return;
+    output.push(`<ul>${bullets.map((item) => `<li>${item}</li>`).join("")}</ul>`);
+    bullets = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushBullets();
+      continue;
+    }
+    const escaped = escapeHtml(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    if (line.startsWith("- ")) {
+      bullets.push(escapeHtml(line.slice(2)).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"));
+      continue;
+    }
+    flushBullets();
+    output.push(`<p>${escaped}</p>`);
+  }
+  flushBullets();
+  return output.join("");
+}
+
+/**
+ * A portable, local-only receipt for the fastest product demonstration. It is
+ * deliberately a standalone HTML file: no network, scripts, analytics, or
+ * mutable live data are needed to inspect and share the decision package.
+ */
+export function renderDemoReceiptHtml(demo: DemoFixture): string {
+  const decision = readMarkdownSection(demo.report, "Decision");
+  const findings = readMarkdownSection(demo.report, "What the evidence supports");
+  const contradictions = readMarkdownSection(demo.report, "What could invalidate this");
+  const nextValidation = readMarkdownSection(demo.report, "Next validation");
+  const sourceCards = demo.sources.map((source) => {
+    const href = escapeHtml(safeExternalUrl(source.url));
+    return `<li class="source-card"><span class="source-role">${escapeHtml(source.role)}</span><a href="${href}" target="_blank" rel="noreferrer noopener">${escapeHtml(source.title)}</a><span>${escapeHtml(source.publisher)} · accessed ${escapeHtml(source.accessedAt)}</span></li>`;
+  }).join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>${escapeHtml(demo.title)} — Decision Receipt</title>
+  <style>
+    :root { --ink: #1b1714; --muted: #6d6259; --paper: #fffaf2; --ground: #efe6d8; --line: #e1d5c2; --accent: #0f766e; --accent-soft: #ddf1ec; --warn: #9a3412; --warn-soft: #fff0e6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; color: var(--ink); background: radial-gradient(circle at 84% 0%, #d8eee8 0, transparent 25rem), var(--ground); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; }
+    main { width: min(1040px, calc(100% - 32px)); margin: 32px auto 56px; }
+    .receipt { overflow: hidden; border: 1px solid var(--line); border-radius: 28px; background: var(--paper); box-shadow: 0 28px 80px rgba(62, 42, 18, .14); }
+    header { padding: clamp(28px, 6vw, 72px); color: #f9f5ee; background: linear-gradient(130deg, #123c39, #0f766e); }
+    .eyebrow, .badge { display: inline-flex; align-items: center; width: fit-content; border-radius: 999px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .72rem; }
+    .eyebrow { padding: 7px 10px; color: #cce8df; background: rgba(255,255,255,.11); }
+    h1 { max-width: 14ch; margin: 16px 0 12px; font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.7rem, 8vw, 5.4rem); line-height: .93; letter-spacing: -.055em; }
+    header p { max-width: 72ch; margin: 0; color: #d7ebe4; font-size: 1.06rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; color: #d7ebe4; font-size: .85rem; }
+    .meta span { padding: 5px 9px; border: 1px solid rgba(255,255,255,.16); border-radius: 999px; }
+    .content { padding: clamp(22px, 4vw, 52px); }
+    .decision { padding: 22px; border: 1px solid #b7dcd2; border-radius: 20px; background: var(--accent-soft); }
+    h2 { margin: 0 0 14px; font-family: Georgia, "Times New Roman", serif; font-size: 1.65rem; letter-spacing: -.025em; }
+    h3 { margin: 0 0 10px; font-size: .9rem; letter-spacing: .075em; text-transform: uppercase; }
+    p { margin: 0 0 12px; }
+    ul { margin: 0; padding-left: 1.25rem; }
+    li + li { margin-top: 8px; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(260px, .85fr); gap: 18px; margin-top: 18px; }
+    .panel { padding: 22px; border: 1px solid var(--line); border-radius: 20px; background: #fffdf8; }
+    .risk { border-color: #f0c9b7; background: var(--warn-soft); }
+    .risk h2 { color: var(--warn); }
+    .sources { margin-top: 18px; padding: 22px; border: 1px solid var(--line); border-radius: 20px; background: #fffdf8; }
+    .source-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+    .source-card { display: flex; flex-direction: column; gap: 8px; min-height: 150px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: #fffaf2; }
+    .source-card a { color: var(--accent); font-weight: 800; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    .source-card span:last-child { margin-top: auto; color: var(--muted); font-size: .82rem; }
+    .source-role { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+    footer { padding: 20px clamp(22px, 4vw, 52px); border-top: 1px solid var(--line); color: var(--muted); font-size: .86rem; }
+    @media (max-width: 720px) { main { width: min(100% - 20px, 1040px); margin-top: 10px; } .receipt { border-radius: 20px; } .grid, .source-list { grid-template-columns: 1fr; } h1 { max-width: none; } }
+    @media print { body { background: #fff; } main { width: 100%; margin: 0; } .receipt { border: 0; box-shadow: none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <article class="receipt">
+      <header>
+        <span class="eyebrow">Local-first research receipt</span>
+        <h1>${escapeHtml(demo.title)}</h1>
+        <p>${escapeHtml(demo.scenario)}</p>
+        <div class="meta"><span>Deterministic fixture</span><span>No key, browser, or live request</span><span>${demo.sources.length} linked sources</span></div>
+      </header>
+      <div class="content">
+        <section class="decision"><h2>Decision</h2>${renderMarkdownFragment(decision)}</section>
+        <div class="grid">
+          <section class="panel"><h2>What the evidence supports</h2>${renderMarkdownFragment(findings)}</section>
+          <section class="panel risk"><h2>What could invalidate this</h2>${renderMarkdownFragment(contradictions)}</section>
+        </div>
+        <section class="sources"><h2>Source trail</h2><ul class="source-list">${sourceCards}</ul></section>
+        <section class="panel" style="margin-top:18px"><h2>Smallest next validation</h2>${renderMarkdownFragment(nextValidation)}</section>
+      </div>
+      <footer>This receipt is a bundled, deterministic fixture. It demonstrates the decision-package contract; it is not a claim that fresh research produced these findings.</footer>
+    </article>
+  </main>
+</body>
+</html>`;
+}
+
 export function listDemoFixtures(): DemoFixture[] {
   return [...DEMOS];
 }
@@ -321,6 +460,7 @@ export function writeDemoPackage(input: {
   const workflowBriefPath = path.join(outputDir, "handoff", "workflow-brief.md");
   const sourcesPath = path.join(outputDir, "evidence", "sources.json");
   const manifestPath = path.join(outputDir, "package-manifest.json");
+  const receiptPath = path.join(outputDir, "receipt.html");
   const readmePath = path.join(outputDir, "README.md");
 
   writeFile(reportPath, `${demo.report}\n`, force);
@@ -328,14 +468,15 @@ export function writeDemoPackage(input: {
   writeFile(sourcesPath, `${JSON.stringify(demo.sources, null, 2)}\n`, force);
   writeFile(
     manifestPath,
-    `${JSON.stringify({ version: 1, type: "deterministic-demo", id: demo.id, title: demo.title, scenario: demo.scenario, generatedAt: FIXTURE_DATE, files: ["report.md", "handoff/workflow-brief.md", "evidence/sources.json"] }, null, 2)}\n`,
+    `${JSON.stringify({ version: 1, type: "deterministic-demo", id: demo.id, title: demo.title, scenario: demo.scenario, generatedAt: FIXTURE_DATE, files: ["receipt.html", "report.md", "handoff/workflow-brief.md", "evidence/sources.json"] }, null, 2)}\n`,
     force
   );
+  writeFile(receiptPath, renderDemoReceiptHtml(demo), force);
   writeFile(
     readmePath,
-    `# ${demo.title}\n\nThis is a deterministic, bundled demo package. It proves the package shape and source-trace reading flow without using an API key, browser session, or live network request. It is not a claim that a fresh live run produced these findings.\n\nScenario: ${demo.scenario}\n\nStart with [handoff/workflow-brief.md](handoff/workflow-brief.md), then read [report.md](report.md) and inspect [evidence/sources.json](evidence/sources.json).\n`,
+    `# ${demo.title}\n\nThis is a deterministic, bundled demo package. It proves the package shape and source-trace reading flow without using an API key, browser session, or live network request. It is not a claim that a fresh live run produced these findings.\n\nScenario: ${demo.scenario}\n\nStart with [receipt.html](receipt.html) for the visual decision handoff, then read [handoff/workflow-brief.md](handoff/workflow-brief.md), [report.md](report.md), and [evidence/sources.json](evidence/sources.json).\n`,
     force
   );
 
-  return { outputDir, reportPath, workflowBriefPath, sourcesPath, manifestPath };
+  return { outputDir, reportPath, workflowBriefPath, sourcesPath, manifestPath, receiptPath };
 }
