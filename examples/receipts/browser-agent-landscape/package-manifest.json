@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "type": "deterministic-demo",
+  "id": "browser-agent-landscape",
+  "title": "Browser Agent Landscape",
+  "scenario": "Compare the current public positioning of browser automation, web extraction, and durable agent execution tools.",
+  "generatedAt": "2026-08-26",
+  "files": [
+    "report.md",
+    "handoff/workflow-brief.md",
+    "evidence/sources.json"
+  ]
+}

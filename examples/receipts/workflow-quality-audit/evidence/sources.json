@@ -1,0 +1,16 @@
+[
+  {
+    "title": "Web Task Agent workflow contribution guidance",
+    "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/CONTRIBUTING.md",
+    "publisher": "Web Task Agent",
+    "accessedAt": "2026-08-26",
+    "role": "contribution contract"
+  },
+  {
+    "title": "Web Task Agent workflow catalog",
+    "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/examples/workflows/CATALOG.md",
+    "publisher": "Web Task Agent",
+    "accessedAt": "2026-08-26",
+    "role": "existing workflow comparison"
+  }
+]

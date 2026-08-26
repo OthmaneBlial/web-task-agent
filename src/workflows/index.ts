@@ -1,8 +1,9 @@
 import path from "node:path";
 
 import type { AgentRunOptions } from "../types";
+import { WORKFLOW_CATALOG, type WorkflowCatalogEntry } from "./catalog";
 
-export type WorkflowTemplateId = "android-opportunity" | "article-research" | "market-opportunity";
+export type WorkflowTemplateId = string;
 export type WorkflowPresetId = "fast" | "focused" | "standard" | "deep";
 
 export interface WorkflowPresetDefinition {
@@ -26,6 +27,10 @@ export interface WorkflowTemplateDefinition {
   handoffTitle: string;
   briefFilename: string;
   examplePath: string;
+  category?: string;
+  tags?: string[];
+  decisionFocus?: string;
+  expectedDeliverables?: string[];
   defaultPresetId: WorkflowPresetId;
   presets: WorkflowPresetDefinition[];
   defaultOptions: Pick<
@@ -133,7 +138,7 @@ function buildAndroidOpportunityResearchQueries(input: {
   );
 }
 
-const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
+const CORE_WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
   {
     id: "android-opportunity",
     title: "Android Opportunity Research",
@@ -327,6 +332,85 @@ const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
       );
     }
   }
+];
+
+function buildCatalogWorkflowTemplate(entry: WorkflowCatalogEntry): WorkflowTemplateDefinition {
+  return {
+    id: entry.id,
+    title: entry.title,
+    description: entry.description,
+    handoffTitle: `${entry.mission.title} Research Package`,
+    briefFilename: "research-brief.md",
+    examplePath: entry.examplePath,
+    category: entry.category,
+    tags: [entry.domain.id, entry.mission.id, "catalog"],
+    decisionFocus: entry.mission.researchFocus,
+    expectedDeliverables: entry.mission.deliverables,
+    defaultPresetId: "standard",
+    presets: buildPresetSet({
+      fast: {
+        maxQueries: 4,
+        maxResultsPerQuery: 18,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 3
+      },
+      focused: {
+        maxQueries: 6,
+        maxResultsPerQuery: 24,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 5
+      },
+      standard: {
+        maxQueries: 8,
+        maxResultsPerQuery: 30,
+        fetchBatchSize: 5,
+        maxRuntimeHours: 6
+      },
+      deep: {
+        maxQueries: 12,
+        maxResultsPerQuery: 40,
+        fetchBatchSize: 6,
+        maxRuntimeHours: 10
+      }
+    }),
+    defaultOptions: {
+      maxQueries: 8,
+      maxResultsPerQuery: 30,
+      fetchBatchSize: 5,
+      maxRuntimeHours: 6
+    },
+    buildInstruction(input) {
+      const lines = [
+        `Run the ${entry.title} workflow for "${input.topic}".`,
+        `Domain context: ${entry.domain.description}.`,
+        `Research objective: ${entry.mission.researchFocus}.`,
+        "Use primary sources, product documentation, public pricing pages, user reviews, issue trackers, community discussions, and credible practitioner material where relevant.",
+        "Do not treat a marketing claim, one review, or an SEO listicle as proof. Preserve disagreement, state uncertainty, and link each strong finding to evidence.",
+        `The decision-ready handoff must include: ${entry.mission.deliverables.join(", ")}.`
+      ];
+      if (input.audience) {
+        lines.push(`Audience to prioritize: ${input.audience}.`);
+      }
+      if (input.context) {
+        lines.push(`Extra context and constraints: ${input.context}.`);
+      }
+      return lines.join("\n");
+    },
+    buildResearchQueries(input) {
+      const topic = input.topic.trim();
+      return uniqueQueries(
+        entry.mission.querySuffixes.map(
+          (suffix) => `"${topic}" ${entry.domain.searchContext} ${suffix}`
+        ),
+        Math.max(1, Math.min(6, input.maxQueries))
+      );
+    }
+  };
+}
+
+const WORKFLOW_TEMPLATES: WorkflowTemplateDefinition[] = [
+  ...CORE_WORKFLOW_TEMPLATES,
+  ...WORKFLOW_CATALOG.map(buildCatalogWorkflowTemplate)
 ];
 
 export function listWorkflowTemplates(): WorkflowTemplateDefinition[] {

@@ -1,0 +1,16 @@
+[
+  {
+    "title": "OWASP Top 10 for LLM Applications",
+    "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
+    "publisher": "OWASP",
+    "accessedAt": "2026-08-26",
+    "role": "prompt-injection and data-handling reference"
+  },
+  {
+    "title": "Web Task Agent security policy",
+    "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/SECURITY.md",
+    "publisher": "Web Task Agent",
+    "accessedAt": "2026-08-26",
+    "role": "project security boundary"
+  }
+]

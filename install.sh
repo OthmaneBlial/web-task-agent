@@ -11,6 +11,7 @@ BIN_DIR="${WEB_TASK_AGENT_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
 LAUNCHER_NAME="${WEB_TASK_AGENT_LAUNCHER_NAME:-web-task-agent}"
 NONINTERACTIVE="${WEB_TASK_AGENT_NONINTERACTIVE:-0}"
 FORCE_SYSTEM_NODE="${WEB_TASK_AGENT_FORCE_SYSTEM_NODE:-0}"
+SKIP_LLM_SETUP="${WEB_TASK_AGENT_SKIP_LLM_SETUP:-0}"
 DEFAULT_BASE_URL="${ANTHROPIC_BASE_URL:-https://api.z.ai/api/anthropic}"
 DEFAULT_MODEL="${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}"
 DEFAULT_CDP_PORT="${CDP_PORT:-9222}"
@@ -32,6 +33,7 @@ Options:
   --bin-dir <path>         Directory for the launcher (default: ~/.local/bin)
   --launcher-name <name>   Name for the launcher command (default: web-task-agent)
   --non-interactive        Do not prompt for config values
+  --skip-llm-setup         Install demos and local commands without configuring an LLM key
   --force-system-node      Require a system Node.js installation instead of bundling Node 22
   --help                   Show this help
 
@@ -46,6 +48,7 @@ Environment overrides:
   WEB_TASK_AGENT_LAUNCHER_NAME
   WEB_TASK_AGENT_NONINTERACTIVE
   WEB_TASK_AGENT_FORCE_SYSTEM_NODE
+  WEB_TASK_AGENT_SKIP_LLM_SETUP
 EOF
 }
 
@@ -206,6 +209,10 @@ parse_args() {
         FORCE_SYSTEM_NODE=1
         shift
         ;;
+      --skip-llm-setup)
+        SKIP_LLM_SETUP=1
+        shift
+        ;;
       --help|-h)
         usage
         exit 0
@@ -282,20 +289,28 @@ prompt_for_env_file() {
   fi
 
   api_key="${ANTHROPIC_API_KEY:-}"
-  if [[ -z "${api_key}" && "${NONINTERACTIVE}" == "0" ]]; then
+  if [[ -z "${api_key}" && "${SKIP_LLM_SETUP}" == "1" ]]; then
+    api_key=""
+  elif [[ -z "${api_key}" && "${NONINTERACTIVE}" == "0" ]]; then
     while [[ -z "${api_key}" ]]; do
       api_key="$(prompt_value "Anthropic API key" "" 1)"
       [[ -n "${api_key}" ]] || printf 'Anthropic API key is required.\n' >&2
     done
   fi
 
-  if [[ -z "${api_key}" && "${NONINTERACTIVE}" == "1" ]]; then
+  if [[ -z "${api_key}" && "${NONINTERACTIVE}" == "1" && "${SKIP_LLM_SETUP}" != "1" ]]; then
     die "ANTHROPIC_API_KEY is required. Re-run with ANTHROPIC_API_KEY set or use interactive mode."
   fi
 
-  base_url="$(prompt_value "Anthropic base URL" "${DEFAULT_BASE_URL}")"
-  model="$(prompt_value "Anthropic model" "${DEFAULT_MODEL}")"
-  cdp_port="$(prompt_value "CDP port" "${DEFAULT_CDP_PORT}")"
+  if [[ "${SKIP_LLM_SETUP}" == "1" ]]; then
+    base_url="${DEFAULT_BASE_URL}"
+    model="${DEFAULT_MODEL}"
+    cdp_port="${DEFAULT_CDP_PORT}"
+  else
+    base_url="$(prompt_value "Anthropic base URL" "${DEFAULT_BASE_URL}")"
+    model="$(prompt_value "Anthropic model" "${DEFAULT_MODEL}")"
+    cdp_port="$(prompt_value "CDP port" "${DEFAULT_CDP_PORT}")"
+  fi
 
   cat >"${env_path}" <<EOF
 CDP_PORT=${cdp_port}
@@ -372,7 +387,11 @@ main() {
   log "launcher: ${BIN_DIR}/${LAUNCHER_NAME}"
   log "state: ${STATE_DIR}"
   log "runtime: ${RUNTIME_DIR}"
-  log "next: run ${LAUNCHER_NAME} workflow list"
+  if [[ "${SKIP_LLM_SETUP}" == "1" ]]; then
+    log "next: run ${LAUNCHER_NAME} demo list, then configure ANTHROPIC_API_KEY in ${APP_DIR}/.env for live research"
+  else
+    log "next: run ${LAUNCHER_NAME} demo list or ${LAUNCHER_NAME} workflow list"
+  fi
 }
 
 main "$@"

@@ -1,10 +1,34 @@
 {
   "name": "web-task-agent",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Intelligent browser task automator using Chrome DevTools Protocol and Claude via a proxy endpoint",
+  "version": "0.2.0",
+  "description": "Local-first, evidence-backed web research workflows with durable state and decision packages",
+  "license": "MIT",
   "type": "commonjs",
   "main": "dist/cli.js",
+  "bin": {
+    "web-task-agent": "dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js",
+    "dist/demos/**/*.js",
+    "dist/lib/**/*.js",
+    "dist/server/**/*.js",
+    "dist/tasks/**/*.js",
+    "dist/types/**/*.js",
+    "dist/workflows/**/*.js",
+    "install.sh",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OthmaneBlial/web-task-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/OthmaneBlial/web-task-agent/issues"
+  },
+  "homepage": "https://github.com/OthmaneBlial/web-task-agent#readme",
   "engines": {
     "node": ">=22"
   },
@@ -16,6 +40,7 @@
     "test:unit": "node --test $(find dist/tests -maxdepth 1 -name '*.test.js' | sort)",
     "test:integration": "node --test dist/tests/integration/*.test.js",
     "test:ci": "npm run build && npm run test:unit && npm run test:integration",
+    "generate:workflows": "npm run build && node scripts/generate-workflow-examples.mjs",
     "lightpanda:start": "./scripts/start-lightpanda.sh start",
     "lightpanda:stop": "./scripts/start-lightpanda.sh stop",
     "lightpanda:update": "./scripts/start-lightpanda.sh update"

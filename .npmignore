@@ -1,0 +1,14 @@
+src/
+.github/
+docs/
+site/
+examples/
+reports/
+.cache/
+.data/
+base/
+dist/tests/
+*.log
+.env
+.env.*
+!.env.example

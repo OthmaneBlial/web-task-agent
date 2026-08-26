@@ -2,12 +2,13 @@
 
 This file is intentionally lightweight.
 
-## Unreleased
+## 0.2.0 — Unreleased
 
-- Added job recovery reports with a recommended next command.
-- Added soft performance budget checks for search, fetch, extraction, and synthesis.
-- Added prompt-trace cleanup retention for existing manifests.
-- Simplified the README and synced the operator docs with the current command surface.
+- Added 240 executable catalog workflows, filters, generated examples, and catalog tests.
+- Added deterministic, source-linked demo packages that work without an API key or browser session.
+- Added public-release foundation: MIT license, security policy, support policy, code of conduct, issue forms, Dependabot, and npm package metadata.
+- Added a no-key installer path for demos and local commands.
+- Added job recovery reports with a recommended next command, performance budget checks, and prompt-trace cleanup retention.
 
 ## Process
 

@@ -13,5 +13,6 @@ test("install script help describes the one-script bootstrap flow", () => {
   assert.match(output, /--repo <owner\/name>/);
   assert.match(output, /--ref <branch\|tag>/);
   assert.match(output, /--non-interactive/);
+  assert.match(output, /--skip-llm-setup/);
   assert.match(output, /WEB_TASK_AGENT_INSTALL_ROOT/);
 });

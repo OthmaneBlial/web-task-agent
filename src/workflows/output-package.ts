@@ -234,6 +234,65 @@ function renderMarketOpportunityBrief(
   ].join("\n").trim();
 }
 
+function renderCatalogWorkflowBrief(
+  template: WorkflowTemplateDefinition,
+  state: AgentRunState,
+  evidence: AgentEvidenceBundle
+): string {
+  const summary = state.researchSummary;
+  const pains = topClusterLabels(evidence, ["complaint"], 6);
+  const requests = topClusterLabels(evidence, ["feature_request"], 6);
+  const findings = topReferenceTexts(summary?.keyFindingDetails, 6);
+  const options = topReferenceTexts(summary?.contentAngleDetails, 5);
+  const contradictions = evidence.contradictions
+    .slice(0, 5)
+    .map((item) => `${item.topic}: ${item.leftLabel} vs ${item.rightLabel}`);
+
+  return [
+    `# ${template.handoffTitle}`,
+    "",
+    `Workflow: ${template.title}`,
+    `Topic: ${resolveWorkflowTopic(state)}`,
+    `Preset: ${state.input.workflowPresetId ?? "standard"}`,
+    "",
+    "## Decision Focus",
+    "",
+    template.decisionFocus || template.description,
+    "",
+    "## Research Read",
+    "",
+    summary?.executiveSummary || "Research complete. Review the linked evidence package.",
+    "",
+    "## Repeated User Signals",
+    "",
+    ...formatBulletList(
+      [...pains, ...requests].slice(0, 8),
+      "No repeated complaint or feature-request cluster was detected."
+    ),
+    "",
+    "## Evidence-Backed Findings",
+    "",
+    ...formatBulletList(findings, "No key findings were generated."),
+    "",
+    "## Options To Evaluate",
+    "",
+    ...formatBulletList(options, "No option shortlist was generated."),
+    "",
+    "## Expected Decision Deliverables",
+    "",
+    ...formatBulletList(template.expectedDeliverables ?? [], "Review the report and evidence references before deciding."),
+    "",
+    "## Contradictions To Resolve",
+    "",
+    ...formatBulletList(contradictions, "No major contradiction cluster was detected."),
+    "",
+    "## Next Validation Step",
+    "",
+    "- Select the strongest evidence-backed option, name its riskiest assumption, and run the smallest test that could disprove it.",
+    "- Keep source links with the decision so the next operator can re-check freshness and context."
+  ].join("\n").trim();
+}
+
 function renderWorkflowBrief(
   template: WorkflowTemplateDefinition,
   state: AgentRunState,
@@ -249,11 +308,7 @@ function renderWorkflowBrief(
     return renderMarketOpportunityBrief(state, evidence);
   }
 
-  return [
-    `# ${template.handoffTitle}`,
-    "",
-    state.researchSummary?.executiveSummary || "Workflow output package ready."
-  ].join("\n");
+  return renderCatalogWorkflowBrief(template, state, evidence);
 }
 
 function renderWorkflowPackageReadme(

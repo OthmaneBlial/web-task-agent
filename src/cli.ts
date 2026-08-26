@@ -39,6 +39,7 @@ import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
 import { PlayStoreAnalyzerTask } from "./tasks/playstore-analyzer";
 import { QueueWorkerTask } from "./tasks/queue-worker";
+import { listDemoFixtures, writeDemoPackage } from "./demos";
 import {
   buildWorkflowRunOptions,
   getWorkflowTemplate,
@@ -100,6 +101,8 @@ async function main(): Promise<void> {
     "beforeAll",
     `
 Common commands:
+  web-task-agent demo list
+  web-task-agent demo export browser-agent-landscape
   web-task-agent workflow list
   web-task-agent workflow run <template> --topic <text>
   web-task-agent agent run <instruction>
@@ -109,6 +112,43 @@ Common commands:
 Use "web-task-agent <command> --help" for the full option list.
 `
   );
+
+  const demo = program
+    .command("demo")
+    .description("Inspect deterministic, source-linked package demos without an API key or browser session");
+
+  demo
+    .command("list")
+    .description("List bundled deterministic demo packages")
+    .action(() => {
+      const fixtures = listDemoFixtures();
+      console.log(`Available demos: ${fixtures.length}`);
+      for (const fixture of fixtures) {
+        console.log(`- ${fixture.id}: ${fixture.title}`);
+        console.log(`  ${fixture.description}`);
+      }
+    });
+
+  demo
+    .command("export <id>")
+    .description("Write a deterministic demo package without calling an LLM or browser")
+    .option("--output <path>", "Destination directory for the package")
+    .option("--force", "Replace files in an existing destination")
+    .action((id, options) => {
+      const destination = options.output
+        ? path.resolve(String(options.output))
+        : path.join(process.cwd(), "reports", "demos", String(id));
+      const written = writeDemoPackage({
+        id: String(id),
+        outputDir: destination,
+        force: Boolean(options.force)
+      });
+      console.log("Demo package exported.");
+      console.log(`Package: ${written.outputDir}`);
+      console.log(`Brief: ${written.workflowBriefPath}`);
+      console.log(`Report: ${written.reportPath}`);
+      console.log(`Sources: ${written.sourcesPath}`);
+    });
 
   program
     .command("github")
@@ -333,16 +373,35 @@ Use "web-task-agent <command> --help" for the full option list.
 
   workflow
     .command("list")
-    .description("List the built-in workflow templates")
-    .action(() => {
-      const templates = listWorkflowTemplates();
-      console.log("Available workflows:");
+    .description("List workflow templates, with optional catalog filters")
+    .option("--category <text>", "Only show workflows whose category matches this text")
+    .option("--search <text>", "Only show workflows matching an id, title, tag, or description")
+    .action((options) => {
+      const categoryFilter = options.category ? normalizeText(String(options.category)).toLowerCase() : "";
+      const searchFilter = options.search ? normalizeText(String(options.search)).toLowerCase() : "";
+      const templates = listWorkflowTemplates().filter((template) => {
+        const categoryMatches = !categoryFilter || (template.category ?? "").toLowerCase().includes(categoryFilter);
+        const searchable = [
+          template.id,
+          template.title,
+          template.description,
+          template.category ?? "",
+          ...(template.tags ?? [])
+        ].join(" ").toLowerCase();
+        return categoryMatches && (!searchFilter || searchable.includes(searchFilter));
+      });
+      console.log(`Available workflows: ${templates.length}`);
+      if (templates.length === 0) {
+        console.log("No workflows match the supplied filters.");
+        return;
+      }
       for (const template of templates) {
-        console.log(`- ${template.id}: ${template.description}`);
-        console.log(`  Default preset: ${template.defaultPresetId}`);
-        for (const preset of template.presets) {
-          console.log(`  - ${preset.id}: ${preset.description}`);
+        console.log(`- ${template.id}: ${template.title}`);
+        console.log(`  ${template.description}`);
+        if (template.category) {
+          console.log(`  Category: ${template.category}`);
         }
+        console.log(`  Default preset: ${template.defaultPresetId}`);
         console.log(`  Example: ${template.examplePath}`);
       }
     });

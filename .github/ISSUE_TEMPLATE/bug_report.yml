@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible defect in a supported local workflow.
+title: "bug: "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include API keys, cookies, private reports, database files, or authenticated URLs. Security issues belong in a private advisory.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.2.0 or abc1234
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Redacted command and expected behavior
+      placeholder: web-task-agent workflow run ...
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and redacted logs
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: macOS 15, Node 22, Chrome CDP
+    validations:
+      required: true

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "type": "deterministic-demo",
+  "id": "local-first-risk-review",
+  "title": "Local-First Risk Review",
+  "scenario": "Review a local research run for unsafe targets, secret exposure, source manipulation, and unsafe sharing before treating its output as ready.",
+  "generatedAt": "2026-08-26",
+  "files": [
+    "report.md",
+    "handoff/workflow-brief.md",
+    "evidence/sources.json"
+  ]
+}

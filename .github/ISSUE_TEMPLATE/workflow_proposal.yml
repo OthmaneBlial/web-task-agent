@@ -1,0 +1,37 @@
+name: Workflow proposal
+description: Propose a repeatable, evidence-backed research workflow.
+title: "workflow: "
+labels: [workflow-review, needs-evidence]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A workflow is more than a prompt variant. It needs a repeatable decision, useful source strategy, stable output contract, and a testable example.
+  - type: input
+    id: decision
+    attributes:
+      label: Decision this workflow helps make
+      placeholder: Choose a narrow entry segment for ...
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Why this is a repeated need
+      description: Link to public examples, community discussions, or a concrete operator story.
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Preferred and excluded sources
+      placeholder: Preferred: official docs, reviews, forums. Excluded: login-only pages, thin SEO lists.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Expected decision package
+      placeholder: Ranked options, evidence links, contradictions, validation steps.
+    validations:
+      required: true

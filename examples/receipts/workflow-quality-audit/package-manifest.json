@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "type": "deterministic-demo",
+  "id": "workflow-quality-audit",
+  "title": "Workflow Quality Audit",
+  "scenario": "Review a proposed research workflow for a repeated decision, a distinct source strategy, an explicit output contract, and disconfirming evidence.",
+  "generatedAt": "2026-08-26",
+  "files": [
+    "report.md",
+    "handoff/workflow-brief.md",
+    "evidence/sources.json"
+  ]
+}
