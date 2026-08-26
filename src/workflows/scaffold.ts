@@ -15,19 +15,21 @@ export function writeWorkflowProposalScaffold(input: {
   category: string;
   outputDir: string;
   force?: boolean;
-}): { definitionPath: string; examplePath: string; testPlanPath: string } {
+}): { definitionPath: string; examplePath: string; fixturePath: string; testPlanPath: string } {
   const id = normalizeWorkflowProposalId(input.id);
   const root = path.resolve(input.outputDir, id);
   const definitionPath = path.join(root, "workflow.json");
   const examplePath = path.join(root, "example.md");
+  const fixturePath = path.join(root, "fixture.json");
   const testPlanPath = path.join(root, "test-plan.md");
-  const paths = [definitionPath, examplePath, testPlanPath];
+  const paths = [definitionPath, examplePath, fixturePath, testPlanPath];
   if (!input.force && paths.some((filePath) => fs.existsSync(filePath))) {
     throw new Error(`refusing to overwrite workflow proposal at ${root}; pass --force to replace it.`);
   }
   fs.mkdirSync(root, { recursive: true });
   fs.writeFileSync(definitionPath, `${JSON.stringify({ id, title: input.title.trim(), category: input.category.trim(), decision: "Describe the operator decision this workflow improves.", sourcePolicy: { preferred: ["official documentation", "first-party product pages", "public user reviews and community discussions"], excluded: ["authenticated pages", "thin SEO listicles", "access-control bypasses"] }, deliverables: ["decision-ready summary", "evidence links", "contradictions", "smallest next validation"], queries: ["Add a distinct, evidence-seeking query", "Add a second non-redundant query"], risks: ["List privacy, freshness, safety, or cost risks"] }, null, 2)}\n`, "utf8");
   fs.writeFileSync(examplePath, `# ${input.title.trim()}\n\n## Decision\n\nDescribe the repeated operator decision.\n\n## Run example\n\n\`\`\`bash\nweb-task-agent workflow run ${id} --topic \"a focused question\" --preset standard\n\`\`\`\n\n## Expected package\n\n- Evidence-backed summary\n- Source links and contradictions\n- A concrete next validation\n\n## Submission note\n\nThis scaffold is a proposal, not an automatically registered workflow. Complete the test plan, prove the workflow is distinct, then follow CONTRIBUTING.md to register it in the catalog.\n`, "utf8");
-  fs.writeFileSync(testPlanPath, `# Test plan — ${input.title.trim()}\n\n- [ ] Id, title, category, source policy, query list, deliverables, and risks validate.\n- [ ] Queries are materially distinct from every closest catalog workflow.\n- [ ] A fixture proves the output preserves source links and contradictions.\n- [ ] Unsafe URLs and prompt-injection content are quarantined.\n- [ ] Docs and generated catalog example are updated.\n`, "utf8");
-  return { definitionPath, examplePath, testPlanPath };
+  fs.writeFileSync(fixturePath, `${JSON.stringify({ topic: "a focused product or market question", sources: [{ title: "Replace with a public source title", url: "https://example.com/public-source", role: "Replace with the evidence role" }], expected: { deliverables: ["Replace with one output assertion"], preserves: ["source links", "contradictions", "next validation"] } }, null, 2)}\n`, "utf8");
+  fs.writeFileSync(testPlanPath, `# Test plan — ${input.title.trim()}\n\n- [ ] Run \`web-task-agent workflow validate workflow.json\` after replacing every scaffold placeholder.\n- [ ] Queries are materially distinct from every closest catalog workflow.\n- [ ] The fixture proves the output preserves source links and contradictions.\n- [ ] Unsafe URLs and prompt-injection content are quarantined.\n- [ ] Docs and generated catalog example are updated.\n`, "utf8");
+  return { definitionPath, examplePath, fixturePath, testPlanPath };
 }

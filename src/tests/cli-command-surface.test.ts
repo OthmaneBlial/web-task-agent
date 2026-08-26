@@ -32,6 +32,11 @@ test("workflow preview commands stay unchanged by legacy workflow argv normaliza
   assert.deepEqual(normalizeCliArgv(argv), argv);
 });
 
+test("workflow validation commands stay unchanged by legacy workflow argv normalization", () => {
+  const argv = ["node", "dist/cli.js", "workflow", "validate", "workflows/proposals/example/workflow.json"];
+  assert.deepEqual(normalizeCliArgv(argv), argv);
+});
+
 test("job budget commands stay unchanged by argv normalization", () => {
   const argv = ["node", "dist/cli.js", "job", "budget", "job_1"];
   assert.deepEqual(normalizeCliArgv(argv), argv);

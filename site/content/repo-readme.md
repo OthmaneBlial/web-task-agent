@@ -139,7 +139,7 @@ npm run build
 
 ## Contribute
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md), then read the [workflow catalog](examples/workflows/CATALOG.md). A useful workflow contribution has a repeated decision, a distinct source strategy, a stable evidence-backed output, a safety boundary, and a test/fixture — not just a renamed prompt.
+Start with [CONTRIBUTING.md](CONTRIBUTING.md), then read the [workflow catalog](examples/workflows/CATALOG.md). Run `web-task-agent workflow validate <proposal/workflow.json>` after scaffolding: it checks the contribution contract without registering or launching it. A useful workflow contribution has a repeated decision, a distinct source strategy, a stable evidence-backed output, a safety boundary, and a test/fixture — not just a renamed prompt.
 
 ## Documentation
 

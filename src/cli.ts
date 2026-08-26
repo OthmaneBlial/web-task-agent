@@ -58,6 +58,10 @@ import {
   listWorkflowTemplates
 } from "./workflows";
 import { writeWorkflowProposalScaffold } from "./workflows/scaffold";
+import {
+  formatWorkflowProposalValidation,
+  validateWorkflowProposalFile
+} from "./workflows/proposal-validation";
 
 function parsePositiveInteger(value: string, label: string): number {
   const parsed = Number(value);
@@ -480,8 +484,23 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log("Workflow proposal scaffold created.");
       console.log(`Definition: ${written.definitionPath}`);
       console.log(`Example: ${written.examplePath}`);
+      console.log(`Fixture: ${written.fixturePath}`);
       console.log(`Test plan: ${written.testPlanPath}`);
-      console.log("It is intentionally not executable until a reviewer verifies distinct evidence, source policy, and fixture coverage.");
+      console.log("Next: replace scaffold placeholders, run workflow validate on the definition, then request reviewer evidence and fixture coverage.");
+    });
+
+  workflow
+    .command("validate <definition>")
+    .description("Validate a workflow proposal schema without registering or running it")
+    .action((definition) => {
+      const result = validateWorkflowProposalFile(String(definition));
+      for (const line of formatWorkflowProposalValidation(result)) {
+        console.log(line);
+      }
+      console.log("Permission: validation does not register a workflow, launch a browser, call an LLM, or write a file.");
+      if (!result.valid) {
+        throw new Error("workflow proposal validation failed; fix every listed error before requesting review");
+      }
     });
 
   const pack = program

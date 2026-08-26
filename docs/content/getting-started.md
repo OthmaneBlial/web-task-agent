@@ -137,6 +137,7 @@ Then open the local management UI at `http://127.0.0.1:4317`.
 web-task-agent workflow list
 web-task-agent workflow list --search ecommerce
 web-task-agent workflow scaffold <new-workflow-id>
+web-task-agent workflow validate <proposal/workflow.json>
 web-task-agent queue list
 web-task-agent job inspect <job-id>
 web-task-agent job report <job-id>

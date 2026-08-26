@@ -22,6 +22,7 @@ web-task-agent workflow preview <template> --topic <text>
 web-task-agent workflow run <template> --topic <text>
 web-task-agent workflow enqueue <template> --topic <text>
 web-task-agent workflow scaffold <new-workflow-id>
+web-task-agent workflow validate <proposal/workflow.json>
 web-task-agent pack list
 web-task-agent pack plan <pack-id> --topic <text> [--dry-run]
 web-task-agent agent run <instruction>
@@ -49,6 +50,7 @@ web-task-agent server run --port 4317
 - `workflow list --category` or `--search` when you want to find one of the 240 catalog workflows.
 - `workflow preview` when you need to inspect one workflow's source strategy, queries, outputs, and budgets before doing work.
 - `pack plan --dry-run` when you need the full ordered plan and its aggregate run bounds without writing a file.
+- `workflow validate` when you want to check a proposal's required decision, source-policy, query, deliverable, and risk fields before review.
 - `workflow run` when you want a full research package immediately.
 - `agent run` when you want a free-form instruction without a template.
 - `queue list` and `job logs` when you are already operating a long run.

@@ -50,12 +50,18 @@ npm run start -- workflow scaffold developer-tool-review \
   --category "Validation"
 ```
 
-It creates a proposal definition, run example, and test plan under `workflows/proposals/`. A proposal becomes executable only after a reviewer verifies all of the following:
+It creates a proposal definition, run example, fixture, and test plan under `workflows/proposals/`. Replace the placeholders, then validate the schema before opening a review:
+
+```bash
+npm run start -- workflow validate workflows/proposals/developer-tool-review/workflow.json
+```
+
+Validation checks the required id, decision, source-policy, query, deliverable, and risk fields. It does not register or run anything, and it intentionally cannot decide whether your workflow is semantically distinct. A proposal becomes executable only after a reviewer verifies all of the following:
 
 - the operator decision is repeated and specific;
 - queries and deliverables are materially distinct from the closest catalog workflow;
 - preferred and excluded sources, freshness, cost, privacy, and safety risks are explicit;
-- a deterministic fixture proves the output keeps sources, contradictions, and the smallest next validation;
+- the included deterministic fixture proves the output keeps sources, contradictions, and the smallest next validation;
 - catalog documentation and generated examples pass `npm test` without drift.
 
 Use the workflow proposal issue form for the discussion. Maintainers should apply `workflow-review`, `needs-evidence`, `good first workflow`, or `help wanted` when the repository labels are available.
