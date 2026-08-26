@@ -9,6 +9,10 @@ This file is intentionally lightweight.
 - Added public-release foundation: MIT license, security policy, support policy, code of conduct, issue forms, Dependabot, and npm package metadata.
 - Added a no-key installer path for demos and local commands.
 - Added job recovery reports with a recommended next command, performance budget checks, and prompt-trace cleanup retention.
+- Added five review-gated decision packs plus dry-run previews that show per-step and aggregate work bounds before writing or launching anything.
+- Added local Markdown, JSON, and CSV job exports, redaction previews, and source/conclusion comparisons between runs.
+- Added responsible source acquisition controls: public-target policy, `robots.txt` signals, per-domain pacing, redirect quarantine, and page-instruction detection.
+- Added a local-data contract, safe SQLite backup/restore, and a reproducible release preflight checklist.
 
 ## Process
 

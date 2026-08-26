@@ -126,10 +126,13 @@ Read [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), and [SUPPORT.md](SUPP
 npm ci
 npm test
 npm run generate:workflows
+npm run release:check
 npm run build
 ```
 
 `npm test` runs deterministic fixtures for the standard CI path: it does not require an API key or live Play Store/AppBrain pages. Live research remains an operator-invoked command, never a hidden test dependency.
+
+`npm run release:check` adds the production dependency audit and a dry-run of the npm package. Follow [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) before any public release or visibility change.
 
 ## Contribute
 
@@ -144,4 +147,5 @@ Start with [CONTRIBUTING.md](CONTRIBUTING.md), then read the [workflow catalog](
 - [Example research receipts](examples/receipts/)
 - [Research receipts guide](RESEARCH_RECEIPTS.md)
 - [Roadmap](ROADMAP.md)
+- [Release checklist](RELEASE_CHECKLIST.md)
 - [Security policy](SECURITY.md)

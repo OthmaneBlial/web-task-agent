@@ -140,3 +140,13 @@ runtime/
   llm-prompt-traces.json
   pipeline-manifest.json
 ```
+
+## Verify A Release Candidate
+
+After `npm ci`, run:
+
+```bash
+npm run release:check
+```
+
+It runs the deterministic suite, checks production dependencies, and previews the npm tarball without publishing it. Then follow the root [release checklist](../../RELEASE_CHECKLIST.md) before publishing anything or changing repository visibility.
