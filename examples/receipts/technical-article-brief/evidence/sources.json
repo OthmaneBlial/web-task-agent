@@ -1,0 +1,23 @@
+[
+  {
+    "title": "Chrome DevTools Protocol",
+    "url": "https://chromedevtools.github.io/devtools-protocol/",
+    "publisher": "Chrome DevTools",
+    "accessedAt": "2026-08-26",
+    "role": "browser protocol reference"
+  },
+  {
+    "title": "Lightpanda documentation",
+    "url": "https://lightpanda.io/docs/",
+    "publisher": "Lightpanda",
+    "accessedAt": "2026-08-26",
+    "role": "browser runtime reference"
+  },
+  {
+    "title": "Web Task Agent article-research workflow",
+    "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/docs/content/example-article-research.md",
+    "publisher": "Web Task Agent",
+    "accessedAt": "2026-08-26",
+    "role": "project workflow reference"
+  }
+]

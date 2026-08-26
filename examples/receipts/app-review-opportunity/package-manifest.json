@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "type": "deterministic-demo",
+  "id": "app-review-opportunity",
+  "title": "App Review Opportunity",
+  "scenario": "Assess whether recurring public app-review complaints point to a product opportunity, a usability issue, or a claim that needs direct user validation.",
+  "generatedAt": "2026-08-26",
+  "files": [
+    "report.md",
+    "handoff/workflow-brief.md",
+    "evidence/sources.json"
+  ]
+}

@@ -1,0 +1,23 @@
+[
+  {
+    "title": "About issues",
+    "url": "https://docs.github.com/en/issues/tracking-your-work-with-issues/learning-about-issues/about-issues",
+    "publisher": "GitHub Docs",
+    "accessedAt": "2026-08-26",
+    "role": "issue-tracking reference"
+  },
+  {
+    "title": "Managing labels",
+    "url": "https://docs.github.com/en/issues/using-labels-and-milestones-to-track-work/managing-labels",
+    "publisher": "GitHub Docs",
+    "accessedAt": "2026-08-26",
+    "role": "review-state reference"
+  },
+  {
+    "title": "About discussions",
+    "url": "https://docs.github.com/en/discussions/collaborating-with-your-community-using-discussions/about-discussions",
+    "publisher": "GitHub Docs",
+    "accessedAt": "2026-08-26",
+    "role": "community discussion reference"
+  }
+]

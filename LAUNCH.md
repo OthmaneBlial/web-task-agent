@@ -30,7 +30,7 @@ web-task-agent demo export browser-agent-landscape
 
 I built Web Task Agent for research that has to survive scrutiny after the browser closes. Instead of returning only an answer, it stores a local package with a brief, source snapshots, evidence clusters, contradictions, report, and the next validation.
 
-It includes 243 executable workflows, three deterministic demos that work without an API key or browser, queue recovery, redacted exports, and review-gated decision packs. The project is local-first: it has no required hosted control plane and no non-essential telemetry by default.
+It includes 243 executable workflows, eight deterministic demos that work without an API key or browser, queue recovery, redacted exports, and review-gated decision packs. The project is local-first: it has no required hosted control plane and no non-essential telemetry by default.
 
 Project site: https://othmaneblial.github.io/web-task-agent/
 

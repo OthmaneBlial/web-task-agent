@@ -1,0 +1,23 @@
+[
+  {
+    "title": "Browser Use introduction",
+    "url": "https://docs.browser-use.com/cloud/agent/quickstart",
+    "publisher": "Browser Use",
+    "accessedAt": "2026-08-26",
+    "role": "browser automation capability reference"
+  },
+  {
+    "title": "Choosing the Data Extractor",
+    "url": "https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor",
+    "publisher": "Firecrawl",
+    "accessedAt": "2026-08-26",
+    "role": "web extraction capability reference"
+  },
+  {
+    "title": "Deep Agents overview",
+    "url": "https://docs.langchain.com/oss/python/deepagents/overview",
+    "publisher": "LangChain",
+    "accessedAt": "2026-08-26",
+    "role": "durable agent execution reference"
+  }
+]

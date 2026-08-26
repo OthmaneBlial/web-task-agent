@@ -12,5 +12,12 @@
     "publisher": "Web Task Agent",
     "accessedAt": "2026-08-26",
     "role": "existing workflow comparison"
+  },
+  {
+    "title": "Web Task Agent workflow proposal form",
+    "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/.github/ISSUE_TEMPLATE/workflow-proposal.yml",
+    "publisher": "Web Task Agent",
+    "accessedAt": "2026-08-26",
+    "role": "review intake contract"
   }
 ]

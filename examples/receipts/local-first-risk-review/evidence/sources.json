@@ -12,5 +12,12 @@
     "publisher": "Web Task Agent",
     "accessedAt": "2026-08-26",
     "role": "project security boundary"
+  },
+  {
+    "title": "Web Task Agent privacy contract",
+    "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/PRIVACY.md",
+    "publisher": "Web Task Agent",
+    "accessedAt": "2026-08-26",
+    "role": "local-data boundary"
   }
 ]

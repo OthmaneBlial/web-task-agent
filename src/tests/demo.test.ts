@@ -6,12 +6,30 @@ import test from "node:test";
 
 import { listDemoFixtures, writeDemoPackage } from "../demos";
 
-test("bundled demos provide three source-linked packages without network or LLM access", () => {
+test("bundled demos provide eight source-linked packages across the public decision examples", () => {
   const fixtures = listDemoFixtures();
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-demo-"));
 
   try {
-    assert.equal(fixtures.length, 3);
+    assert.equal(fixtures.length, 8);
+    assert.deepEqual(
+      fixtures.map((fixture) => fixture.id),
+      [
+        "browser-agent-landscape",
+        "workflow-quality-audit",
+        "local-first-risk-review",
+        "product-launch-readiness",
+        "competitor-decision-map",
+        "github-issue-opportunity",
+        "technical-article-brief",
+        "app-review-opportunity"
+      ]
+    );
+    for (const fixture of fixtures) {
+      assert.equal(fixture.sources.length, 3);
+      assert.match(fixture.report, /^# .+\n\n## Decision/m);
+      assert.match(fixture.workflowBrief, /^# .+\n\n## /m);
+    }
     const written = writeDemoPackage({
       id: "browser-agent-landscape",
       outputDir: tempDir

@@ -1,0 +1,23 @@
+[
+  {
+    "title": "Android app quality",
+    "url": "https://developer.android.com/quality",
+    "publisher": "Android Developers",
+    "accessedAt": "2026-08-26",
+    "role": "platform quality reference"
+  },
+  {
+    "title": "View and analyze your app's ratings and reviews",
+    "url": "https://support.google.com/googleplay/android-developer/answer/138230?hl=en",
+    "publisher": "Google Play Console Help",
+    "accessedAt": "2026-08-26",
+    "role": "review-system reference"
+  },
+  {
+    "title": "Web Task Agent Android opportunity example",
+    "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/docs/content/example-android-opportunity.md",
+    "publisher": "Web Task Agent",
+    "accessedAt": "2026-08-26",
+    "role": "project workflow reference"
+  }
+]

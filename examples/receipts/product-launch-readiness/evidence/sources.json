@@ -1,0 +1,23 @@
+[
+  {
+    "title": "About releases",
+    "url": "https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases",
+    "publisher": "GitHub Docs",
+    "accessedAt": "2026-08-26",
+    "role": "versioned release reference"
+  },
+  {
+    "title": "SEO Starter Guide",
+    "url": "https://developers.google.com/search/docs/fundamentals/seo-starter-guide",
+    "publisher": "Google Search Central",
+    "accessedAt": "2026-08-26",
+    "role": "public discoverability reference"
+  },
+  {
+    "title": "Web Task Agent v0.2.0",
+    "url": "https://github.com/OthmaneBlial/web-task-agent/releases/tag/v0.2.0",
+    "publisher": "Web Task Agent",
+    "accessedAt": "2026-08-26",
+    "role": "project release artifact"
+  }
+]

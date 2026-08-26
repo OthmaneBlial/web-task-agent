@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "type": "deterministic-demo",
+  "id": "competitor-decision-map",
+  "title": "Competitor Decision Map",
+  "scenario": "Decide how to position a research product alongside browser automation, web extraction, and durable agent frameworks without claiming unverified superiority.",
+  "generatedAt": "2026-08-26",
+  "files": [
+    "report.md",
+    "handoff/workflow-brief.md",
+    "evidence/sources.json"
+  ]
+}
