@@ -2,6 +2,11 @@
 
 This file is intentionally lightweight.
 
+## 0.3.1 — 2026-08-26
+
+- Fixed the published `web-task-agent` executable by preserving its Node shebang through TypeScript compilation.
+- Added a package-bin test that prevents future release tarballs from installing a non-executable CLI.
+
 ## 0.3.0 — 2026-08-26
 
 - Added five deterministic, source-linked receipts for launch readiness, competitor mapping, GitHub feedback, technical article claims, and app-review opportunities.
