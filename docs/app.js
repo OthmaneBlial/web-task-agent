@@ -49,6 +49,13 @@ const DOC_PAGES = [
     path: "content/test-suite-map.md"
   },
   {
+    slug: "privacy",
+    section: "Operations",
+    title: "Privacy And Source Acquisition",
+    summary: "What stays local, what a live job can send, and the source boundaries enforced before browser work.",
+    path: "content/privacy.md"
+  },
+  {
     slug: "project-charter",
     section: "Reference",
     title: "Project Charter",

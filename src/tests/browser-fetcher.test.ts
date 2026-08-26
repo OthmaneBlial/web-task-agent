@@ -14,7 +14,15 @@ test("browser fetcher records browser-session failures as error results", async 
   };
 
   try {
-    const fetcher = new BrowserPageFetcher((message) => events.push(message));
+    const fetcher = new BrowserPageFetcher((message) => events.push(message), {
+      userAgent: "web-task-agent-test",
+      prepare: async () => ({
+        action: "allow",
+        reason: "fixture source allowed",
+        signals: ["fixture"],
+        waitedMs: 0
+      })
+    });
     const results = await fetcher.fetchResults([
       {
         title: "Docs article",

@@ -19,7 +19,8 @@
     "install.sh",
     "README.md",
     "LICENSE",
-    "SECURITY.md"
+    "SECURITY.md",
+    "PRIVACY.md"
   ],
   "repository": {
     "type": "git",

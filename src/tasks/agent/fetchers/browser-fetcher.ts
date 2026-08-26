@@ -6,7 +6,8 @@ import {
   withLightpandaRecovery
 } from "../../../lib/cdp";
 import { humanScroll } from "../../../lib/humanizer";
-import { detectPromptInjectionSignals, evaluateSourceUrlPolicy } from "../../../lib/source-policy";
+import { detectPromptInjectionSignals } from "../../../lib/source-policy";
+import { SourceAcquisitionPolicy } from "../../../lib/source-acquisition-policy";
 import type {
   AgentPageDigest,
   AgentSearchResult,
@@ -65,7 +66,10 @@ export class BrowserPageFetcher implements AgentFetcher {
   readonly id = "browser_page_fetcher";
   readonly label = "Browser Page Fetcher";
 
-  constructor(private readonly log: (message: string) => void) {}
+  constructor(
+    private readonly log: (message: string) => void,
+    private readonly acquisitionPolicy: Pick<SourceAcquisitionPolicy, "prepare" | "userAgent"> = new SourceAcquisitionPolicy()
+  ) {}
 
   private async scrapePageDigest(client: CDPClient): Promise<AgentPageDigest> {
     return evaluateInBrowser<AgentPageDigest>(
@@ -174,7 +178,7 @@ export class BrowserPageFetcher implements AgentFetcher {
       if (normalizedUrl) {
         result.url = normalizedUrl;
       }
-      const sourcePolicy = evaluateSourceUrlPolicy(result.url);
+      const sourcePolicy = await this.acquisitionPolicy.prepare(result.url);
       if (sourcePolicy.action === "deny") {
         result.policyAction = "skip";
         result.policyReason = sourcePolicy.reason;
@@ -186,6 +190,9 @@ export class BrowserPageFetcher implements AgentFetcher {
         this.log(`skipping unsafe source before open: ${result.title} (${sourcePolicy.reason})`);
         enriched.push(result);
         continue;
+      }
+      if (sourcePolicy.waitedMs > 0) {
+        this.log(`rate limited ${result.title} for ${sourcePolicy.waitedMs}ms before opening the next source`);
       }
       result.contentType = result.contentType ?? classifyResearchContentType(result);
       const policy = evaluateDomainPolicy(result);
@@ -218,7 +225,7 @@ export class BrowserPageFetcher implements AgentFetcher {
             let client: CDPClient | null = null;
             try {
               this.log(`opening article: ${result.title}`);
-              client = await createPageSession(result.url);
+              client = await createPageSession(result.url, { userAgent: this.acquisitionPolicy.userAgent });
               const page = await this.scrapePageDigest(client);
               page.safetySignals = detectPromptInjectionSignals([
                 page.title,

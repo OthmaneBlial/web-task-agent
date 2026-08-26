@@ -197,7 +197,7 @@ async function enableCoreDomains(client: CDPClient): Promise<void> {
  * Create a new CDP session by connecting directly to the Lightpanda WebSocket.
  * Each call creates an independent page context.
  */
-export async function createPageSession(url?: string): Promise<CDPClient> {
+export async function createPageSession(url?: string, options?: { userAgent?: string }): Promise<CDPClient> {
   await ensureDebuggerReady();
 
   const versionResp = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
@@ -274,6 +274,10 @@ export async function createPageSession(url?: string): Promise<CDPClient> {
   }) as CDPClient;
 
   await enableCoreDomains(proxyClient);
+
+  if (options?.userAgent) {
+    await proxyClient.Network.setUserAgentOverride({ userAgent: options.userAgent });
+  }
 
   if (url) {
     await proxyClient.Page.navigate({ url });
