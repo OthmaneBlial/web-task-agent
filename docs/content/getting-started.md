@@ -28,6 +28,18 @@ WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 
 The demo, catalog, pack plan, preview, and scaffold commands do not need a key. Job-launching commands fail immediately with a clear message when no compatible API key is configured.
 
+### Cloud and local-compatible model endpoints
+
+The runtime speaks the Anthropic Messages API. It works with a cloud-compatible endpoint such as the configuration above, or with a local endpoint that implements `POST /v1/messages` with Anthropic-compatible request and response shapes:
+
+```env
+ANTHROPIC_API_KEY=local-token-chosen-by-you
+ANTHROPIC_BASE_URL=http://127.0.0.1:4000
+ANTHROPIC_MODEL=your-local-compatible-model
+```
+
+This is not a generic OpenAI-compatible mode: use a proxy or local server that explicitly implements the Anthropic Messages contract, including its `x-api-key` authentication header. The automated suite starts a local endpoint fixture and verifies the request path, authentication header, payload, and parsed response without contacting a provider.
+
 ## 3. Preview A Workflow Before Spending Time Or Tokens
 
 ```bash
