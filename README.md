@@ -117,7 +117,7 @@ npm run generate:workflows
 npm run build
 ```
 
-`npm test` includes a legacy browser-backed integration path that may access the network. Targeted unit tests and deterministic demos do not. The project is moving that path behind an explicit opt-in gate so ordinary CI remains deterministic.
+`npm test` runs deterministic fixtures for the standard CI path: it does not require an API key or live Play Store/AppBrain pages. Live research remains an operator-invoked command, never a hidden test dependency.
 
 ## Contribute
 

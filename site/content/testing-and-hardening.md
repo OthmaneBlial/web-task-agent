@@ -1,4 +1,4 @@
-# Testing And Roadmap
+# Testing And Hardening
 
 ## Current Automated Coverage
 
@@ -12,7 +12,7 @@ The repo currently includes automated tests for:
 - workflow output packaging
 - interrupted agent checkpoints
 
-The standard test command currently runs 103 unit tests and 3 integration tests. It also regenerates workflow/docs outputs and rejects drift before a change can merge.
+At the time this site was generated, the suite has **13 tests** and covers many of the highest-risk local operator paths.
 
 ## Working Quality Bar
 
@@ -38,9 +38,10 @@ For a more detailed product-surface view of the tests, read the test suite map p
 - run the relevant test subset or full build for the touched area
 - confirm the docs and examples still match the command or output shape
 - confirm the artifact layout and runtime paths still look the same to an operator
+- run `storage gate` before treating the local platform as ready enough for the current phase
 - update the living roadmap with the commit reference when the phase is complete
 
-## Current Macro Roadmap Position
+## Current Hardening Position
 
 Most of the large platform milestones are already complete:
 
@@ -56,13 +57,9 @@ Most of the large platform milestones are already complete:
 - research quality hardening
 - workflow output polish
 
-## Remaining Macro Area
+## Remaining Focus
 
-The remaining macro item is:
-
-- `Tests And Production Hardening`
-
-This is intentionally **local-first**, not a scale-out or hosted deployment roadmap. The current remaining emphasis is:
+The remaining emphasis is:
 
 - broader failure-mode coverage
 - stronger recovery and debug artifacts for long local runs
@@ -82,6 +79,6 @@ This site also includes copied versions of:
 
 - the repository `README.md`
 - the repository `ROADMAP.md`
-- generated catalog workflow examples and the mirrored static site
+- the two workflow example files
 
 Use those when you want the exact project-authored source text inside the portable site.

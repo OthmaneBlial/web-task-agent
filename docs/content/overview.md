@@ -1,6 +1,6 @@
 # Overview
 
-Web Task Agent is a **local-first long-running web research system** built on top of Lightpanda, Chrome DevTools Protocol, SQLite, and an Anthropic-compatible LLM endpoint.
+Web Task Agent is a **local-first, evidence-backed web research system** built on top of Lightpanda or Chrome DevTools Protocol, SQLite, and an Anthropic-compatible LLM endpoint.
 
 It is not just a browser automation script. The current repository already supports:
 
@@ -11,9 +11,10 @@ It is not just a browser automation script. The current repository already suppo
 - Synthesizing persisted evidence into a report
 - Queueing jobs for local worker execution
 - Recovering interrupted work instead of restarting from zero
+- Preserving citations, freshness, source quality, and contradictions with the resulting brief
 - Inspecting jobs through a local dashboard and API
 
-The working charter for the project lives in [Project Charter](project-charter.md). It defines the north star, vocabulary, architecture map, runtime layout, and quality gate that the rest of the docs follow.
+The product promise is simple: turn a messy web question into a package a teammate can inspect, challenge, and resume. Start with a deterministic demo before configuring a browser or LLM.
 
 ## What It Is Good At
 
@@ -31,10 +32,11 @@ The project writes both **database state** and **file artifacts**.
 
 ## Built-In Workflow Entry Points
 
-- `android-opportunity`
-- `article-research`
+- Three focused core workflows: `android-opportunity`, `article-research`, and `market-opportunity`
+- 240 catalog workflows across 20 domains and 12 decision types
+- Five review-gated decision packs for idea validation, launches, churn, defensible articles, and integrations
 
-Both workflow templates produce topic-based output folders under `reports/workflows/<template>/<topic-slug>/`.
+Every workflow produces a topic-based output folder under `reports/workflows/<template>/<topic-slug>/`.
 
 ## Main Operator Surfaces
 
@@ -46,4 +48,4 @@ Both workflow templates produce topic-based output folders under `reports/workfl
 
 ## Current Position
 
-The repository is already mature enough to be useful for deep research on one machine. The main unfinished area is the final hardening pass around tests, failure modes, operator debugging, and tighter docs-to-code parity.
+The standard test suite is fixture-backed and deterministic. Live research is intentionally separate: its sources and freshness must be reviewed at the time an operator runs it.

@@ -1,53 +1,238 @@
-# Roadmap
+# Roadmap — Web Task Agent
 
-Current progress: the core platform is built. The project can now run long research jobs, store and reuse evidence, queue work for workers, expose a local dashboard, control jobs in flight, stream live logs, apply a hardened research pipeline before synthesis, and generate cleaner workflow handoff packages. The next phase is production hardening.
+## La thèse
 
-Recommended next focus: expand tests and production hardening.
+Web Task Agent ne doit pas devenir « un agent web de plus ». Il doit devenir le poste de recherche web **local, durable et vérifiable** qui transforme une question confuse en package de décision : on lance une enquête, on peut l'interrompre, reprendre, auditer ses sources et transmettre une conclusion avec ses contradictions.
 
-## [x] Browser And Task Foundation
+> From a messy web question to an evidence-backed decision package — locally, resumably, and with the sources still attached.
 
-The project already has a working CLI, Lightpanda/CDP integration, resumable cache state, and task runners for GitHub, Play Store, and general research jobs.
+Les étoiles ne sont pas un livrable. Elles sont une conséquence d'une promesse publique, facile à essayer, crédible par la preuve et utile au point d'être recommandée.
 
-## [x] Durable Job Execution
+## Diagnostic — 26 août 2026
 
-Jobs now have leases, heartbeats, stale-run recovery, step tracking, and stage-level resume, including resumed execution after queued stale-run recovery, so long jobs can survive interruptions instead of restarting from zero.
+### Ce qui existe réellement
 
-## [x] Deep Research Pipeline
+- Base TypeScript locale avec CLI, Chrome DevTools Protocol/Lightpanda, SQLite, file d'attente, worker, dashboard local, reprise après interruption, traces de prompts et packages de sortie.
+- Chaîne de recherche : recherche → fetch → extraction → regroupement des preuves → contradictions → synthèse.
+- Trois workflows historiques : `android-opportunity`, `article-research`, `market-opportunity`.
+- Tests automatisés pour la reprise, les contrôles, le stockage, les preuves, le packaging et plusieurs échecs de runtime.
+- Installateur et site de documentation statique déjà présents.
 
-The research flow is split into search, fetch, extract, and synthesize stages, and it can now process large batches instead of only a few pages per run.
+### Ce qui bloque l'adoption aujourd'hui
 
-## [x] Durable Storage And Reuse
+- Le dépôt est **privé**, sans étoile ni fork possible ; il n'a ni licence, ni release, ni sujets GitHub, ni page d'accueil déclarée. Il ne peut pas gagner des étoiles dans cet état.
+- « Local-first web research » est vrai mais trop large. Les capacités distinctives — preuve durable, reprise, contradictions et package de décision — sont enfouies dans le code.
+- `package.json` est en `private: true`, version `0.1.0`. L'installation existe, mais le premier résultat utile n'est pas encore démontré par une sortie publique et réutilisable.
+- Les docs dérivent du code : elles parlent de deux templates alors que trois existent, et affichent un compte de tests ancien. Cela réduit la confiance.
+- Le répertoire d'exemples ne montrait que deux cas d'usage ; il ne rendait ni l'étendue ni la contribution visibles.
+- `npm audit --omit=dev` signale actuellement une vulnérabilité haute dans `ws` transitif. La politique de sources, secrets, prompt injection et données sensibles doit devenir un contrat public.
 
-Sources, documents, snapshots, extractions, and artifact metadata are stored in SQLite, and canonicalized sources can be reused across runs to avoid unnecessary refetching.
+## Positionnement à verrouiller
 
-## [x] Evidence Analysis Layer
+### Pour qui
 
-The system already deduplicates repeated signals, scores source quality and freshness, detects contradictions, and builds an evidence graph linking sources, documents, extractions, entities, and outputs.
+- Équipes produit, fondateurs et analystes qui doivent transformer des retours publics, alternatives et signaux de marché en décision.
+- Développeurs et chercheurs qui veulent garder l'exécution et les preuves sur leur machine.
+- Équipes de contenu qui veulent une enquête traçable plutôt qu'un texte sans sources.
 
-## [x] Workflow Templates
+### Différenciation
 
-The project now has reusable workflow entrypoints for `android-opportunity` and `article-research`, each with its own defaults and operator-facing CLI flow.
+Le navigateur, le crawl et la planification sont déjà concurrentiels. La valeur rare est de répondre : **quelles sources ont conduit à cette recommandation, qu'est-ce qui la contredit, et que se passe-t-il si le job tombe ?**
 
-## [x] Queue And Worker Mode
+Le moat open source est le contrat de recherche : source canonique, snapshot, extraction, qualité, fraîcheur, contradiction, citation, reprise et package de décision. Un concurrent peut refaire un prompt, pas aussi facilement une expérience locale réellement auditable.
 
-Jobs can now be enqueued, claimed by a worker, heartbeated during execution, retried after failure, and completed through a durable queue stored in SQLite.
+### Ce que le projet n'est pas
 
-## [x] API And Dashboard
+- Pas un SaaS de scraping hébergé.
+- Pas un clone généraliste de Browser Use, Firecrawl ou LangGraph.
+- Pas une promesse d'autonomie sans supervision.
+- Pas un catalogue de prompts interchangeables sans preuves ni format de sortie.
 
-There is now a local HTTP management surface for jobs, queue state, recoverable runs, and job detail inspection, plus a simple HTML dashboard.
+---
 
-## [x] Job Controls And Live Logs
+## P0 — Devenir publiable, compréhensible et essayable
 
-The API, CLI, and dashboard now support pause, resume, cancel, retry, and rerun controls, and selected jobs expose live event logs through stored run events and an SSE stream.
+Ces éléments sont bloquants. Il ne faut pas lancer une campagne de visibilité avant eux.
 
-## [x] Research Quality Hardening
+### 1. Publication responsable
 
-The research pipeline now applies domain policies, document quality filters, search-result ranking, source-specific extractors for docs/forums/reviews, and trend-aware source and cluster scoring before synthesis.
+**But :** permettre de regarder, fork, tester et contribuer sans ambiguïté.
 
-## [x] Workflow Output Polish
+À faire :
 
-Workflow runs now use topic-based cache and report paths, support `fast`/`standard`/`deep` presets, write cleaner handoff packages, and include repo-side output examples for each built-in workflow.
+- Décision explicite de rendre le dépôt public.
+- Licence open source choisie (`MIT` ou `Apache-2.0` après validation de compatibilité).
+- `SECURITY.md`, politique de signalement, `CODE_OF_CONDUCT.md`, `SUPPORT.md`, templates d'issues et sujets GitHub.
+- Description GitHub, URL de démo, image sociale et première release versionnée.
+- Audit des secrets, de l'état local et des captures avant publication.
 
-## [ ] Tests And Production Hardening
+**Acceptation :** un inconnu peut comprendre licence, limites de sécurité, support et installation sans demander au mainteneur.
 
-This final macro phase is local-first hardening: it now includes golden workflow fixtures and prompt/version trace files, and it still needs broader failure-mode coverage and stronger recovery/debugging for long research runs on one machine.
+### 2. Première minute = preuve produit
+
+**But :** obtenir un premier package utile sans lire le code.
+
+À faire :
+
+- README reconstruit autour d'un scénario phare : question → recherche → preuves → brief de décision.
+- GIF/capture courte et rapport d'exemple lisible : résumé, recommandation, incertitudes, citations, contradictions et prochaine validation.
+- Trois exécutions golden versionnées, avec sources publiques et reproductibles :
+  - voix du client ;
+  - analyse concurrentielle ;
+  - brief d'article technique avec contradictions.
+- Pré-requis et messages d'erreur exacts, testés depuis une machine propre.
+- Page « Why this instead? » qui compare honnêtement le projet à un crawler, un agent navigateur et un framework d'agents.
+
+**Acceptation :** une personne nouvelle produit et comprend un résultat en moins de 15 minutes, puis remonte du brief à une source sans ouvrir SQLite.
+
+### 3. Catalogue de centaines de workflows, sans prompts creux
+
+**But :** montrer l'étendue réelle du produit tout en gardant une qualité et une navigation strictes.
+
+À faire :
+
+- Registre data-driven, plutôt que des centaines de blocs de code copiés-collés.
+- Au moins 200 scénarios exécutables organisés par décision et domaine : voix du client, concurrents, gaps produit, pricing, segmentation, parcours d'achat, positionnement, demande de contenu, intégrations, entrée de marché, validation, churn/rétention.
+- Pour chaque scénario : objectif, stratégie de requêtes, sources à privilégier, livrables du brief, exemple de commande, emplacement de sortie stable et workflows liés.
+- `workflow list --category` et `workflow list --search` pour naviguer sans liste interminable.
+- Génération contrôlée de la documentation du catalogue depuis le registre, avec test anti-doublon des ids et chemins.
+
+**Acceptation :** chaque entrée est réellement lançable par la CLI, produit le même contrat d'artefacts et une recherche par catégorie donne immédiatement un scénario exploitable.
+
+### 4. Éliminer la dette de confiance
+
+À faire :
+
+- Synchroniser README, docs, site statique, exemples et carte des tests depuis une source canonique ou un générateur.
+- Mettre à jour la dépendance vulnérable et vérifier la lockfile.
+- CI : build, unité, intégration, génération du catalogue, liens Markdown, exemples CLI et détection de dérive documentaire.
+- Badges uniquement pour ce qui est réel : CI d'abord, release ensuite, jamais de faux badge de popularité ou couverture.
+
+**Acceptation :** `npm ci && npm test && npm run generate:workflows` passe proprement en CI et ne laisse aucun changement non versionné.
+
+---
+
+## P1 — Faire du catalogue un produit
+
+### 5. Packs de décision composables
+
+Un workflow est un point de départ ; un pack termine une décision.
+
+- Packs : « Valider une idée », « Préparer un lancement », « Comprendre un churn », « Écrire un article défendable », « Choisir une intégration ».
+- Ordre explicite, artefacts d'entrée/sortie et revue humaine entre étapes ; aucun lancement coûteux en cascade sans confirmation.
+- Réutilisation sûre de mémoire locale et de sources déjà vérifiées.
+- Mode `dry-run` : budget, sources visées, dossiers de sortie et permissions avant exécution.
+
+**Acceptation :** une décision complète se mène en 2–4 étapes, reprend après incident et affiche son coût avant l'appel LLM.
+
+### 6. Sorties immédiatement partageables
+
+- Format de rapport versionné avec citations, raison de qualité, date de collecte et section « ce qui invaliderait cette conclusion ».
+- Exports Markdown, JSON et CSV ; aucune synchronisation hors machine par défaut.
+- Comparaison de runs : nouvelles sources, sources disparues, conclusions modifiées.
+- Export redacted avec aperçu de ce qui quittera la machine.
+
+**Acceptation :** un décideur non technique lit le brief, un développeur réutilise les données, et l'opérateur sait exactement ce qu'il partage.
+
+### 7. Contribution de workflows facile, mais exigeante
+
+- `workflow scaffold` qui crée définition, exemple, test de requêtes et fixture de package.
+- Schéma validé : objectif, sources préférées/interdites, livrables, fraîcheur, coûts et risques.
+- Guide de contribution : besoin répétable, requêtes non redondantes, contrat de sortie et test de non-régression.
+- Labels `good first workflow`, `workflow-review`, `needs-evidence`, `help wanted`.
+
+**Acceptation :** un contributeur ajoute un workflow sans comprendre tout l'orchestrateur et ne peut pas livrer une simple variante de prompt sous un nouveau nom.
+
+---
+
+## P2 — Gagner la confiance sur les sujets difficiles
+
+### 8. Acquisition web responsable
+
+- Politique explicite : sites autorisés, `robots.txt` lorsque pertinent, rate limits, user-agent, limites de login et interdiction de contourner des accès.
+- Garde-fous contre SSRF, URL privées, téléchargements dangereux, redirections suspectes et contenu malveillant.
+- Détection et traçage des instructions présentes dans les pages afin de les séparer des instructions de l'opérateur.
+- Liste rouge configurable, budget par domaine et revue humaine pour les actions sensibles.
+
+**Acceptation :** l'opérateur comprend pourquoi une source est refusée, ralentie ou soumise à revue sans chercher dans les logs bruts.
+
+### 9. Confidentialité observable et choix d'infrastructure
+
+- Contrat local-first précis : données conservées sur disque, données envoyées au LLM, données visibles par Lightpanda/Chrome et télémétrie — par défaut, aucune télémétrie non essentielle.
+- Redaction des secrets dans logs, rapports et traces ; rétention/suppression vérifiables de l'état local.
+- Adaptateurs de modèles documentés : une option cloud et une option locale/compatible, testées.
+- Chrome/CDP de base, Lightpanda en option ; différences de capacité visibles.
+
+**Acceptation :** la confidentialité est décrite, testée et observable, pas seulement affichée.
+
+### 10. Fiabilité de long terme
+
+- Tests de reprise dans chaque étape, queue expirée, crash processus, stockage saturé et panne fournisseur.
+- E2E par fixtures pour trois packs ; réseau réel séparé et opt-in.
+- Budget de performance/coût par preset avec avertissement avant dérive.
+- Migration SQLite, sauvegarde/restauration et diagnostics sans fuite de données.
+
+**Acceptation :** une panne ne détruit ni le progrès ni les preuves, et un résultat incomplet ou ancien est explicitement signalé.
+
+---
+
+## P3 — Boucles d'adoption méritées
+
+### 11. Démontrer, puis distribuer
+
+- « Research receipts » versionnées : question utile, sortie publique, décision prise et limites.
+- Démos ciblées : lancement produit, concurrents, issues GitHub, sujet technique, avis d'apps.
+- Mini-site public : promesse, trois démonstrations, installation et confidentialité.
+- Partage communautaire après preuve seulement (Show HN, communautés devtools/product/data pertinentes), avec une démo adaptée à chaque audience.
+
+**Acceptation :** chaque post renvoie vers une expérience vérifiable et le README répond aux questions que cette démo suscite.
+
+### 12. GitHub comme espace de collaboration
+
+- Issues orientées résultat ; Discussions pour les workflows et receipts ; issues pour bugs/propositions actionnables.
+- `CONTRIBUTING.md` avec architecture, environnement, tests ciblés et règles de revue.
+- Reconnaissance des contributeurs par workflows/packs et releases régulières avec notes concrètes.
+
+**Acceptation :** un visiteur trouve une première contribution en moins de cinq minutes et comprend comment elle sera revue.
+
+---
+
+## Mesures à suivre, sans surveillance cachée
+
+| Signal | Ce qu'il mesure | Décision associée |
+| --- | --- | --- |
+| Temps au premier package utile | Activation réelle | Réduire friction d'installation/configuration |
+| Taux de reprise réussie | Valeur de la durabilité | Prioriser recovery et queue |
+| Citations ouvertes depuis un brief | Confiance/auditabilité | Améliorer la sortie |
+| Workflows exécutés, copiés, contribués | Utilité du catalogue | Garder les familles demandées, retirer les doublons |
+| Issues converties en PRs | Santé communautaire | Simplifier le kit contributeur |
+| Forks, étoiles, mentions, démos réutilisées | Distribution méritée | Investir dans les preuves qui circulent |
+
+Mesurer uniquement par consentement explicite ou à partir de signaux publics GitHub. Le produit reste silencieux par défaut. Les étoiles sont un indicateur tardif : une hausse sans installations, packages lisibles ou contributeurs ne valide pas le produit.
+
+## Ordre d'exécution
+
+1. Publication responsable : licence, sécurité, dépôt public, release, métadonnées.
+2. Preuve produit : scénario phare, trois runs golden, README et rapport lisible.
+3. Catalogue exécutable : 200+ cas, génération, filtres CLI et tests.
+4. Contrat de confiance : sécurité web, redaction, politiques de source, audit et CI anti-dérive.
+5. Packs et partage : séquences de décision, exports sûrs, receipts publiques.
+6. Communauté et distribution : contributions faciles, démos ciblées, releases et conversations utiles.
+
+Ne pas inverser cet ordre : une campagne avant preuve et sécurité produirait des visites, pas une confiance durable.
+
+## Hors périmètre volontaire, pour l'instant
+
+- SaaS multi-tenant ou scraping hébergé.
+- Actions externes à haut risque (achats, formulaires ou comptes tiers).
+- Marketplace de workflows sans revue de qualité.
+- Intégrer chaque LLM, navigateur et réseau social avant de solidifier le contrat d'exécution.
+- Métriques de croissance collectées à l'insu des opérateurs.
+
+## Références de marché
+
+- [Browser Use — tâches d'agent navigateur](https://docs.browser-use.com/cloud/agent/quickstart)
+- [Firecrawl — agent de découverte et extraction web](https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor)
+- [LangChain Deep Agents — exécution durable et validation humaine](https://docs.langchain.com/oss/python/deepagents/overview)
+
+Ces outils confirment que le navigateur, le crawl et la planification sont concurrentiels. Web Task Agent doit donc gagner sur le package de décision local, la qualité de l'évidence, la reprise et la transparence d'exécution.

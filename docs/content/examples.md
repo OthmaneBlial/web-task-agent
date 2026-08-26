@@ -1,6 +1,14 @@
 # Examples
 
-## Example 1: Research A New Android App Idea
+## Example 1: Inspect A Complete Package Without Credentials
+
+```bash
+npm run start -- demo export local-first-risk-review
+```
+
+This writes a source-linked, clearly labelled fixture package to `reports/demos/`. It is the fastest way to learn the report, evidence, and handoff contract without pretending a static example is fresh research.
+
+## Example 2: Research A New Android App Idea
 
 Goal:
 
@@ -19,7 +27,7 @@ npm run start -- workflow run android-opportunity \
 
 Use this when you want an evidence-backed concept package instead of casual browsing.
 
-## Example 2: Research A Technical Topic For An Article
+## Example 3: Research A Technical Topic For An Article
 
 Goal:
 
@@ -36,7 +44,7 @@ npm run start -- workflow run article-research \
 
 Use this when the final output is not just research, but better writing based on that research.
 
-## Example 3: Queue A Long Run And Process It Later
+## Example 4: Queue A Long Run And Process It Later
 
 Goal:
 
@@ -52,7 +60,7 @@ npm run start -- workflow enqueue android-opportunity \
 npm run start -- worker run --once
 ```
 
-## Example 4: Run A One-Off General Research Job
+## Example 5: Run A One-Off General Research Job
 
 Goal:
 
@@ -65,7 +73,7 @@ npm run start -- agent run \
   "Research cheerful launch ideas for our product and write one evidence-backed post"
 ```
 
-## Example 5: Inspect A Job While It Runs
+## Example 6: Inspect A Job While It Runs
 
 Commands:
 
@@ -77,7 +85,7 @@ npm run start -- job logs <job-id> --limit 100
 
 This is useful when a run is long enough that you want real operator visibility instead of waiting blindly.
 
-## Example 6: Export Logs For Later Review
+## Example 7: Export Logs For Later Review
 
 Command:
 
@@ -87,12 +95,22 @@ npm run start -- job logs <job-id> --limit 250 --output ./job-logs.txt
 
 Use this when you want to share or archive a long log history without losing the exact event ordering.
 
-## Example 7: Discover A Workflow Before Launching It
+## Example 8: Find One Workflow In The Catalog
 
 Command:
 
 ```bash
-npm run start -- workflow list
+npm run start -- workflow list --category "Pricing and Packaging"
+npm run start -- workflow list --search ecommerce
 ```
 
-Use this when you want to compare `fast`, `standard`, and `deep` before picking the launch option that fits the job.
+Use `workflow preview <id> --topic <text>` next to inspect the intended source strategy, output folder, and preset before launching it.
+
+## Example 9: Prepare A Decision Without Launching A Chain Of Agents
+
+```bash
+npm run start -- pack plan understand-churn \
+  --topic "why teams stop using a shared research workspace"
+```
+
+The plan gives an ordered, review-gated sequence. The operator decides whether to run each workflow; the command does not silently spend credits or open websites.

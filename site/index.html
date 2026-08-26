@@ -6,7 +6,7 @@
   <title>Web Task Agent</title>
   <meta
     name="description"
-    content="Local-first long-running web research with Lightpanda, CDP, SQLite, queue workers, resumable jobs, and evidence-backed workflow packages."
+    content="Local-first, evidence-backed web research with durable jobs, source policy, resumable runs, and decision-ready packages."
   />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="styles.css" />
@@ -31,33 +31,36 @@
     <main>
       <section class="hero reveal">
         <div class="hero-copy">
-          <p class="eyebrow">Lightpanda + CDP + SQLite + Queue Worker</p>
-          <h1>Run long web research on your machine without losing the trail.</h1>
+          <p class="eyebrow">LOCAL-FIRST RESEARCH RECEIPTS</p>
+          <h1>Turn a messy web question into a decision package you can inspect.</h1>
           <p class="hero-text">
-            Web Task Agent is a local-first research system for jobs that search broadly, fetch
-            many pages, persist evidence, recover after interruption, and hand back a usable report
-            package instead of a loose pile of notes.
+            Web Task Agent keeps the chain from a recommendation back to its sources: durable jobs,
+            snapshots, evidence clusters, contradictions, resumability, and a handoff package a
+            teammate can challenge instead of a loose pile of notes.
           </p>
           <div class="hero-actions">
-            <a class="button button-accent" href="docs.html">Open Documentation</a>
-            <a class="button" href="examples.html">See Real Workflows</a>
+            <a class="button button-accent" href="examples.html">Inspect a package</a>
+            <a class="button" href="docs.html">Read the docs</a>
           </div>
           <div class="hero-notes">
-            <span>Long-running jobs</span>
+            <span>Source-linked evidence</span>
+            <span>Contradictions visible</span>
             <span>Stage-level resume</span>
-            <span>SQLite evidence store</span>
-            <span>Queue, worker, controls, live logs</span>
+            <span>Local by default</span>
           </div>
         </div>
         <aside class="hero-panel reveal">
           <div class="panel">
             <div class="panel-kicker">Quick Start</div>
-            <pre><code class="language-bash">npm install
-npm run lightpanda:start
-npm run start -- workflow run android-opportunity \
-  --topic "ai study planner" \
-  --preset deep
-npm run start -- server run --port 4317</code></pre>
+            <pre><code class="language-bash">npm ci
+npm run start -- demo export browser-agent-landscape
+open reports/demos/browser-agent-landscape/ \
+  handoff/workflow-brief.md
+
+# then preview live work before you run it
+npm run start -- workflow preview \
+  cybersecurity-voice-of-customer \
+  --topic "security review workflows"</code></pre>
             <p class="panel-note">
               Outputs land in `reports/`, resumable state lands in `.cache/`, and durable metadata
               lands in `.data/web-task-agent.sqlite`.
@@ -68,23 +71,23 @@ npm run start -- server run --port 4317</code></pre>
 
       <section class="metrics reveal">
         <article class="metric-card">
+          <strong>243</strong>
+          <span>Executable workflows</span>
+          <small>Three core workflows plus 240 catalog entries, all with a stable output contract.</small>
+        </article>
+        <article class="metric-card">
+          <strong>5</strong>
+          <span>Review-gated decision packs</span>
+          <small>Plan idea validation, launches, churn, articles, or integrations before work begins.</small>
+        </article>
+        <article class="metric-card">
           <strong>3</strong>
-          <span>Research stages before synthesis</span>
-          <small>Search, fetch, extract, then synthesize and report.</small>
-        </article>
-        <article class="metric-card">
-          <strong>2</strong>
-          <span>Built-in workflow templates</span>
-          <small>`android-opportunity` and `article-research` are ready now.</small>
-        </article>
-        <article class="metric-card">
-          <strong>13</strong>
-          <span>Automated tests</span>
-          <small>Queue recovery, controls, management API, workflow packaging, and interruptions.</small>
+          <span>Deterministic demos</span>
+          <small>Inspect real package shapes without an API key, browser, or live source request.</small>
         </article>
         <article class="metric-card">
           <strong>1</strong>
-          <span>Local database</span>
+          <span>Auditable local state</span>
           <small>SQLite stores jobs, sources, documents, extractions, graph links, and artifacts.</small>
         </article>
       </section>
@@ -184,33 +187,32 @@ npm run start -- server run --port 4317</code></pre>
       <section class="section reveal">
         <div class="section-heading">
           <p class="eyebrow">Real Workflows</p>
-          <h2>Use the built-in templates or run your own custom research instruction.</h2>
+          <h2>Start with a decision, then pick the smallest useful workflow.</h2>
         </div>
         <div class="workflow-grid">
           <article class="workflow-card">
-            <div class="workflow-label">Workflow Template</div>
-            <h3>Android Opportunity Research</h3>
-            <p>Find recurring pains, competitor gaps, launch hooks, MVP ideas, and monetization clues for a new Android app concept.</p>
-            <pre><code class="language-bash">npm run start -- workflow run android-opportunity \
-  --topic "ai study planner" \
-  --preset deep</code></pre>
-            <a class="text-link" href="docs.html#page=workflows">Read workflow docs</a>
+            <div class="workflow-label">No-key proof</div>
+            <h3>Inspect a research receipt</h3>
+            <p>See the brief, report, evidence and manifest contract before you configure an LLM or browser.</p>
+            <pre><code class="language-bash">npm run start -- demo export \
+  workflow-quality-audit</code></pre>
+            <a class="text-link" href="examples.html">Open package examples</a>
           </article>
           <article class="workflow-card">
-            <div class="workflow-label">Workflow Template</div>
-            <h3>Technical Article Research</h3>
-            <p>Collect official docs, blog posts, discussion threads, and contradictions to build a stronger technical article brief.</p>
-            <pre><code class="language-bash">npm run start -- workflow run article-research \
-  --topic "browser automation with Lightpanda and CDP"</code></pre>
-            <a class="text-link" href="examples.html">See the example page</a>
+            <div class="workflow-label">Catalog discovery</div>
+            <h3>Choose from 240 focused cases</h3>
+            <p>Find a distinct voice-of-customer, pricing, competitor, retention, or market-entry workflow by decision and domain.</p>
+            <pre><code class="language-bash">npm run start -- workflow list \
+  --category "Pricing and Packaging"</code></pre>
+            <a class="text-link" href="docs.html#page=workflows">Browse workflow docs</a>
           </article>
           <article class="workflow-card">
-            <div class="workflow-label">General Agent Job</div>
-            <h3>Free-form research</h3>
-            <p>Run a custom instruction when your job does not fit the shipped templates.</p>
-            <pre><code class="language-bash">npm run start -- agent run \
-  "Research cheerful launch ideas for our product and write one evidence-backed post"</code></pre>
-            <a class="text-link" href="docs.html#page=examples">Browse more scenarios</a>
+            <div class="workflow-label">Human review first</div>
+            <h3>Plan a decision pack</h3>
+            <p>Generate a 2–4 step plan without silently opening sites or spending model calls in a chain.</p>
+            <pre><code class="language-bash">npm run start -- pack plan validate-an-idea \
+  --topic "offline document signing"</code></pre>
+            <a class="text-link" href="docs.html#page=examples">See more scenarios</a>
           </article>
         </div>
       </section>
@@ -287,11 +289,12 @@ GET  /api/recoverable</code></pre>
       <section class="section cta-section reveal">
         <div>
           <p class="eyebrow">Documentation</p>
-          <h2>Open the full docs, browse real workflow examples, or read the repo sources directly.</h2>
+          <h2>Inspect the output contract, then choose a workflow or contribute one.</h2>
         </div>
         <div class="cta-actions">
           <a class="button button-accent" href="docs.html">Documentation</a>
           <a class="button" href="examples.html">Examples</a>
+          <a class="button" href="docs.html#page=project-charter">Charter</a>
           <a class="button" href="docs.html#page=repo-roadmap">Roadmap</a>
         </div>
       </section>

@@ -1,175 +1,134 @@
 # Web Task Agent
 
-Long-running web research agent built on Lightpanda, CDP, SQLite, and an Anthropic-compatible LLM endpoint.
+[![CI](https://github.com/OthmaneBlial/web-task-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/OthmaneBlial/web-task-agent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-This repository is now a practical research system, not just a small browser automation demo. It can run long jobs, persist evidence, recover interrupted work, reuse sources across runs, queue jobs for workers, and expose a local dashboard for monitoring.
+**Turn a messy web question into a local, evidence-backed decision package.**
 
-`README.md` explains what the project does now and how to use it.
-`ROADMAP.md` is the clean macro roadmap.
-`base/roadmap.md` is the private living execution roadmap.
-`docs/content/project-charter.md` is the working reference for the project north star, vocabulary, and operating rules.
+Web Task Agent is a local-first research runner for work that needs more than a chat answer: durable jobs, source snapshots, evidence clusters, contradictions, resumability, queue workers, and a handoff a teammate can actually inspect.
 
-## What It Does Now
+It is not a hosted scraper, an access-control bypass tool, or a generic browser-agent framework. Its job is to preserve the trail from a recommendation back to the evidence that supports — or challenges — it.
 
-- Runs research jobs that plan, search, fetch, extract, synthesize, and write reports.
-- Persists jobs, steps, sources, documents, snapshots, extractions, evidence links, and artifact metadata in SQLite.
-- Recovers interrupted runs with leases, heartbeats, resumable cache state, and stage-level resume.
-- Reuses canonicalized sources and stored page snapshots across runs.
-- Supports built-in workflows for `android-opportunity` and `article-research`.
-- Gives workflows stable topic-based cache/report paths, operator presets, and handoff packages.
-- Stores local prompt/version traces for agent runs under the runtime artifact folder.
-- Supports queued execution with worker mode.
-- Exposes a local HTTP API and HTML dashboard for jobs, queue state, controls, and live logs.
-- Applies research-quality hardening with domain policies, search-result ranking, source-specific extractors, and trend-aware evidence scoring.
-- Uses a shared vocabulary for jobs, workflows, queue items, artifacts, sources, documents, snapshots, extractions, and evidence clusters.
+## See a package before configuring anything
 
-## Main Commands
+The bundled demos have no API key, browser session, or network request. They show the exact report, evidence, and handoff shape a live workflow produces.
 
 ```bash
-# Install and start Lightpanda
-npm install
-npm run lightpanda:start
+curl -fsSL https://raw.githubusercontent.com/OthmaneBlial/web-task-agent/main/install.sh \
+  | bash -s -- --skip-llm-setup
 
-# General research job
-npm run start -- agent run \
-  "Research cheerful launch ideas for our product and write one evidence-backed post"
-
-# Built-in workflow templates
-npm run start -- workflow list
-npm run start -- workflow run android-opportunity \
-  --topic "ai study planner" \
-  --preset deep
-npm run start -- workflow run article-research \
-  --topic "browser automation with Lightpanda and CDP"
-
-# Queue long jobs
-npm run start -- workflow enqueue android-opportunity \
-  --topic "budgeting app for couples"
-npm run start -- queue list
-npm run start -- queue pause <queue-id>
-npm run start -- queue resume <queue-id>
-npm run start -- worker run --once
-
-# Job controls and logs
-npm run start -- job pause <job-id>
-npm run start -- job resume <job-id>
-npm run start -- job rerun <job-id>
-npm run start -- job inspect <job-id>
-npm run start -- job logs <job-id> --limit 100
-npm run start -- job logs <job-id> --limit 250 --output ./job-logs.txt
-
-# Monitoring API and dashboard
-npm run start -- server run --port 4317
+web-task-agent demo export browser-agent-landscape
+open reports/demos/browser-agent-landscape/handoff/workflow-brief.md
 ```
 
-## Quick Start
+The package contains:
 
-1. Copy the environment file and fill in your API key.
-2. Install dependencies.
-3. Start Lightpanda.
-4. Run either a direct `agent run` job or a `workflow run` template.
-5. Start the local dashboard if you want to inspect jobs and queue state in the browser.
+- `handoff/workflow-brief.md` — the decision-ready reading start.
+- `report.md` — findings, uncertainty, and the next validation.
+- `evidence/sources.json` — the source trail with role and collection date.
+- `package-manifest.json` — an explicit, versioned file contract.
 
-## Current System Shape
+Try the other deterministic demos with `web-task-agent demo list`. They are fixtures, clearly marked as such; they do not pretend to be fresh live research.
 
-The project currently has these main layers:
+## Run live research
 
-- Browser automation with Lightpanda over CDP.
-- Task orchestration for `github`, `playstore`, and long-form `agent` research.
-- Durable storage in `.data/web-task-agent.sqlite`.
-- Artifact files in `reports/` and `.cache/`, with their metadata registered in SQLite.
-- Resumable local state in `.cache/`.
-- Queue and worker execution for long-running jobs.
-- Local management API and dashboard.
-- Workflow output packaging under `reports/workflows/<template>/<topic-slug>/`.
+Set a narrow, compatible API key in `.env`, then choose a workflow and a topic:
 
-The canonical flow is:
+```bash
+web-task-agent workflow list --category "Voice of Customer"
 
-1. CLI command enters through `src/cli.ts`.
-2. The job is created or queued in the local store.
-3. The agent runner executes plan, search, fetch, extract, and synthesize stages.
-4. Evidence and artifacts are persisted in SQLite and on disk.
-5. The workflow package is written under `reports/workflows/<template>/<topic-slug>/`.
-6. The dashboard and API expose the job state back to the operator.
-
-## Project Charter
-
-See [docs/content/project-charter.md](docs/content/project-charter.md) for the north star, vocabulary, maintenance rules, runtime layout, and quality gate.
-Use the charter as the canonical source for terminology when a command, doc, or code path could use more than one name.
-
-## Workflow Packages
-
-Workflow runs now default to stable topic-based folders instead of generic one-off report directories. A typical workflow package looks like this:
-
-```text
-report.md
-handoff/
-  README.md
-  package-manifest.json
-  research-summary.md
-  workflow-brief.md
-drafts/
-  post-draft.md
-  comments-draft.md
-plan/
-  plan.json
-raw/
-  research/
-runtime/
-  llm-prompt-traces.json
-  pipeline-manifest.json
+web-task-agent workflow run cybersecurity-voice-of-customer \
+  --topic "security review workflow for SaaS teams" \
+  --audience "product and security leads" \
+  --preset focused
 ```
 
-Repo examples:
+For the complete workflow catalog:
 
-- [examples/workflows/android-opportunity.md](examples/workflows/android-opportunity.md)
-- [examples/workflows/article-research.md](examples/workflows/article-research.md)
-
-## Monitoring Surface
-
-The dashboard is served from the local management server root:
-
-- `GET /`
-- `GET /api/health`
-- `GET /api/jobs`
-- `GET /api/jobs/:id`
-- `GET /api/jobs/:id/events`
-- `GET /api/jobs/:id/events/stream`
-- `POST /api/jobs/:id/control`
-- `GET /api/queue`
-- `POST /api/queue/:id/control`
-- `GET /api/recoverable`
-
-## Project Layout
-
-- [src/cli.ts](src/cli.ts) contains the CLI entrypoints.
-- [src/tasks/agent-runner.ts](src/tasks/agent-runner.ts) orchestrates staged research jobs.
-- [src/lib/job-store.ts](src/lib/job-store.ts) contains the SQLite job, evidence, and graph store.
-- [src/lib/job-queue.ts](src/lib/job-queue.ts) contains queue persistence.
-- [src/tasks/queue-worker.ts](src/tasks/queue-worker.ts) runs queued jobs.
-- [src/server/management-server.ts](src/server/management-server.ts) serves the local API and dashboard.
-- [src/workflows/index.ts](src/workflows/index.ts) defines the built-in workflow templates.
-
-## Environment
-
-```env
-CDP_PORT=9222
-LIGHTPANDA_DISABLE_TELEMETRY=true
-ANTHROPIC_API_KEY=your_key_here
-ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
-ANTHROPIC_MODEL=claude-sonnet-4-20250514
-ANTHROPIC_TIMEOUT_MS=90000
-WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
+```bash
+web-task-agent workflow list --search ecommerce
+web-task-agent workflow list --category "Pricing and Packaging"
 ```
 
-## Current Limitations
+There are three focused core workflows plus 240 executable catalog workflows. Browse them in [examples/workflows/CATALOG.md](examples/workflows/CATALOG.md).
 
-- Queue and job controls are now implemented, but only agent jobs support graceful pause, cancel, resume, and rerun.
-- Research quality is stronger now, but extraction, ranking, and trend scoring are still heuristic rather than model-verified or domain-trained.
-- Workflow outputs are cleaner now, but there are still only two built-in workflow templates and the fixture coverage is still narrow.
-- Prompt/version traceability is local-first, but today it is centered on agent runs rather than every LLM-using task.
-- Automated tests now cover queue recovery, control helpers, management API endpoints, research quality, and workflow packaging, but broader failure-mode and fixture coverage is still thin compared with the size of the system.
+## Why this instead of a crawler or generic browser agent?
 
-## Roadmap
+Browser automation and extraction are necessary infrastructure. Web Task Agent adds the operator-facing research contract:
 
-See [ROADMAP.md](ROADMAP.md) for the simplified macro roadmap and the next priorities.
+| Need | Web Task Agent behavior |
+| --- | --- |
+| A job survives a crash | Durable SQLite state, leases, heartbeats, queue recovery, and stage resume |
+| A recommendation is inspectable | Sources, snapshots, evidence clusters, citations, quality signals, and contradictions remain attached |
+| A report is useful outside the terminal | Stable workflow package with brief, report, raw research, plan, drafts, manifest, and prompt trace |
+| Work stays understandable on one machine | Local CLI, local dashboard, local storage, explicit output paths, and no required hosted control plane |
+| A workflow is reusable | Presets, catalog metadata, topic-scoped output paths, examples, and deterministic package fixtures |
+
+Use a crawler or a browser agent when you only need page control or extraction. Use Web Task Agent when the result needs to remain reviewable, resumable, and decision-ready.
+
+## Catalog families
+
+Each catalog entry carries a distinct decision focus, source strategy, query set, expected deliverables, output package and example. They are grouped by the decision to make:
+
+- Voice of customer and feature-gap discovery
+- Competitor mapping and market entry
+- Pricing, packaging, segments, and buyer journey
+- Launch positioning and content demand
+- Integrations and partnerships
+- Product validation, retention, and churn
+
+The same decision families are available across AI developer tools, API platforms, DevOps, security, data, B2B SaaS, e-commerce, fintech, HR, education, wellness, creators, marketplaces, real estate, local business, sustainability, productivity, travel, and mobile apps.
+
+## Operator controls
+
+```bash
+web-task-agent workflow enqueue market-opportunity --topic "offline PDF tools"
+web-task-agent worker run --once
+web-task-agent queue list
+web-task-agent job inspect <job-id>
+web-task-agent job report <job-id>
+web-task-agent job logs <job-id> --limit 100
+web-task-agent job budget <job-id>
+web-task-agent storage gate
+web-task-agent server run --port 4317
+```
+
+The dashboard is local at `http://127.0.0.1:4317`. Runtime data is kept outside the code tree:
+
+- `.cache/` — resumable work state.
+- `.data/web-task-agent.sqlite` — durable jobs, queue data, source/evidence metadata, and artifacts.
+- `reports/` — human-facing packages.
+
+## Safety and privacy
+
+- Browser pages, search snippets, files, and LLM output are untrusted input.
+- Do not use the project to bypass access controls, solve CAPTCHAs, or automate high-risk external actions.
+- A local workflow can still send selected content to the LLM endpoint configured by the operator. Use the narrowest credentials possible.
+- Never commit API keys, cookies, private reports, runtime databases, or prompt traces.
+
+Read [SECURITY.md](SECURITY.md) before reporting a vulnerability and [SUPPORT.md](SUPPORT.md) before opening an issue.
+
+## Develop and verify
+
+```bash
+npm ci
+npm test
+npm run generate:workflows
+npm run build
+```
+
+`npm test` runs deterministic fixtures for the standard CI path: it does not require an API key or live Play Store/AppBrain pages. Live research remains an operator-invoked command, never a hidden test dependency.
+
+## Contribute
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md), then read the [workflow catalog](examples/workflows/CATALOG.md). A useful workflow contribution has a repeated decision, a distinct source strategy, a stable evidence-backed output, a safety boundary, and a test/fixture — not just a renamed prompt.
+
+## Documentation
+
+- [Platform](docs/content/platform.md)
+- [Getting started](docs/content/getting-started.md)
+- [CLI reference](docs/content/cli-reference.md)
+- [Workflow catalog](examples/workflows/CATALOG.md)
+- [Example research receipts](examples/receipts/)
+- [Roadmap](ROADMAP.md)
+- [Security policy](SECURITY.md)

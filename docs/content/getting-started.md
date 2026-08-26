@@ -1,16 +1,18 @@
 # Getting Started
 
-## 1. Install The App
+## 1. See A Real Package Before Configuring Anything
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OthmaneBlial/web-task-agent/main/install.sh | bash
+npm ci
+npm run start -- demo list
+npm run start -- demo export browser-agent-landscape
 ```
 
-The installer downloads the source, prepares a local launcher named `web-task-agent`, and keeps jobs, reports, and other state outside the app code so upgrades do not wipe your work.
+The bundled demos use checked-in fixtures. They do not call an LLM, open a browser, or request a source. Open `reports/demos/browser-agent-landscape/handoff/workflow-brief.md` first, then inspect its report, evidence file, and manifest.
 
-If you already have a system Node.js 22 install, the installer uses it. Otherwise it downloads a portable Node 22 runtime for you.
+For a source installation, use Node.js 22 or later. The `install.sh` helper can also create a local launcher; add `--skip-llm-setup` if you only want demos and local commands.
 
-## 2. Configure Environment
+## 2. Configure Environment For Live Research
 
 Create or update your `.env` file with the variables used by the project:
 
@@ -24,11 +26,18 @@ ANTHROPIC_TIMEOUT_MS=90000
 WEB_TASK_AGENT_DB_PATH=.data/web-task-agent.sqlite
 ```
 
-If you forget the API key, the installer prompts for it during setup and the job-launching commands still fail immediately with a clear error that tells you which environment variable to set.
+The demo, catalog, pack plan, preview, and scaffold commands do not need a key. Job-launching commands fail immediately with a clear message when no compatible API key is configured.
 
-## 3. Start Lightpanda
+## 3. Preview A Workflow Before Spending Time Or Tokens
 
-The agent relies on a CDP server, and the repo is currently designed around Lightpanda.
+```bash
+npm run start -- workflow list --category "Voice of Customer"
+npm run start -- workflow preview cybersecurity-voice-of-customer \
+  --topic "security review workflow for SaaS teams" \
+  --preset focused
+```
+
+The preview shows the planned queries, source boundaries, output folder, and preset budget without starting browser or LLM work.
 
 ## 4. Run Your First Research Job
 
@@ -43,21 +52,23 @@ web-task-agent agent run \
 
 ```bash
 web-task-agent workflow run article-research \
-  --topic "browser automation with Lightpanda and CDP"
+  --topic "browser automation with Lightpanda and CDP" \
+  --preset focused
 ```
 
 If you are learning the system, run the workflow template first. It exercises the same durable pipeline but gives you a more structured output package.
 
-## 4b. Pick The Easiest First Run
+## 4b. Choose A Pack When The Goal Is A Decision
 
-If you want the least surprising first experience, use:
+If you need a sequence rather than one workflow, generate a review-gated plan:
 
 ```bash
-web-task-agent workflow run article-research \
-  --topic "browser automation with Lightpanda and CDP"
+web-task-agent pack list
+web-task-agent pack plan validate-an-idea \
+  --topic "offline document signing for independent contractors"
 ```
 
-Use `agent run` when you already know the instruction you want and do not need the template structure.
+Packs only write a plan. They never launch a sequence of paid or browser actions without an explicit human review between steps.
 
 ## 5. Inspect Outputs
 
@@ -79,7 +90,7 @@ The main distinction to remember is:
 
 1. install dependencies
 2. start Lightpanda
-3. run `workflow run article-research`
+3. run `workflow run article-research` or export a demo
 4. open the resulting report package
 5. open the dashboard and compare the visible job state with the files on disk
 
@@ -95,6 +106,8 @@ Then open the local management UI at `http://127.0.0.1:4317`.
 
 ```bash
 web-task-agent workflow list
+web-task-agent workflow list --search ecommerce
+web-task-agent workflow scaffold <new-workflow-id>
 web-task-agent queue list
 web-task-agent job inspect <job-id>
 web-task-agent job report <job-id>

@@ -1,5 +1,12 @@
 const DOC_PAGES = [
   {
+    slug: "platform",
+    section: "Guides",
+    title: "Platform",
+    summary: "The finished local research system in one concise page.",
+    path: "content/platform.md"
+  },
+  {
     slug: "overview",
     section: "Guides",
     title: "Overview",
@@ -26,6 +33,27 @@ const DOC_PAGES = [
     title: "Workflow Templates",
     summary: "How the built-in workflow templates and presets are shaped.",
     path: "content/workflows.md"
+  },
+  {
+    slug: "cli-reference",
+    section: "Reference",
+    title: "CLI Reference",
+    summary: "Top-level command families, common commands, and output conventions.",
+    path: "content/cli-reference.md"
+  },
+  {
+    slug: "test-suite-map",
+    section: "Reference",
+    title: "Test Suite Map",
+    summary: "Product surfaces and the tests that cover them.",
+    path: "content/test-suite-map.md"
+  },
+  {
+    slug: "project-charter",
+    section: "Reference",
+    title: "Project Charter",
+    summary: "North star, vocabulary, architecture map, maintenance rules, and quality gate.",
+    path: "content/project-charter.md"
   },
   {
     slug: "queue-worker-controls",
@@ -56,11 +84,11 @@ const DOC_PAGES = [
     path: "content/project-layout.md"
   },
   {
-    slug: "testing-and-roadmap",
+    slug: "testing-and-hardening",
     section: "Reference",
-    title: "Testing And Roadmap",
-    summary: "Current automated coverage and what remains in the macro roadmap.",
-    path: "content/testing-and-roadmap.md"
+    title: "Testing And Hardening",
+    summary: "Current automated coverage and what remains to harden the platform.",
+    path: "content/testing-and-hardening.md"
   },
   {
     slug: "repo-readme",

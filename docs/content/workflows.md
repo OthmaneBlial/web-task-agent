@@ -1,6 +1,18 @@
 # Workflow Templates
 
-The repository currently ships two built-in workflow templates.
+The repository ships three focused core workflows plus 240 catalog workflows. Every workflow uses the same durable research and package contract; catalog entries differ in their decision focus, query strategy, preferred sources, deliverables, and stable output path.
+
+## Find A Workflow Before Running It
+
+```bash
+web-task-agent workflow list --category "Voice of Customer"
+web-task-agent workflow list --search ecommerce
+web-task-agent workflow preview cybersecurity-voice-of-customer \
+  --topic "security review workflow for SaaS teams" \
+  --preset focused
+```
+
+`preview` is a dry run: it displays the expected work and does not invoke an LLM or browser. The generated [workflow catalog](../../examples/workflows/CATALOG.md) contains one page per catalog workflow.
 
 ## 1. Android Opportunity Research
 
@@ -46,9 +58,30 @@ npm run start -- workflow run article-research \
   --topic "browser automation with Lightpanda and CDP"
 ```
 
+## 3. Market Opportunity Research
+
+```bash
+npm run start -- workflow run market-opportunity \
+  --topic "offline PDF tools for regulated teams" \
+  --preset focused
+```
+
+Use this workflow when a product or market decision needs competitor context, repeated pains, positioning options, and a concrete validation plan.
+
+## Decision Packs
+
+When one workflow is not enough, create a review-gated plan instead of launching a hidden chain:
+
+```bash
+web-task-agent pack list
+web-task-agent pack plan launch-with-proof --topic "a local research tool for product teams"
+```
+
+The five packs are `validate-an-idea`, `launch-with-proof`, `understand-churn`, `write-a-defensible-article`, and `choose-an-integration`. A pack only writes the ordered plan; the operator reviews every step before starting it.
+
 ## Shared Workflow Behavior
 
-Both templates:
+All workflows:
 
 - generate a topic-shaped instruction automatically
 - write outputs to stable topic-based folders
@@ -96,5 +129,6 @@ runtime/
 
 - `examples/workflows/android-opportunity.md`
 - `examples/workflows/article-research.md`
+- `examples/workflows/CATALOG.md`
 
 Those files are also copied into this site under the repo source pages.
