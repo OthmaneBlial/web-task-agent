@@ -9,6 +9,10 @@ Web Task Agent is a local-first research runner for work that needs more than a 
 
 It is not a hosted scraper, an access-control bypass tool, or a generic browser-agent framework. Its job is to preserve the trail from a recommendation back to the evidence that supports — or challenges — it.
 
+![Web Task Agent local product proof](docs/assets/product-proof.jpg)
+
+The capture is generated from the versioned local documentation site; it shows the deterministic demo path and product surface before a visitor configures a browser or LLM.
+
 ## See a package before configuring anything
 
 The bundled demos have no API key, browser session, or network request. They show the exact report, evidence, and handoff shape a live workflow produces.
