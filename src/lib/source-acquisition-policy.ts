@@ -11,11 +11,15 @@ export interface SourceAcquisitionDecision {
   reason: string;
   signals: string[];
   waitedMs: number;
+  domainRequestCount?: number | null;
+  domainRequestLimit?: number | null;
 }
 
 export interface SourceAcquisitionPolicyOptions {
   userAgent?: string;
   minDomainDelayMs?: number;
+  maxRequestsPerDomain?: number | null;
+  reviewDomains?: readonly string[];
   fetchRobots?: (url: string, init: RequestInit) => Promise<RobotsFetchResponse>;
   now?: () => number;
   sleep?: (milliseconds: number) => Promise<void>;
@@ -34,6 +38,27 @@ interface RobotsGroup {
 function configuredDelay(): number {
   const parsed = Number(process.env.WEB_TASK_AGENT_DOMAIN_MIN_DELAY_MS ?? "1200");
   return Number.isFinite(parsed) ? Math.max(0, Math.min(60_000, Math.round(parsed))) : 1200;
+}
+
+function configuredDomainRequestLimit(): number | null {
+  const raw = process.env.WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS;
+  if (raw === undefined || raw.trim() === "") return 12;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return 12;
+  const rounded = Math.round(parsed);
+  return rounded <= 0 ? null : Math.min(100, rounded);
+}
+
+function normalizeDomain(value: string): string {
+  return value.trim().toLowerCase().replace(/^\.+/, "").replace(/^www\./, "");
+}
+
+function configuredDomains(value: string | undefined): string[] {
+  return (value ?? ",").split(",").map(normalizeDomain).filter(Boolean);
+}
+
+function isDomainMatch(hostname: string, domain: string): boolean {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
 }
 
 function defaultSleep(milliseconds: number): Promise<void> {
@@ -107,15 +132,27 @@ export function evaluateRobotsText(input: {
 export class SourceAcquisitionPolicy {
   readonly userAgent: string;
   readonly minDomainDelayMs: number;
+  readonly maxRequestsPerDomain: number | null;
+  readonly reviewDomains: readonly string[];
   private readonly fetchRobots: (url: string, init: RequestInit) => Promise<RobotsFetchResponse>;
   private readonly now: () => number;
   private readonly sleep: (milliseconds: number) => Promise<void>;
   private readonly robotsByOrigin = new Map<string, string | null>();
   private readonly nextRequestAt = new Map<string, number>();
+  private readonly requestsByDomain = new Map<string, number>();
 
   constructor(options: SourceAcquisitionPolicyOptions = {}) {
     this.userAgent = options.userAgent?.trim() || process.env.WEB_TASK_AGENT_USER_AGENT?.trim() || "web-task-agent/0.2";
     this.minDomainDelayMs = options.minDomainDelayMs ?? configuredDelay();
+    this.maxRequestsPerDomain = options.maxRequestsPerDomain === undefined
+      ? configuredDomainRequestLimit()
+      : options.maxRequestsPerDomain === null || options.maxRequestsPerDomain <= 0
+        ? null
+        : Math.min(100, Math.round(options.maxRequestsPerDomain));
+    this.reviewDomains = [
+      ...(options.reviewDomains ?? []),
+      ...configuredDomains(process.env.WEB_TASK_AGENT_REVIEW_DOMAINS)
+    ].map(normalizeDomain).filter(Boolean);
     this.fetchRobots = options.fetchRobots ?? defaultFetchRobots;
     this.now = options.now ?? Date.now;
     this.sleep = options.sleep ?? defaultSleep;
@@ -156,13 +193,35 @@ export class SourceAcquisitionPolicy {
     return waitedMs;
   }
 
+  private reserveDomainRequest(hostname: string): { allowed: boolean; count: number; limit: number | null } {
+    const current = this.requestsByDomain.get(hostname) ?? 0;
+    if (this.maxRequestsPerDomain !== null && current >= this.maxRequestsPerDomain) {
+      return { allowed: false, count: current, limit: this.maxRequestsPerDomain };
+    }
+    const count = current + 1;
+    this.requestsByDomain.set(hostname, count);
+    return { allowed: true, count, limit: this.maxRequestsPerDomain };
+  }
+
   async prepare(rawUrl: string): Promise<SourceAcquisitionDecision> {
     const sourceDecision = evaluateSourceUrlPolicy(rawUrl);
     if (sourceDecision.action === "deny") {
-      return { ...sourceDecision, waitedMs: 0 };
+      return { ...sourceDecision, waitedMs: 0, domainRequestCount: null, domainRequestLimit: this.maxRequestsPerDomain };
     }
 
     const parsed = new URL(rawUrl);
+    const hostname = normalizeDomain(parsed.hostname);
+    if (this.reviewDomains.some((domain) => isDomainMatch(hostname, domain))) {
+      return {
+        action: "deny",
+        reason: "acquisition policy requires human review for this configured sensitive domain before browser navigation",
+        signals: ["human_review_required", "review_domain"],
+        waitedMs: 0,
+        domainRequestCount: this.requestsByDomain.get(hostname) ?? 0,
+        domainRequestLimit: this.maxRequestsPerDomain
+      };
+    }
+
     const robots = await this.getRobots(parsed.origin);
     if (robots.text !== null) {
       const robotsDecision = evaluateRobotsText({
@@ -175,19 +234,38 @@ export class SourceAcquisitionPolicy {
           action: "deny",
           reason: `acquisition policy denied source: ${robotsDecision.reason}`,
           signals: ["robots_disallow"],
-          waitedMs: 0
+          waitedMs: 0,
+          domainRequestCount: this.requestsByDomain.get(hostname) ?? 0,
+          domainRequestLimit: this.maxRequestsPerDomain
         };
       }
     }
 
-    const waitedMs = await this.waitForDomainSlot(parsed.hostname.toLowerCase());
+    const reservation = this.reserveDomainRequest(hostname);
+    if (!reservation.allowed) {
+      return {
+        action: "deny",
+        reason: `acquisition policy denied source: domain request budget of ${reservation.limit} reached; review the evidence already collected or raise WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS deliberately`,
+        signals: ["domain_request_budget_exhausted", "human_review_required"],
+        waitedMs: 0,
+        domainRequestCount: reservation.count,
+        domainRequestLimit: reservation.limit
+      };
+    }
+
+    const waitedMs = await this.waitForDomainSlot(hostname);
+    const budgetSignal = reservation.limit !== null && reservation.limit - reservation.count <= 2
+      ? ["domain_request_budget_low"]
+      : [];
     return {
       action: "allow",
       reason: robots.unavailable
-        ? "source policy allowed public URL; robots.txt unavailable, proceeding with rate limit"
-        : "source policy and robots.txt allow this URL",
-      signals: ["public_http_url", robots.unavailable ? "robots_unavailable" : "robots_allowed", ...(waitedMs > 0 ? ["domain_rate_limited"] : [])],
-      waitedMs
+        ? `source policy allowed public URL; robots.txt unavailable, proceeding with rate limit and domain request ${reservation.count}${reservation.limit === null ? "" : `/${reservation.limit}`}`
+        : `source policy and robots.txt allow this URL; domain request ${reservation.count}${reservation.limit === null ? "" : `/${reservation.limit}`}`,
+      signals: ["public_http_url", robots.unavailable ? "robots_unavailable" : "robots_allowed", ...(waitedMs > 0 ? ["domain_rate_limited"] : []), ...budgetSignal],
+      waitedMs,
+      domainRequestCount: reservation.count,
+      domainRequestLimit: reservation.limit
     };
   }
 }

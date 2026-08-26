@@ -167,6 +167,8 @@ The runtime rejects malformed, credential-bearing, local, private-network, and c
 ```env
 WEB_TASK_AGENT_ALLOWED_DOMAINS=docs.example.com,github.com
 WEB_TASK_AGENT_BLOCKED_DOMAINS=example-bad-domain.test
+WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS=12
+WEB_TASK_AGENT_REVIEW_DOMAINS=sensitive.example.com
 ```
 
-Allow lists are intentionally restrictive: when configured, any domain outside the list is refused. Source content is also treated as untrusted; pages whose text looks like prompt-injection instructions are flagged rather than treated as an operator command.
+Allow lists are intentionally restrictive: when configured, any domain outside the list is refused. Browser source acquisition is capped at 12 requests per domain by default; set `WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS=0` only to deliberately disable the cap. Domains placed in `WEB_TASK_AGENT_REVIEW_DOMAINS` are quarantined before navigation until an operator reviews and removes them from that list. Source content is also treated as untrusted; pages whose text looks like prompt-injection instructions are flagged rather than treated as an operator command.

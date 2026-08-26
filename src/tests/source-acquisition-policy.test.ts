@@ -68,3 +68,31 @@ test("source acquisition denies known robots exclusions and records unavailable 
   assert.equal((await denyPolicy.prepare("https://docs.example.com/private/audit")).action, "deny");
   assert.ok((await unavailablePolicy.prepare("https://docs.example.com/guide")).signals.includes("robots_unavailable"));
 });
+
+test("source acquisition enforces a per-domain budget and leaves sensitive domains for human review", async () => {
+  let robotsCalls = 0;
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    maxRequestsPerDomain: 2,
+    reviewDomains: ["sensitive.example.com"],
+    fetchRobots: async () => {
+      robotsCalls += 1;
+      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+    }
+  });
+
+  const first = await policy.prepare("https://docs.example.com/one");
+  const second = await policy.prepare("https://docs.example.com/two");
+  const exhausted = await policy.prepare("https://docs.example.com/three");
+  const sensitive = await policy.prepare("https://sensitive.example.com/brief");
+
+  assert.equal(first.action, "allow");
+  assert.equal(second.domainRequestCount, 2);
+  assert.ok(second.signals.includes("domain_request_budget_low"));
+  assert.equal(exhausted.action, "deny");
+  assert.match(exhausted.reason, /domain request budget of 2 reached/i);
+  assert.ok(exhausted.signals.includes("human_review_required"));
+  assert.equal(sensitive.action, "deny");
+  assert.ok(sensitive.signals.includes("review_domain"));
+  assert.equal(robotsCalls, 1);
+});

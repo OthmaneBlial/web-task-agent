@@ -18,11 +18,11 @@ You are responsible for choosing an endpoint and credentials appropriate for the
 ## Source acquisition safeguards
 
 - URLs that are malformed, credential-bearing, local, private-network, or explicitly blocked are refused before browser navigation.
-- Public source paths are checked against `robots.txt` when it is available, with a configurable per-domain delay; an unsafe redirect target is quarantined before its content is extracted or persisted.
+- Public source paths are checked against `robots.txt` when it is available, with a configurable per-domain delay and a default cap of 12 browser requests per domain; an unsafe redirect target is quarantined before its content is extracted or persisted.
 - Page text is treated as untrusted; suspected prompt-injection instructions are quarantined from extraction.
-- Configure `WEB_TASK_AGENT_ALLOWED_DOMAINS`, `WEB_TASK_AGENT_BLOCKED_DOMAINS`, `WEB_TASK_AGENT_DOMAIN_MIN_DELAY_MS`, and `WEB_TASK_AGENT_USER_AGENT` for tighter operating boundaries.
+- Configure `WEB_TASK_AGENT_ALLOWED_DOMAINS`, `WEB_TASK_AGENT_BLOCKED_DOMAINS`, `WEB_TASK_AGENT_DOMAIN_MIN_DELAY_MS`, `WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS`, `WEB_TASK_AGENT_REVIEW_DOMAINS`, and `WEB_TASK_AGENT_USER_AGENT` for tighter operating boundaries. Domains on the review list are not opened: the operator must review their relevance and deliberately remove them from that list before a new run.
 
-An unavailable `robots.txt` is recorded as a signal and rate limiting still applies; it is not a claim that a site granted permission. Respect applicable law, terms, and access controls.
+Set `WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS=0` only when you deliberately want to disable the default cap. An unavailable `robots.txt` is recorded as a signal and rate limiting still applies; it is not a claim that a site granted permission. Respect applicable law, terms, and access controls.
 
 ## Redaction, retention, and deletion
 
