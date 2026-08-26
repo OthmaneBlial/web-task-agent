@@ -10,11 +10,14 @@ npm run release:check
 git status --short
 ```
 
-Expected result: tests, generated-content checks, Markdown-link checks, production dependency audit, and `npm pack --dry-run` all pass. `git status --short` must be empty afterwards.
+Expected result: tests, generated-content checks, Markdown-link checks, publication-secret checks, production dependency audit, and `npm pack --dry-run` all pass. `git status --short` must be empty afterwards.
+
+`release:check` includes a publication-secret audit. It scans the files Git could publish, reports only a file, line, and credential type (never the value), and verifies that `.env`, `.data/`, and `reports/` remain ignored local state.
 
 ## 2. Review what would become public
 
 - Read `README.md`, `PRIVACY.md`, `SECURITY.md`, `SUPPORT.md`, `LICENSE`, and `CHANGELOG.md` as a first-time user.
+- Run `npm run audit:secrets` again immediately before a visibility change or release. A clean audit is not a substitute for rotating a credential that was ever committed in prior Git history.
 - Inspect the three deterministic receipts in `examples/receipts/`; they are fixtures, not current research claims.
 - Confirm the npm tarball file list from `npm pack --dry-run` only includes the intended CLI, runtime modules, installer, and public policies.
 - Search tracked source for accidental credentials or private artifacts before releasing. Do not add real keys to test fixtures or documentation.

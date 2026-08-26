@@ -33,3 +33,5 @@ web-task-agent job export <job-id> --format markdown --redact --dry-run
 ```
 
 The redactor recognizes common secret formats but cannot decide whether the surrounding content is safe to share. Review every export. Bound local prompt traces with `storage cleanup --prompt-traces <path> --max-traces <count>`. Use `storage backup --output <path>` before a risky local change; `storage restore --input <path> --force` creates a safety copy before replacing the active database. Delete local databases, caches, and reports through your normal retention process.
+
+Before making the repository public or cutting a release, run `npm run audit:secrets`. It scans tracked and non-ignored candidate files, confirms that `.env`, `.data/`, and `reports/` remain ignored, and reports only locations and credential categories. It cannot prove that a secret never existed in Git history; rotate anything that may previously have been committed.

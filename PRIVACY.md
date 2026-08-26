@@ -30,6 +30,8 @@ Structured logs and prompt traces redact common API, GitHub, AWS, and bearer-tok
 
 Prompt-trace manifests can be bounded with `web-task-agent storage cleanup --prompt-traces <path> --max-traces <count>`. Create a consistent local SQLite backup with `storage backup --output <path>` before a risky local change; `storage restore --input <path> --force` keeps a safety copy before replacement. Delete local reports, cache files, and the SQLite database through your normal local retention process when they are no longer needed. The project does not retain a remote copy on your behalf.
 
+Before making the repository public or cutting a release, run `npm run audit:secrets`. It scans tracked and non-ignored candidate files, confirms that `.env`, `.data/`, and `reports/` remain ignored, and reports only locations and credential categories. It cannot prove that a secret never existed in Git history; rotate anything that may previously have been committed.
+
 ## Contact
 
 For a vulnerability, follow [SECURITY.md](SECURITY.md). For product support, see [SUPPORT.md](SUPPORT.md).
