@@ -91,6 +91,13 @@ Do not optimize for star count, benchmark theater, or a large prompt catalog. A 
 - [Add one adversarial receipt regression fixture](https://github.com/OthmaneBlial/web-task-agent/issues/3)
 - [Propose one bounded decision with a receipt fixture](https://github.com/OthmaneBlial/web-task-agent/issues/4)
 
+Discussion starters:
+
+- [First-run help](https://github.com/OthmaneBlial/web-task-agent/discussions/5)
+- [Receipt review](https://github.com/OthmaneBlial/web-task-agent/discussions/6)
+- [Workflow ideas](https://github.com/OthmaneBlial/web-task-agent/discussions/7)
+- [Show your decision package](https://github.com/OthmaneBlial/web-task-agent/discussions/8)
+
 ## Project Shape
 
 - `reports/` is for human-facing output.
