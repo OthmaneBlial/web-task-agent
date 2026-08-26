@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { detectPromptInjectionSignals, evaluateSourceUrlPolicy } from "../lib/source-policy";
+import {
+  detectPromptInjectionSignals,
+  evaluateRedirectTargetPolicy,
+  evaluateSourceUrlPolicy
+} from "../lib/source-policy";
 
 test("source policy allows public HTTPS and rejects unsafe URL targets", () => {
   assert.equal(evaluateSourceUrlPolicy("https://docs.example.com/guide").action, "allow");
@@ -32,6 +36,22 @@ test("source policy supports explicit allow and block domain controls", () => {
   assert.equal(
     evaluateSourceUrlPolicy("https://other.example.net", { allowedDomains: ["example.com"] }).action,
     "deny"
+  );
+});
+
+test("redirect policy quarantines unsafe final targets and flags cross-origin redirects", () => {
+  assert.equal(
+    evaluateRedirectTargetPolicy({
+      requestedUrl: "https://docs.example.com/guide",
+      finalUrl: "http://127.0.0.1:4317/internal"
+    }).action,
+    "deny"
+  );
+  assert.ok(
+    evaluateRedirectTargetPolicy({
+      requestedUrl: "https://docs.example.com/guide",
+      finalUrl: "https://other.example.net/guide"
+    }).signals.includes("cross_origin_redirect")
   );
 });
 

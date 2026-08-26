@@ -58,6 +58,37 @@ export function evaluateSourceUrlPolicy(rawUrl: string, options: SourcePolicyOpt
   return { action: "allow", reason: "source policy allowed public HTTP(S) URL", signals: ["public_http_url"] };
 }
 
+export function evaluateRedirectTargetPolicy(input: {
+  requestedUrl: string;
+  finalUrl: string;
+  options?: SourcePolicyOptions;
+}): SourcePolicyDecision {
+  const target = evaluateSourceUrlPolicy(input.finalUrl, input.options);
+  if (target.action === "deny") {
+    return {
+      action: "deny",
+      reason: `source policy denied redirect target: ${target.reason}`,
+      signals: ["unsafe_redirect_target", ...target.signals]
+    };
+  }
+
+  try {
+    const requested = new URL(input.requestedUrl);
+    const final = new URL(input.finalUrl);
+    if (requested.origin !== final.origin) {
+      return {
+        action: "allow",
+        reason: "source policy allowed cross-origin redirect; operator review is recommended",
+        signals: ["cross_origin_redirect", ...target.signals]
+      };
+    }
+  } catch {
+    return target;
+  }
+
+  return target;
+}
+
 const INJECTION_PATTERNS: Array<{ signal: string; pattern: RegExp }> = [
   { signal: "instruction_override", pattern: /\b(ignore|disregard|forget)\s+(all\s+)?(previous|prior|system)\s+(instructions?|prompts?)\b/i },
   { signal: "role_override", pattern: /\b(you are now|act as|switch to)\s+(the\s+)?(system|developer|assistant)\b/i },

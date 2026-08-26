@@ -18,7 +18,7 @@ You are responsible for choosing an endpoint and credentials appropriate for the
 ## Source acquisition safeguards
 
 - URLs that are malformed, credential-bearing, local, private-network, or explicitly blocked are refused before browser navigation.
-- Public source paths are checked against `robots.txt` when it is available, with a configurable per-domain delay.
+- Public source paths are checked against `robots.txt` when it is available, with a configurable per-domain delay; an unsafe redirect target is quarantined before its content is extracted or persisted.
 - Page text is treated as untrusted; suspected prompt-injection instructions are quarantined from extraction.
 - Configure `WEB_TASK_AGENT_ALLOWED_DOMAINS`, `WEB_TASK_AGENT_BLOCKED_DOMAINS`, `WEB_TASK_AGENT_DOMAIN_MIN_DELAY_MS`, and `WEB_TASK_AGENT_USER_AGENT` for tighter operating boundaries.
 

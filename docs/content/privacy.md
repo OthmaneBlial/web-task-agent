@@ -13,7 +13,7 @@ Read the full [privacy and local-data contract](../../PRIVACY.md) before putting
 
 ## Live Research Boundaries
 
-Before opening a source, the runtime refuses malformed, credential-bearing, local, private-network, and configured blocked URLs. It checks public `robots.txt` rules when available and applies a per-domain delay. An unavailable robots file is visible in the source signals; it does not mean permission was granted.
+Before opening a source, the runtime refuses malformed, credential-bearing, local, private-network, and configured blocked URLs. It checks public `robots.txt` rules when available and applies a per-domain delay. A redirect that resolves to an unsafe target is quarantined before its content is extracted or persisted; cross-origin redirects are explicitly flagged. An unavailable robots file is visible in the source signals; it does not mean permission was granted.
 
 ```env
 WEB_TASK_AGENT_ALLOWED_DOMAINS=docs.example.com,github.com

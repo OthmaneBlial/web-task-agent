@@ -6,7 +6,7 @@ import {
   withLightpandaRecovery
 } from "../../../lib/cdp";
 import { humanScroll } from "../../../lib/humanizer";
-import { detectPromptInjectionSignals } from "../../../lib/source-policy";
+import { detectPromptInjectionSignals, evaluateRedirectTargetPolicy } from "../../../lib/source-policy";
 import { SourceAcquisitionPolicy } from "../../../lib/source-acquisition-policy";
 import type {
   AgentPageDigest,
@@ -227,6 +227,27 @@ export class BrowserPageFetcher implements AgentFetcher {
               this.log(`opening article: ${result.title}`);
               client = await createPageSession(result.url, { userAgent: this.acquisitionPolicy.userAgent });
               const page = await this.scrapePageDigest(client);
+              const redirectPolicy = evaluateRedirectTargetPolicy({
+                requestedUrl: result.url,
+                finalUrl: page.url
+              });
+              if (redirectPolicy.action === "deny") {
+                this.log(`quarantining redirect target: ${result.title} (${redirectPolicy.reason})`);
+                return {
+                  page: undefined,
+                  review: {
+                    reviewStatus: "skipped" as const,
+                    dwellSeconds: 0,
+                    skipReason: redirectPolicy.reason
+                  },
+                  redirectPolicy
+                };
+              }
+              if (redirectPolicy.signals.includes("cross_origin_redirect")) {
+                result.policyAction = "deprioritize";
+                result.policyReason = redirectPolicy.reason;
+                result.qualitySignals = Array.from(new Set([...(result.qualitySignals ?? []), ...redirectPolicy.signals]));
+              }
               page.safetySignals = detectPromptInjectionSignals([
                 page.title,
                 page.description,
@@ -237,7 +258,8 @@ export class BrowserPageFetcher implements AgentFetcher {
               const review = await this.readOpenedPage(client, result, page);
               return {
                 page,
-                review
+                review,
+                redirectPolicy
               };
             } finally {
               if (client) {

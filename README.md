@@ -110,7 +110,7 @@ The dashboard is local at `http://127.0.0.1:4317`. Runtime data is kept outside 
 - A local workflow can still send selected content to the LLM endpoint configured by the operator. Use the narrowest credentials possible.
 - Never commit API keys, cookies, private reports, runtime databases, or prompt traces.
 - Use `job export --dry-run --redact` before sharing. It previews the local package, recognizes common secret formats, and writes nothing or sends nothing unless you explicitly choose an output file.
-- Direct source acquisition checks configured domain boundaries, public `robots.txt` rules when available, and paces repeated domains; it never bypasses access controls.
+- Direct source acquisition checks configured domain boundaries, public `robots.txt` rules when available, paces repeated domains, and quarantines unsafe redirect targets; it never bypasses access controls.
 
 Read [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), and [SUPPORT.md](SUPPORT.md) before running sensitive work or reporting a vulnerability.
 

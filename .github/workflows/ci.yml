@@ -30,3 +30,6 @@ jobs:
 
       - name: Build, unit test, and integration test
         run: npm run test:ci
+
+      - name: Audit production dependencies
+        run: npm run audit:prod

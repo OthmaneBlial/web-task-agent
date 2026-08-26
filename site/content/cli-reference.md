@@ -139,7 +139,7 @@ before running `agent`, `workflow`, `github`, `playstore`, or `worker` commands.
 
 ## Source Boundaries
 
-The runtime rejects malformed, credential-bearing, local, private-network, and configured blocked URLs before browser work begins. Set these optional controls in `.env`:
+The runtime rejects malformed, credential-bearing, local, private-network, and configured blocked URLs before browser work begins. It also quarantines unsafe redirect targets and flags cross-origin redirects for review. Set these optional controls in `.env`:
 
 ```env
 WEB_TASK_AGENT_ALLOWED_DOMAINS=docs.example.com,github.com
