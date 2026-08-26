@@ -2,6 +2,11 @@
 
 This file is intentionally lightweight.
 
+## 0.3.2 — 2026-08-26
+
+- Included the decision-pack runtime in the published npm tarball, fixing a missing `dist/packs` module at CLI startup.
+- Added a tarball-content check for the CLI, demos, packs, server, tasks, and workflows required by the public command.
+
 ## 0.3.1 — 2026-08-26
 
 - Fixed the published `web-task-agent` executable by preserving its Node shebang through TypeScript compilation.
