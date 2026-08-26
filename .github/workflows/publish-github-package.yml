@@ -1,0 +1,38 @@
+name: Publish GitHub Package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish @othmaneblial/web-task-agent
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the selected source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@othmaneblial'
+          cache: npm
+
+      - name: Install and build the release artifact
+        run: |
+          npm ci
+          npm run build
+
+      - name: Publish the GitHub Packages mirror
+        run: |
+          npm pkg set name='@othmaneblial/web-task-agent'
+          npm pkg set publishConfig.registry='https://npm.pkg.github.com'
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -28,6 +28,8 @@ Not a hosted scraper. Not an access-control bypass. Not another generic browser-
 
 **See the full product story:** [live documentation](https://othmaneblial.github.io/web-task-agent/) · [eight inspectable receipts](RESEARCH_RECEIPTS.md) · [latest release](https://github.com/OthmaneBlial/web-task-agent/releases/latest)
 
+The GitHub Packages mirror is available as `@othmaneblial/web-task-agent`. Add `@othmaneblial:registry=https://npm.pkg.github.com` to your `.npmrc`, then run `npm install @othmaneblial/web-task-agent`.
+
 ## Get a real package in two minutes — no key, browser, or network
 
 Start with a deterministic research receipt. It has no API key, browser session, or network request, and shows the exact package shape a live workflow produces.
