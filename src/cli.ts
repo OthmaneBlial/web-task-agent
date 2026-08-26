@@ -34,6 +34,13 @@ import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
 import { maintainPromptTraceRetention } from "./lib/prompt-trace";
 import { logStructured } from "./lib/local-logging";
 import { assessStorageHealth } from "./lib/storage-validation";
+import {
+  buildJobExportData,
+  compareJobExports,
+  renderJobComparison,
+  renderJobExport,
+  type JobExportFormat
+} from "./lib/job-export";
 import { createManagementServer } from "./server/management-server";
 import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
@@ -87,6 +94,41 @@ function parseDurationMinutes(value: string, label: string): number {
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function parseJobExportFormat(value: string, allowed: readonly JobExportFormat[]): JobExportFormat {
+  const normalized = value.trim().toLowerCase() as JobExportFormat;
+  if (!allowed.includes(normalized)) {
+    throw new Error(`format must be one of: ${allowed.join(", ")}`);
+  }
+  return normalized;
+}
+
+function exportExtension(format: JobExportFormat): string {
+  return format === "markdown" ? "md" : format;
+}
+
+function writeLocalExport(input: {
+  outputPath: string;
+  content: string;
+  force: boolean;
+  dryRun: boolean;
+  summary: string[];
+}): void {
+  if (input.dryRun) {
+    console.log("Export preview (no file written, no network request):");
+    for (const line of input.summary) {
+      console.log(`  ${line}`);
+    }
+    console.log(`  Destination: ${input.outputPath}`);
+    return;
+  }
+  if (fs.existsSync(input.outputPath) && !input.force) {
+    throw new Error(`refusing to overwrite ${input.outputPath}; pass --force to replace it.`);
+  }
+  fs.mkdirSync(path.dirname(input.outputPath), { recursive: true });
+  fs.writeFileSync(input.outputPath, input.content, "utf8");
+  console.log(`Local export written: ${input.outputPath}`);
 }
 
 async function main(): Promise<void> {
@@ -896,6 +938,72 @@ Use "web-task-agent <command> --help" for the full option list.
           console.log(line);
         }
       }
+    });
+
+  job
+    .command("export <jobId>")
+    .description("Export a local job as shareable Markdown, JSON, or source CSV; no data leaves this machine")
+    .option("--format <format>", "Export format: markdown, json, or csv", "markdown")
+    .option("--output <path>", "Destination file path")
+    .option("--redact", "Redact recognized secrets before previewing or writing")
+    .option("--dry-run", "Preview exactly what would be exported without writing")
+    .option("--force", "Replace an existing export file")
+    .action((jobId, options) => {
+      const detail = getStoredJobDetail({ jobId: String(jobId) });
+      if (!detail) {
+        throw new Error(`Unknown job: ${jobId}`);
+      }
+      const format = parseJobExportFormat(String(options.format), ["markdown", "json", "csv"]);
+      const data = buildJobExportData(detail);
+      const outputPath = options.output
+        ? path.resolve(String(options.output))
+        : path.resolve("reports", "exports", `${detail.job.jobId}.${exportExtension(format)}`);
+      writeLocalExport({
+        outputPath,
+        content: renderJobExport(data, format, Boolean(options.redact)),
+        force: Boolean(options.force),
+        dryRun: Boolean(options.dryRun),
+        summary: [
+          `Job: ${data.job.id} (${data.job.status})`,
+          `Format: ${format}`,
+          `Sources: ${data.sources.length}`,
+          `Redaction: ${options.redact ? "enabled" : "disabled"}`
+        ]
+      });
+    });
+
+  job
+    .command("compare <leftJobId> <rightJobId>")
+    .description("Compare two local jobs for source and conclusion changes without sending data anywhere")
+    .option("--format <format>", "Comparison format: markdown or json", "markdown")
+    .option("--output <path>", "Destination file path")
+    .option("--redact", "Redact recognized secrets before previewing or writing")
+    .option("--dry-run", "Preview the comparison export without writing")
+    .option("--force", "Replace an existing comparison file")
+    .action((leftJobId, rightJobId, options) => {
+      const left = getStoredJobDetail({ jobId: String(leftJobId) });
+      const right = getStoredJobDetail({ jobId: String(rightJobId) });
+      if (!left) throw new Error(`Unknown job: ${leftJobId}`);
+      if (!right) throw new Error(`Unknown job: ${rightJobId}`);
+      const format = parseJobExportFormat(String(options.format), ["markdown", "json"]) as "markdown" | "json";
+      const comparison = compareJobExports(buildJobExportData(left), buildJobExportData(right));
+      const outputPath = options.output
+        ? path.resolve(String(options.output))
+        : path.resolve("reports", "exports", `${left.job.jobId}-vs-${right.job.jobId}.${exportExtension(format)}`);
+      writeLocalExport({
+        outputPath,
+        content: renderJobComparison(comparison, format, Boolean(options.redact)),
+        force: Boolean(options.force),
+        dryRun: Boolean(options.dryRun),
+        summary: [
+          `Earlier job: ${comparison.leftJobId}`,
+          `Later job: ${comparison.rightJobId}`,
+          `New sources: ${comparison.newSources.length}`,
+          `Sources no longer present: ${comparison.disappearedSources.length}`,
+          `Decision changed: ${comparison.decisionChanged ? "yes" : "no"}`,
+          `Redaction: ${options.redact ? "enabled" : "disabled"}`
+        ]
+      });
     });
 
   job

@@ -89,6 +89,8 @@ web-task-agent job inspect <job-id>
 web-task-agent job report <job-id>
 web-task-agent job logs <job-id> --limit 100
 web-task-agent job budget <job-id>
+web-task-agent job export <job-id> --format markdown --redact --dry-run
+web-task-agent job compare <earlier-job-id> <later-job-id> --redact --dry-run
 web-task-agent storage gate
 web-task-agent server run --port 4317
 ```
@@ -105,6 +107,7 @@ The dashboard is local at `http://127.0.0.1:4317`. Runtime data is kept outside 
 - Do not use the project to bypass access controls, solve CAPTCHAs, or automate high-risk external actions.
 - A local workflow can still send selected content to the LLM endpoint configured by the operator. Use the narrowest credentials possible.
 - Never commit API keys, cookies, private reports, runtime databases, or prompt traces.
+- Use `job export --dry-run --redact` before sharing. It previews the local package, recognizes common secret formats, and writes nothing or sends nothing unless you explicitly choose an output file.
 
 Read [SECURITY.md](SECURITY.md) before reporting a vulnerability and [SUPPORT.md](SUPPORT.md) before opening an issue.
 

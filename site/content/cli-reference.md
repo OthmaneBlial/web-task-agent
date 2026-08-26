@@ -30,6 +30,8 @@ web-task-agent queue stats
 web-task-agent job logs <job-id> --limit 100
 web-task-agent job report <job-id>
 web-task-agent job budget <job-id>
+web-task-agent job export <job-id> --format markdown --redact --dry-run
+web-task-agent job compare <earlier-job-id> <later-job-id> --redact --dry-run
 web-task-agent storage maintain
 web-task-agent storage cleanup --prompt-traces <path>
 web-task-agent storage gate
@@ -108,6 +110,18 @@ Use `storage gate` when you want a quick readiness check for the local platform.
 ## Log Export
 
 Use `job logs <job-id> --output <path>` to write the recent event history to a file for later review or sharing.
+
+## Shareable Job Exports And Run Comparisons
+
+Use `job export` to write a local Markdown decision receipt, structured JSON, or a CSV of cached source metadata. The command never sends content anywhere. It refuses overwrites unless `--force` is deliberate.
+
+```bash
+web-task-agent job export <job-id> --format markdown --redact --dry-run
+web-task-agent job export <job-id> --format csv --output ./sources.csv
+web-task-agent job compare <earlier-job-id> <later-job-id> --redact --dry-run
+```
+
+`--dry-run` previews the destination, source count, format, and redaction setting without writing a file. A comparison identifies new and disappeared cached sources and whether the report or its decision excerpt changed. Redaction recognizes common API, GitHub, AWS, and bearer-token patterns; it is a safety aid, not a license to share data the operator has not reviewed.
 
 ## Failure Messages
 

@@ -95,7 +95,18 @@ npm run start -- job logs <job-id> --limit 250 --output ./job-logs.txt
 
 Use this when you want to share or archive a long log history without losing the exact event ordering.
 
-## Example 8: Find One Workflow In The Catalog
+## Example 8: Preview A Redacted Decision Receipt Before Sharing
+
+```bash
+npm run start -- job export <job-id> \
+  --format markdown \
+  --redact \
+  --dry-run
+```
+
+This does not write a file or send data. Remove `--dry-run` only after reviewing the source count and destination. Use `job compare <earlier-job-id> <later-job-id>` to see source additions, source disappearances, and a changed decision excerpt between two local runs.
+
+## Example 9: Find One Workflow In The Catalog
 
 Command:
 
@@ -106,7 +117,7 @@ npm run start -- workflow list --search ecommerce
 
 Use `workflow preview <id> --topic <text>` next to inspect the intended source strategy, output folder, and preset before launching it.
 
-## Example 9: Prepare A Decision Without Launching A Chain Of Agents
+## Example 10: Prepare A Decision Without Launching A Chain Of Agents
 
 ```bash
 npm run start -- pack plan understand-churn \
