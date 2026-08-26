@@ -8,24 +8,38 @@ Web Task Agent ne doit pas devenir « un agent web de plus ». Il doit devenir l
 
 Les étoiles ne sont pas un livrable. Elles sont une conséquence d'une promesse publique, facile à essayer, crédible par la preuve et utile au point d'être recommandée.
 
-## Diagnostic — 26 août 2026
+## État d'exécution — 26 août 2026
+
+Cette roadmap sert aussi de contrat de livraison. Les statuts ci-dessous distinguent ce qui est versionné et vérifié localement de ce qui exige une décision du mainteneur ou une action publique.
+
+| Chantier | État vérifié | Preuve disponible |
+| --- | --- | --- |
+| Fondation open source | Livré localement | MIT, sécurité, support, code de conduite, templates GitHub, Dependabot et métadonnées npm `0.2.0` versionnés |
+| Première minute produit | Livré localement | Trois démos déterministes, receipts sources, README orienté package et site local contrôlé visuellement |
+| Catalogue de cas d'usage | Livré | 243 workflows exécutables : 3 historiques et 240 scénarios générés, filtrables et documentés |
+| Packs, exports et comparaison | Livré | 5 packs à revue humaine, `workflow scaffold`, exports Markdown/JSON/CSV, redaction et diff de runs |
+| Confiance et confidentialité | Livré localement | Politique de sources, `robots.txt`, cadence par domaine, redirections signalées, détection d'injection, contrat de confidentialité et sauvegarde/restauration SQLite |
+| Qualité et dérive | Livré localement | Build, 110 tests unitaires, 3 intégrations, génération, 304 liens Markdown et audit des dépendances de production dans la CI |
+| Publication et distribution | Bloqué par décision explicite | Le dépôt est encore privé : ouverture, release GitHub/npm, Topics, image sociale, Pages et discussions exigent l'autorisation du mainteneur |
+
+Le mot « livré » ne veut pas dire que le projet a déjà gagné des étoiles : cela signifie que le comportement est présent dans `main` et couvert par les contrôles indiqués. La visibilité et les signaux publics restent une étape distincte.
+
+## Diagnostic initial — 26 août 2026
 
 ### Ce qui existe réellement
 
 - Base TypeScript locale avec CLI, Chrome DevTools Protocol/Lightpanda, SQLite, file d'attente, worker, dashboard local, reprise après interruption, traces de prompts et packages de sortie.
 - Chaîne de recherche : recherche → fetch → extraction → regroupement des preuves → contradictions → synthèse.
-- Trois workflows historiques : `android-opportunity`, `article-research`, `market-opportunity`.
-- Tests automatisés pour la reprise, les contrôles, le stockage, les preuves, le packaging et plusieurs échecs de runtime.
-- Installateur et site de documentation statique déjà présents.
+- Trois workflows historiques : `android-opportunity`, `article-research`, `market-opportunity`, complétés par 240 scénarios de catalogue.
+- Tests automatisés déterministes pour la reprise, les contrôles, le stockage, les preuves, le packaging, la politique de sources et plusieurs échecs de runtime.
+- Installateur, site de documentation statique, receipts versionnées et contrat de confidentialité présents.
 
 ### Ce qui bloque l'adoption aujourd'hui
 
-- Le dépôt est **privé**, sans étoile ni fork possible ; il n'a ni licence, ni release, ni sujets GitHub, ni page d'accueil déclarée. Il ne peut pas gagner des étoiles dans cet état.
-- « Local-first web research » est vrai mais trop large. Les capacités distinctives — preuve durable, reprise, contradictions et package de décision — sont enfouies dans le code.
-- `package.json` est en `private: true`, version `0.1.0`. L'installation existe, mais le premier résultat utile n'est pas encore démontré par une sortie publique et réutilisable.
-- Les docs dérivent du code : elles parlent de deux templates alors que trois existent, et affichent un compte de tests ancien. Cela réduit la confiance.
-- Le répertoire d'exemples ne montrait que deux cas d'usage ; il ne rendait ni l'étendue ni la contribution visibles.
-- `npm audit --omit=dev` signale actuellement une vulnérabilité haute dans `ws` transitif. La politique de sources, secrets, prompt injection et données sensibles doit devenir un contrat public.
+- Le dépôt est **privé**, donc aucune étoile, aucun fork ou contribution publique n'est encore possible. C'est le principal verrou de distribution.
+- Les métadonnées GitHub publiques (description, Topics, image sociale, homepage), une release et un mini-site accessible restent à publier après cette décision.
+- L'expérience réelle de source/LLM reste volontairement séparée des tests déterministes : elle devra être validée avec des jeux de clés et sources choisis par l'opérateur.
+- Aucune campagne communautaire ne doit précéder cette ouverture, une première release et une démonstration publique vérifiable.
 
 ## Positionnement à verrouiller
 
