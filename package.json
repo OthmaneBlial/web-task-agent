@@ -33,7 +33,7 @@
   "bugs": {
     "url": "https://github.com/OthmaneBlial/web-task-agent/issues"
   },
-  "homepage": "https://github.com/OthmaneBlial/web-task-agent#readme",
+  "homepage": "https://othmaneblial.github.io/web-task-agent/",
   "engines": {
     "node": ">=22"
   },
