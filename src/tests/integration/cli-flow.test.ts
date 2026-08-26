@@ -7,10 +7,11 @@ import test from "node:test";
 
 import { JobStore } from "../../lib/job-store";
 
-function runCli(args: string[], env: NodeJS.ProcessEnv): string {
+function runCli(args: string[], env: NodeJS.ProcessEnv, cwd: string = process.cwd()): string {
   const cliPath = path.join(process.cwd(), "dist", "cli.js");
   return execFileSync(process.execPath, [cliPath, ...args], {
     encoding: "utf8",
+    cwd,
     env: {
       ...process.env,
       ...env
@@ -144,6 +145,48 @@ test("storage gate command passes when the local database is healthy", () => {
     assert.match(output, /Production Hardening Gate: PASS/);
     assert.match(output, /Storage health: ok/);
     assert.match(output, /No recoverable jobs remain\./);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("three decision packs write review-gated plans without starting browser or LLM work", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-pack-plans-"));
+  const packs = [
+    { id: "validate-an-idea", expectedWorkflow: "b2b-saas-voice-of-customer" },
+    { id: "launch-with-proof", expectedWorkflow: "ai-developer-tools-launch-positioning" },
+    { id: "understand-churn", expectedWorkflow: "consumer-productivity-retention-churn" }
+  ];
+
+  try {
+    for (const pack of packs) {
+      const outputPath = path.join(tempDir, `${pack.id}.md`);
+      const output = runCli(
+        [
+          "pack",
+          "plan",
+          pack.id,
+          "--topic",
+          "a durable local research product",
+          "--preset",
+          "focused",
+          "--output",
+          outputPath
+        ],
+        { WEB_TASK_AGENT_DB_PATH: path.join(tempDir, "jobs.sqlite") },
+        tempDir
+      );
+      const plan = fs.readFileSync(outputPath, "utf8");
+
+      assert.match(output, /Review-gated decision pack plan created/);
+      assert.match(plan, /Run one step at a time/);
+      assert.match(plan, /Run bounds \(not a price estimate\)/);
+      assert.match(plan, new RegExp(pack.expectedWorkflow));
+      assert.match(plan, /--preset focused/);
+    }
+
+    assert.equal(fs.existsSync(path.join(tempDir, ".cache")), false);
+    assert.equal(fs.existsSync(path.join(tempDir, "reports")), false);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

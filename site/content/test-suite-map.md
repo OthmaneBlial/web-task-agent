@@ -27,6 +27,7 @@ This page maps the main product surfaces to the current automated coverage.
   - `src/tests/scoring-balance.test.ts`
   - `src/tests/llm-synthesis-hardening.test.ts`
   - `src/tests/search-adapter-fallback.test.ts`
+  - `src/tests/llm-compatible-endpoint.test.ts`
 - Source trust and privacy:
   - `src/tests/source-policy.test.ts`
   - `src/tests/redaction.test.ts`
@@ -36,6 +37,7 @@ This page maps the main product surfaces to the current automated coverage.
   - `src/tests/decision-packs.test.ts`
   - `src/tests/workflow-catalog.test.ts`
   - `src/tests/workflow-scaffold.test.ts`
+  - `src/tests/integration/cli-flow.test.ts` (three end-to-end review-gated decision packs)
 
 ## How To Use This Map
 
