@@ -51,6 +51,7 @@
     "generate:workflows": "npm run build && node scripts/generate-workflow-examples.mjs",
     "generate:receipts": "npm run build && node scripts/generate-demo-receipts.mjs",
     "generate:golden-paths": "node scripts/generate-golden-paths.mjs",
+    "first-success": "node scripts/first-success.mjs",
     "generate:docs": "node scripts/sync-docs.mjs",
     "check:links": "node scripts/check-markdown-links.mjs",
     "audit:secrets": "node scripts/audit-publication-secrets.mjs",

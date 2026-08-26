@@ -56,6 +56,13 @@ const DOC_PAGES = [
     path: "content/privacy.md"
   },
   {
+    slug: "trust-model",
+    section: "Operations",
+    title: "Trust Model",
+    summary: "What a receipt verifies, what the web and model can still get wrong, and the operator checklist.",
+    path: "content/trust-model.md"
+  },
+  {
     slug: "project-charter",
     section: "Reference",
     title: "Project Charter",

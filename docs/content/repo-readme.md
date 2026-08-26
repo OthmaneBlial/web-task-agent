@@ -31,7 +31,7 @@ Local decision package
 
 This is local research infrastructure, not a hosted scraper, access-control bypass, or generic browser-agent wrapper.
 
-**See the full product story:** [live documentation](https://othmaneblial.github.io/web-task-agent/) · [eight inspectable receipts](RESEARCH_RECEIPTS.md) · [latest release](https://github.com/OthmaneBlial/web-task-agent/releases/latest)
+**See the full product story:** [live documentation](https://othmaneblial.github.io/web-task-agent/) · [trust model](docs/content/trust-model.md) · [eight inspectable receipts](RESEARCH_RECEIPTS.md) · [latest release](https://github.com/OthmaneBlial/web-task-agent/releases/latest)
 
 The GitHub Packages mirror is available as `@othmaneblial/web-task-agent`. GitHub's npm registry requires a classic personal access token with `read:packages` even for public packages. Authenticate without committing that token, then install the mirror:
 
@@ -71,6 +71,18 @@ web-task-agent receipt verify reports/demos/browser-agent-landscape
 ```
 
 The verifier checks the receipt structure, evidence references, source snapshots, and exported file hashes. It cannot prove that a source is true, complete, authorized, or fresh.
+
+For a versioned install, use the tarball and checksum attached to a GitHub release. This is the canonical public distribution path; it does not require a registry token:
+
+```bash
+VERSION=0.4.0
+curl -fsSLO "https://github.com/OthmaneBlial/web-task-agent/releases/download/v${VERSION}/web-task-agent-${VERSION}.tgz"
+curl -fsSLO "https://github.com/OthmaneBlial/web-task-agent/releases/download/v${VERSION}/SHA256SUMS"
+grep "web-task-agent-${VERSION}.tgz" SHA256SUMS | sha256sum -c -
+npm install --global "./web-task-agent-${VERSION}.tgz"
+```
+
+The tag, package version, tarball name, and checksum are generated together by the release workflow. `npm run first-success` rehearses this clean-install path locally before a tag is published.
 
 Try the other deterministic demos with `web-task-agent demo list`. Every export includes a standalone `receipt.html` you can open locally or attach to a handoff. They are fixtures, clearly marked as such; they never pretend to be fresh research.
 

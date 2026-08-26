@@ -187,3 +187,13 @@ npm run release:check
 ```
 
 It runs the deterministic suite, checks production dependencies, and previews the npm tarball without publishing it. Then follow the root [release checklist](../../RELEASE_CHECKLIST.md) before publishing anything or changing repository visibility.
+
+## Rehearse The Public First Success
+
+The canonical public install is the versioned GitHub Release tarball plus its `SHA256SUMS` file. It needs no npm registry token. Before cutting a tag, run:
+
+```bash
+npm run first-success
+```
+
+This builds the package, installs the tarball into a fresh temporary directory, exports the deterministic browser-agent demo, and verifies its receipt offline. The exact gate and limits are recorded in [first-success evidence](../first-success.md). The release workflow runs the same check on Node 22 before attaching the tarball and checksum to the release.

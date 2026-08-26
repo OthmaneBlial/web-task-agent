@@ -5,6 +5,7 @@ This file is intentionally lightweight.
 ## Unreleased
 
 - Added three curated golden paths: [Decision Change Review](examples/golden-paths/decision-change-review/), [Competitor Map](examples/golden-paths/competitor-map/), and [Launch Risk Review](examples/golden-paths/launch-risk-review/). Each path links a runnable workflow to an inspectable receipt and explicit invalidation conditions.
+- Added a tag-only public release workflow that attaches a versioned tarball, `SHA256SUMS`, and build-provenance attestation after a clean first-success install; documented the trust model and release evidence.
 
 ## 0.4.0 — 2026-08-26
 
