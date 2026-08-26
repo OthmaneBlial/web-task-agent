@@ -56,7 +56,7 @@ Commands:
 
 ```bash
 npm run start -- workflow enqueue android-opportunity \
-  --topic "halal family budgeting app"
+  --topic "family budgeting app"
 npm run start -- worker run --once
 ```
 
