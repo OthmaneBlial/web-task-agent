@@ -65,10 +65,11 @@ If you need a sequence rather than one workflow, generate a review-gated plan:
 ```bash
 web-task-agent pack list
 web-task-agent pack plan validate-an-idea \
-  --topic "offline document signing for independent contractors"
+  --topic "offline document signing for independent contractors" \
+  --dry-run
 ```
 
-Packs only write a plan. They never launch a sequence of paid or browser actions without an explicit human review between steps.
+Packs only write a plan. They never launch a sequence of paid or browser actions without an explicit human review between steps. The dry run prints each stable report destination and aggregate query, candidate, and runtime bounds before it writes anything.
 
 ## 5. Inspect Outputs
 

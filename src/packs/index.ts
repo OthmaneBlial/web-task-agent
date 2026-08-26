@@ -1,3 +1,7 @@
+import path from "node:path";
+
+import { buildWorkflowReportPath, getWorkflowPreset, getWorkflowTemplate } from "../workflows";
+
 export interface DecisionPackStep {
   workflowId: string;
   title: string;
@@ -10,6 +14,24 @@ export interface DecisionPackDefinition {
   description: string;
   outcome: string;
   steps: DecisionPackStep[];
+}
+
+export interface DecisionPackRunPreviewStep {
+  workflowId: string;
+  title: string;
+  reportPath: string;
+  maxQueries: number;
+  maxCandidates: number;
+  fetchBatchSize: number;
+  maxRuntimeHours: number;
+}
+
+export interface DecisionPackRunPreview {
+  preset: string;
+  steps: DecisionPackRunPreviewStep[];
+  totalMaxQueries: number;
+  totalMaxCandidates: number;
+  totalMaxRuntimeHours: number;
 }
 
 export const DECISION_PACKS: DecisionPackDefinition[] = [
@@ -73,6 +95,46 @@ export function getDecisionPack(id: string): DecisionPackDefinition | undefined 
   return DECISION_PACKS.find((pack) => pack.id === id);
 }
 
+export function buildDecisionPackRunPreview(input: {
+  pack: DecisionPackDefinition;
+  topic: string;
+  preset: string;
+}): DecisionPackRunPreview {
+  const steps = input.pack.steps.map((step) => {
+    const workflow = getWorkflowTemplate(step.workflowId);
+    if (!workflow) {
+      throw new Error(`decision pack ${input.pack.id} references unknown workflow ${step.workflowId}`);
+    }
+
+    const preset = getWorkflowPreset(workflow, input.preset);
+    const maxQueries = preset.options.maxQueries;
+    const maxResultsPerQuery = preset.options.maxResultsPerQuery;
+    const maxRuntimeHours = preset.options.maxRuntimeHours;
+
+    if (!maxQueries || !maxResultsPerQuery || !maxRuntimeHours) {
+      throw new Error(`workflow ${workflow.id} has incomplete limits for preset ${preset.id}`);
+    }
+
+    return {
+      workflowId: workflow.id,
+      title: step.title,
+      reportPath: path.relative(process.cwd(), buildWorkflowReportPath(workflow.id, input.topic)),
+      maxQueries,
+      maxCandidates: maxQueries * maxResultsPerQuery,
+      fetchBatchSize: preset.options.fetchBatchSize ?? 1,
+      maxRuntimeHours
+    };
+  });
+
+  return {
+    preset: input.preset,
+    steps,
+    totalMaxQueries: steps.reduce((total, step) => total + step.maxQueries, 0),
+    totalMaxCandidates: steps.reduce((total, step) => total + step.maxCandidates, 0),
+    totalMaxRuntimeHours: steps.reduce((total, step) => total + step.maxRuntimeHours, 0)
+  };
+}
+
 export function renderDecisionPackPlan(input: {
   pack: DecisionPackDefinition;
   topic: string;
@@ -80,6 +142,11 @@ export function renderDecisionPackPlan(input: {
   audience?: string | null;
   context?: string | null;
 }): string {
+  const preview = buildDecisionPackRunPreview({
+    pack: input.pack,
+    topic: input.topic,
+    preset: input.preset
+  });
   const lines = [
     `# ${input.pack.title} Plan`,
     "",
@@ -93,15 +160,21 @@ export function renderDecisionPackPlan(input: {
     "## Review rule",
     "",
     "Run one step at a time. Review its evidence package before launching the next command; this pack never starts paid or browser work in the background.",
+    "",
+    "## Run bounds (not a price estimate)",
+    "",
+    `At most ${preview.totalMaxQueries} search queries, ${preview.totalMaxCandidates} candidate results, and ${preview.totalMaxRuntimeHours} runtime-hours across ${preview.steps.length} separately reviewed steps. Actual browser requests and LLM usage depend on the sources and model selected by the operator.`,
     ""
   ];
   input.pack.steps.forEach((step, index) => {
+    const previewStep = preview.steps[index];
     lines.push(`## ${index + 1}. ${step.title}`, "", step.reason, "", "```bash");
     lines.push(`web-task-agent workflow run ${step.workflowId} \\`);
     lines.push(`  --topic \"${input.topic.replace(/"/g, "\\\"")}\" \\`);
     if (input.audience) lines.push(`  --audience \"${input.audience.replace(/"/g, "\\\"")}\" \\`);
     if (input.context) lines.push(`  --context \"${input.context.replace(/"/g, "\\\"")}\" \\`);
     lines.push(`  --preset ${input.preset}`, "```", "");
+    lines.push(`Bound: up to ${previewStep.maxQueries} queries, ${previewStep.maxCandidates} candidate results, ${previewStep.maxRuntimeHours} runtime-hours; report: \`${previewStep.reportPath}\`.`, "");
   });
   return lines.join("\n").trim();
 }

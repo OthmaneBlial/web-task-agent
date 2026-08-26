@@ -480,11 +480,17 @@ Use "web-task-agent <command> --help" for the full option list.
     .option("--context <text>", "Optional business context or constraint")
     .option("--preset <name>", "Preset for generated workflow commands", "standard")
     .option("--output <path>", "Write the plan to a specific Markdown file")
+    .option("--dry-run", "Print the review-gated plan and bounds without writing a file")
     .action((id, options) => {
       const definition = getDecisionPack(String(id));
       if (!definition) throw new Error(`Unknown decision pack: ${id}`);
       const topic = normalizeText(String(options.topic));
       const content = renderDecisionPackPlan({ pack: definition, topic, preset: normalizeText(String(options.preset)).toLowerCase(), audience: options.audience ? normalizeText(String(options.audience)) : null, context: options.context ? normalizeText(String(options.context)) : null });
+      if (options.dryRun) {
+        console.log("Review-gated decision pack preview (nothing written or launched).");
+        console.log(content);
+        return;
+      }
       const outputPath = options.output ? path.resolve(String(options.output)) : path.join(process.cwd(), "reports", "packs", definition.id, topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "topic", "plan.md");
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
       fs.writeFileSync(outputPath, `${content}\n`, "utf8");

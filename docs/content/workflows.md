@@ -75,9 +75,10 @@ When one workflow is not enough, create a review-gated plan instead of launching
 ```bash
 web-task-agent pack list
 web-task-agent pack plan launch-with-proof --topic "a local research tool for product teams"
+web-task-agent pack plan launch-with-proof --topic "a local research tool for product teams" --dry-run
 ```
 
-The five packs are `validate-an-idea`, `launch-with-proof`, `understand-churn`, `write-a-defensible-article`, and `choose-an-integration`. A pack only writes the ordered plan; the operator reviews every step before starting it.
+The five packs are `validate-an-idea`, `launch-with-proof`, `understand-churn`, `write-a-defensible-article`, and `choose-an-integration`. A pack only writes the ordered plan; the operator reviews every step before starting it. Add `--dry-run` to print the plan, report destinations, and aggregate query/candidate/runtime bounds without creating a file or launching work. Those bounds are not a monetary estimate: actual browser and LLM usage depend on the selected sources and model.
 
 ## Shared Workflow Behavior
 
