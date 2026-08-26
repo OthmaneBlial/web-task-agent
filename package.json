@@ -42,9 +42,10 @@
     "test:integration": "node --test dist/tests/integration/*.test.js",
     "test:ci": "npm run build && npm run test:unit && npm run test:integration && npm run check:generated",
     "generate:workflows": "npm run build && node scripts/generate-workflow-examples.mjs",
+    "generate:receipts": "npm run build && node scripts/generate-demo-receipts.mjs",
     "generate:docs": "node scripts/sync-docs.mjs",
     "check:links": "node scripts/check-markdown-links.mjs",
-    "check:generated": "node scripts/generate-workflow-examples.mjs && node scripts/sync-docs.mjs --check && npm run check:links && git diff --exit-code -- docs site examples/workflows",
+    "check:generated": "node scripts/generate-workflow-examples.mjs && node scripts/generate-demo-receipts.mjs && node scripts/sync-docs.mjs --check && npm run check:links && git diff --exit-code -- docs site examples/workflows examples/receipts",
     "lightpanda:start": "./scripts/start-lightpanda.sh start",
     "lightpanda:stop": "./scripts/start-lightpanda.sh stop",
     "lightpanda:update": "./scripts/start-lightpanda.sh update"

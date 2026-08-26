@@ -30,6 +30,8 @@ The package contains:
 
 Try the other deterministic demos with `web-task-agent demo list`. They are fixtures, clearly marked as such; they do not pretend to be fresh live research.
 
+Read all three versioned [research receipts](RESEARCH_RECEIPTS.md) directly in the repository.
+
 ## Run live research
 
 Set a narrow, compatible API key in `.env`, then choose a workflow and a topic:
@@ -134,5 +136,6 @@ Start with [CONTRIBUTING.md](CONTRIBUTING.md), then read the [workflow catalog](
 - [CLI reference](docs/content/cli-reference.md)
 - [Workflow catalog](examples/workflows/CATALOG.md)
 - [Example research receipts](examples/receipts/)
+- [Research receipts guide](RESEARCH_RECEIPTS.md)
 - [Roadmap](ROADMAP.md)
 - [Security policy](SECURITY.md)

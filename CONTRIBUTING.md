@@ -40,6 +40,26 @@ npm run start -- storage cleanup --prompt-traces <path>
 - Keep command output labels stable when possible.
 - Prefer small, focused commits when the change maps cleanly to one behavior.
 
+## Add A Workflow Proposal
+
+You do not need to understand the full runner to propose a workflow. Start with the scaffold:
+
+```bash
+npm run start -- workflow scaffold developer-tool-review \
+  --title "Developer Tool Review" \
+  --category "Validation"
+```
+
+It creates a proposal definition, run example, and test plan under `workflows/proposals/`. A proposal becomes executable only after a reviewer verifies all of the following:
+
+- the operator decision is repeated and specific;
+- queries and deliverables are materially distinct from the closest catalog workflow;
+- preferred and excluded sources, freshness, cost, privacy, and safety risks are explicit;
+- a deterministic fixture proves the output keeps sources, contradictions, and the smallest next validation;
+- catalog documentation and generated examples pass `npm test` without drift.
+
+Use the workflow proposal issue form for the discussion. Maintainers should apply `workflow-review`, `needs-evidence`, `good first workflow`, or `help wanted` when the repository labels are available.
+
 ## Good First Checks
 
 - run `npm run build`
