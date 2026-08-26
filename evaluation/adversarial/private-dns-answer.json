@@ -1,0 +1,7 @@
+{
+  "id": "private-dns-answer",
+  "input": "public.example resolves to 192.168.1.10",
+  "expectedGate": "deny",
+  "reason": "Private and reserved DNS answers are denied before robots or browser access.",
+  "test": "src/tests/evaluation.test.ts"
+}

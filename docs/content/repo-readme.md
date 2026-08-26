@@ -88,6 +88,8 @@ Try the other deterministic demos with `web-task-agent demo list`. Every export 
 
 Read all eight versioned [research receipts](RESEARCH_RECEIPTS.md) directly in the repository: launch readiness, competitor mapping, GitHub feedback, technical writing, app-review opportunities, workflow quality, and local-first risk review.
 
+The receipt contract also ships with an inspectable [evaluation scorecard](evaluation/scorecard.md) and four [adversarial policy fixtures](evaluation/adversarial/). They are regression evidence for package integrity and trust boundaries, not claims that the model or the web is always right.
+
 ## Why teams keep the package instead of just the answer
 
 | When research goes wrong | What stays available |

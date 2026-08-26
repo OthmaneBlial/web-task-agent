@@ -1,0 +1,7 @@
+{
+  "id": "stale-source-limit",
+  "input": "A source is older than the configured freshness window.",
+  "expectedGate": "limit",
+  "reason": "A stale source may remain context, but the receipt must keep a limitation and next validation.",
+  "test": "src/tests/evaluation.test.ts"
+}

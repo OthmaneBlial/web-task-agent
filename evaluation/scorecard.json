@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "type": "decision-receipt-evaluation",
+  "corpus": {
+    "kind": "deterministic-fixtures",
+    "path": "examples/receipts",
+    "cases": 8,
+    "adversarialCases": 4
+  },
+  "totals": {
+    "claims": 8,
+    "claimsWithEvidence": 8,
+    "sources": 24,
+    "sourcesWithSnapshots": 24,
+    "checkedFiles": 80
+  },
+  "rates": {
+    "validReceipts": 1,
+    "claimEvidenceCoverage": 1,
+    "sourceSnapshotCoverage": 1
+  },
+  "gates": {
+    "corpusSize": true,
+    "everyReceiptValid": true,
+    "everyClaimLinked": true,
+    "everySourceSnapshotted": true
+  },
+  "cases": [
+    {
+      "id": "app-review-opportunity",
+      "valid": true,
+      "checkedFiles": 10,
+      "claims": 1,
+      "claimsWithEvidence": 1,
+      "sources": 3,
+      "sourcesWithSnapshots": 3,
+      "structuralChecks": {
+        "receiptValid": true,
+        "claimsLinked": true,
+        "sourcesSnapshotted": true,
+        "hasLimitations": true,
+        "hasNextValidation": true,
+        "fixtureLabeled": true
+      },
+      "errors": []
+    },
+    {
+      "id": "browser-agent-landscape",
+      "valid": true,
+      "checkedFiles": 10,
+      "claims": 1,
+      "claimsWithEvidence": 1,
+      "sources": 3,
+      "sourcesWithSnapshots": 3,
+      "structuralChecks": {
+        "receiptValid": true,
+        "claimsLinked": true,
+        "sourcesSnapshotted": true,
+        "hasLimitations": true,
+        "hasNextValidation": true,
+        "fixtureLabeled": true
+      },
+      "errors": []
+    },
+    {
+      "id": "competitor-decision-map",
+      "valid": true,
+      "checkedFiles": 10,
+      "claims": 1,
+      "claimsWithEvidence": 1,
+      "sources": 3,
+      "sourcesWithSnapshots": 3,
+      "structuralChecks": {
+        "receiptValid": true,
+        "claimsLinked": true,
+        "sourcesSnapshotted": true,
+        "hasLimitations": true,
+        "hasNextValidation": true,
+        "fixtureLabeled": true
+      },
+      "errors": []
+    },
+    {
+      "id": "github-issue-opportunity",
+      "valid": true,
+      "checkedFiles": 10,
+      "claims": 1,
+      "claimsWithEvidence": 1,
+      "sources": 3,
+      "sourcesWithSnapshots": 3,
+      "structuralChecks": {
+        "receiptValid": true,
+        "claimsLinked": true,
+        "sourcesSnapshotted": true,
+        "hasLimitations": true,
+        "hasNextValidation": true,
+        "fixtureLabeled": true
+      },
+      "errors": []
+    },
+    {
+      "id": "local-first-risk-review",
+      "valid": true,
+      "checkedFiles": 10,
+      "claims": 1,
+      "claimsWithEvidence": 1,
+      "sources": 3,
+      "sourcesWithSnapshots": 3,
+      "structuralChecks": {
+        "receiptValid": true,
+        "claimsLinked": true,
+        "sourcesSnapshotted": true,
+        "hasLimitations": true,
+        "hasNextValidation": true,
+        "fixtureLabeled": true
+      },
+      "errors": []
+    },
+    {
+      "id": "product-launch-readiness",
+      "valid": true,
+      "checkedFiles": 10,
+      "claims": 1,
+      "claimsWithEvidence": 1,
+      "sources": 3,
+      "sourcesWithSnapshots": 3,
+      "structuralChecks": {
+        "receiptValid": true,
+        "claimsLinked": true,
+        "sourcesSnapshotted": true,
+        "hasLimitations": true,
+        "hasNextValidation": true,
+        "fixtureLabeled": true
+      },
+      "errors": []
+    },
+    {
+      "id": "technical-article-brief",
+      "valid": true,
+      "checkedFiles": 10,
+      "claims": 1,
+      "claimsWithEvidence": 1,
+      "sources": 3,
+      "sourcesWithSnapshots": 3,
+      "structuralChecks": {
+        "receiptValid": true,
+        "claimsLinked": true,
+        "sourcesSnapshotted": true,
+        "hasLimitations": true,
+        "hasNextValidation": true,
+        "fixtureLabeled": true
+      },
+      "errors": []
+    },
+    {
+      "id": "workflow-quality-audit",
+      "valid": true,
+      "checkedFiles": 10,
+      "claims": 1,
+      "claimsWithEvidence": 1,
+      "sources": 3,
+      "sourcesWithSnapshots": 3,
+      "structuralChecks": {
+        "receiptValid": true,
+        "claimsLinked": true,
+        "sourcesSnapshotted": true,
+        "hasLimitations": true,
+        "hasNextValidation": true,
+        "fixtureLabeled": true
+      },
+      "errors": []
+    }
+  ],
+  "limitations": [
+    "Fixtures are synthetic and do not measure model quality, web recall, freshness, or factual truth.",
+    "A structural pass proves package consistency only; reviewers must re-open sources for consequential decisions.",
+    "Adversarial cases are policy regressions, not a complete security assessment."
+  ]
+}

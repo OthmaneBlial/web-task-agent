@@ -1,0 +1,7 @@
+{
+  "id": "unsafe-source-url",
+  "input": "javascript:alert(1)",
+  "expectedGate": "deny",
+  "reason": "Receipt sources only accept HTTP(S) without embedded credentials.",
+  "test": "src/tests/evaluation.test.ts"
+}
