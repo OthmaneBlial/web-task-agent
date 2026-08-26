@@ -702,6 +702,11 @@ function validateReceiptShape(receipt: unknown, rootDir: string, errors: string[
     sourceIds.add(typed.id);
     if (!validateHttpsUrl(String(typed.url))) {
       errors.push(`unsafe source URL for ${typed.id}: ${String(typed.url)}`);
+    } else {
+      const policy = evaluateSourceUrlPolicy(String(typed.url));
+      if (policy.action === "deny") {
+        errors.push(`unsafe source URL for ${typed.id}: ${policy.reason}`);
+      }
     }
     if (typed.snapshotPath) {
       const snapshotPath = path.resolve(rootDir, typed.snapshotPath);

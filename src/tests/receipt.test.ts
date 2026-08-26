@@ -49,6 +49,12 @@ test("receipt verification identifies tampered artifacts and unsupported source 
     const unsafe = verifyReceiptDirectory(tempDir);
     assert.equal(unsafe.valid, false);
     assert.ok(unsafe.errors.some((error) => error.includes("unsafe source URL")));
+
+    receipt.sources[0]!.url = "https://user:password@example.com";
+    fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+    const credentialBearing = verifyReceiptDirectory(tempDir);
+    assert.equal(credentialBearing.valid, false);
+    assert.ok(credentialBearing.errors.some((error) => error.includes("credential-bearing URL")));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
