@@ -1,0 +1,46 @@
+{
+  "title": "Should we add an offline export mode?",
+  "summary": "The available evidence supports validating an offline export before committing to a broader hosted workflow.",
+  "generatedAt": "2026-08-26T00:00:00.000Z",
+  "policyVersion": "external-provider-policy-2026-01",
+  "model": "provider-redacted",
+  "sources": [
+    {
+      "id": "browser-use-docs",
+      "title": "Browser Use documentation",
+      "url": "https://docs.browser-use.com/",
+      "publisher": "Browser Use",
+      "role": "provider documentation",
+      "collectedAt": "2026-08-25T12:00:00.000Z",
+      "excerpt": "Browser Use provides browser automation infrastructure for agents."
+    },
+    {
+      "id": "local-first-principles",
+      "title": "Local-first software principles",
+      "url": "https://www.inkandswitch.com/local-first/",
+      "publisher": "Ink & Switch",
+      "role": "independent context",
+      "collectedAt": "2026-08-25T12:05:00.000Z",
+      "excerpt": "Local-first software gives users ownership of their data and offline capability."
+    }
+  ],
+  "claims": [
+    {
+      "id": "offline-export-validation",
+      "text": "An offline export is a concrete next validation for the proposed workflow.",
+      "status": "supported",
+      "evidence": [
+        {
+          "sourceIndex": 1,
+          "excerpt": "Local-first software gives users ownership of their data and offline capability.",
+          "relation": "supports"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "This provider result was imported without its browser session or raw network trace.",
+    "The sources were not re-fetched by Web Task Agent."
+  ],
+  "nextValidation": "Export one representative decision package offline and ask a reviewer to verify it on a clean machine."
+}

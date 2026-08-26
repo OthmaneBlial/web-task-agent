@@ -29,6 +29,7 @@ Run `web-task-agent receipt verify <directory>` before sharing a package. Verifi
 - Keep API keys, browser profiles, cookies, databases, prompt traces, and private reports outside Git.
 - Use a narrow, operator-owned compatible endpoint for live research; deterministic demos make no network or model request.
 - Share the receipt and its limitations together. Do not strip the invalidation conditions or contradictory evidence from the handoff.
+- If a maintainer signs a receipt, treat the Ed25519 key ID as an authorship/byte-integrity signal only; it is not an approval of factual truth.
 
 ## Reporting a trust issue
 

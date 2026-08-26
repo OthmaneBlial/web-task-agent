@@ -90,6 +90,8 @@ Read all eight versioned [research receipts](RESEARCH_RECEIPTS.md) directly in t
 
 The receipt contract also ships with an inspectable [evaluation scorecard](evaluation/scorecard.md) and four [adversarial policy fixtures](evaluation/adversarial/). They are regression evidence for package integrity and trust boundaries, not claims that the model or the web is always right.
 
+Provider-neutral results can be brought into the same contract with the [interop fixture](examples/interop/README.md). The adapter preserves source metadata, excerpts, limitations, and the next validation; it never imports cookies, browser sessions, or hosted-provider instructions.
+
 ## Why teams keep the package instead of just the answer
 
 | When research goes wrong | What stays available |

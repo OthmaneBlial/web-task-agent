@@ -1,8 +1,16 @@
-import { createHash } from "node:crypto";
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  sign as signBytes,
+  verify as verifyBytes,
+  type KeyObject
+} from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
 import { ensureDir, writeJsonAtomic } from "./cache";
+import { evaluateSourceUrlPolicy } from "./source-policy";
 import type { AgentEvidenceBundle, AgentRunState } from "../types";
 
 export const DECISION_RECEIPT_SCHEMA_VERSION = 1;
@@ -65,11 +73,20 @@ export interface DecisionReceipt {
   }>;
   nextValidation: string;
   limitations: string[];
+  signature?: DecisionReceiptSignature;
   integrity: {
     algorithm: typeof RECEIPT_HASH_ALGORITHM;
     manifestPath: "integrity-manifest.json";
     note: string;
   };
+}
+
+export interface DecisionReceiptSignature {
+  algorithm: "ed25519";
+  keyId: string;
+  publicKeyPem: string;
+  signatureBase64: string;
+  signedBytes: "receipt-without-signature";
 }
 
 export interface ReceiptIntegrityManifestFile {
@@ -227,6 +244,179 @@ export interface FixtureReceiptPaths {
   snapshotPaths: string[];
 }
 
+export interface ExternalDecisionResult {
+  title: string;
+  summary: string;
+  sources: Array<{
+    id?: string;
+    title: string;
+    url: string;
+    publisher?: string;
+    role?: string;
+    collectedAt?: string | null;
+    excerpt?: string | null;
+  }>;
+  claims?: Array<{
+    id?: string;
+    text: string;
+    status?: ReceiptClaimStatus;
+    evidence?: Array<{
+      sourceId?: string;
+      sourceIndex?: number;
+      excerpt?: string;
+      relation?: DecisionReceiptEvidenceRef["relation"];
+    }>;
+    limitation?: string;
+  }>;
+  contradictions?: DecisionReceipt["contradictions"];
+  limitations?: string[];
+  nextValidation?: string;
+  generatedAt?: string;
+  policyVersion?: string | null;
+  model?: string | null;
+}
+
+export interface ImportedReceiptPaths {
+  receiptPath: string;
+  integrityManifestPath: string;
+  snapshotPaths: string[];
+}
+
+function importSlug(value: string, fallback: string): string {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return normalized || fallback;
+}
+
+/**
+ * Convert a provider-neutral research result into the local receipt contract.
+ * This is deliberately an ingestion boundary: it imports claims and evidence,
+ * but never runs a browser, calls a hosted provider, or grants new capability.
+ */
+export function importExternalDecisionResult(input: {
+  result: ExternalDecisionResult;
+  outputDir: string;
+  force?: boolean;
+}): ImportedReceiptPaths {
+  const outputDir = path.resolve(input.outputDir);
+  if (fs.existsSync(outputDir) && !input.force && fs.readdirSync(outputDir).length > 0) {
+    throw new Error(`refusing to overwrite non-empty import directory: ${outputDir}; pass --force to replace it.`);
+  }
+  ensureDir(outputDir);
+  const result = input.result;
+  if (!result || typeof result.title !== "string" || !result.title.trim()) {
+    throw new Error("external result title is required");
+  }
+  if (typeof result.summary !== "string" || !result.summary.trim()) {
+    throw new Error("external result summary is required");
+  }
+
+  const sourceIds = new Set<string>();
+  const snapshotPaths: string[] = [];
+  const sources: DecisionReceiptSource[] = result.sources.map((source, index) => {
+    if (!source || typeof source.url !== "string" || !source.url.trim()) {
+      throw new Error(`external source ${index + 1} is missing a URL`);
+    }
+    const policy = evaluateSourceUrlPolicy(source.url);
+    if (policy.action === "deny") {
+      throw new Error(`external source ${index + 1} denied by source policy: ${policy.reason}`);
+    }
+    const baseId = importSlug(source.id || source.title, `source-${index + 1}`);
+    let id = baseId;
+    let suffix = 2;
+    while (sourceIds.has(id)) id = `${baseId}-${suffix++}`;
+    sourceIds.add(id);
+    const excerpt = typeof source.excerpt === "string" ? source.excerpt.trim() : "";
+    let snapshotPath: string | null = null;
+    if (excerpt) {
+      snapshotPath = path.join(outputDir, "evidence", "snapshots", `${String(index + 1).padStart(2, "0")}-${id}.md`);
+      ensureDir(path.dirname(snapshotPath));
+      fs.writeFileSync(snapshotPath, `# ${source.title}\n\n${excerpt}\n`, "utf8");
+      snapshotPaths.push(snapshotPath);
+    }
+    return {
+      id,
+      title: source.title.trim() || id,
+      url: source.url.trim(),
+      publisher: source.publisher?.trim() || new URL(source.url).hostname,
+      role: source.role?.trim() || "external research result",
+      collectedAt: source.collectedAt ?? null,
+      captureType: excerpt ? "live" : "metadata-only",
+      snapshotPath: snapshotPath ? safeRelativePath(outputDir, snapshotPath) : null,
+      snapshotSha256: snapshotPath ? fileSha256(snapshotPath) : null
+    };
+  });
+
+  const claims: DecisionReceiptClaim[] = (result.claims ?? []).map((claim, claimIndex) => {
+    const evidence = (claim.evidence ?? []).map((reference, evidenceIndex) => {
+      const sourceId = reference.sourceId || (reference.sourceIndex !== undefined ? sources[reference.sourceIndex]?.id : undefined);
+      if (!sourceId || !sourceIds.has(sourceId)) {
+        throw new Error(`external claim ${claimIndex + 1} references an unknown source`);
+      }
+      const source = sources.find((item) => item.id === sourceId)!;
+      const snapshotText = source.snapshotPath ? fs.readFileSync(path.join(outputDir, source.snapshotPath), "utf8") : "";
+      const excerpt = (reference.excerpt || snapshotText.split("\n\n").slice(1).join("\n\n").trim() || claim.text).trim();
+      return {
+        id: `evidence-${claimIndex + 1}-${evidenceIndex + 1}`,
+        sourceId,
+        excerpt,
+        relation: reference.relation ?? "supports"
+      } satisfies DecisionReceiptEvidenceRef;
+    });
+    const fallbackSource = sources[0];
+    const fallbackExcerpt = fallbackSource?.snapshotPath
+      ? fs.readFileSync(path.join(outputDir, fallbackSource.snapshotPath), "utf8").split("\n\n").slice(1).join("\n\n").trim()
+      : claim.text.trim();
+    const normalizedEvidence = evidence.length > 0 || !fallbackSource
+      ? evidence
+      : [{ id: `evidence-${claimIndex + 1}-context`, sourceId: fallbackSource.id, excerpt: fallbackExcerpt || claim.text.trim(), relation: "context" as const }];
+    return {
+      id: importSlug(claim.id || `claim-${claimIndex + 1}`, `claim-${claimIndex + 1}`),
+      text: claim.text.trim(),
+      status: claim.status ?? (evidence.length > 0 ? "supported" : "insufficient"),
+      evidence: normalizedEvidence,
+      limitation: claim.limitation || (evidence.length > 0 ? undefined : "The external result did not attach a direct evidence reference.")
+    };
+  });
+
+  const receipt: DecisionReceipt = {
+    schemaVersion: DECISION_RECEIPT_SCHEMA_VERSION,
+    type: "decision-receipt",
+    generatedAt: result.generatedAt || new Date().toISOString(),
+    provenance: {
+      kind: "imported",
+      runId: null,
+      cliVersion: null,
+      workflowId: null,
+      policyVersion: result.policyVersion ?? "source-policy-v1",
+      promptVersion: null,
+      model: result.model ?? null,
+      fixture: false
+    },
+    decision: { title: result.title.trim(), summary: result.summary.trim() },
+    claims,
+    sources,
+    contradictions: result.contradictions ?? [],
+    nextValidation: result.nextValidation?.trim() || "Review the imported claims and run the smallest test that could disprove the decision.",
+    limitations: [
+      "Imported evidence preserves the provider result but does not prove that its sources are true, complete, authorized, or fresh.",
+      ...(result.limitations ?? []).map((item) => item.trim()).filter(Boolean)
+    ],
+    integrity: {
+      algorithm: RECEIPT_HASH_ALGORITHM,
+      manifestPath: "integrity-manifest.json",
+      note: "The manifest covers the imported receipt and snapshots; provider-specific provenance remains outside this contract."
+    }
+  };
+  const receiptPath = path.join(outputDir, "receipt.json");
+  writeJsonAtomic(receiptPath, receipt);
+  const integrityManifestPath = writeReceiptIntegrityManifest({
+    rootDir: outputDir,
+    files: [receiptPath, ...snapshotPaths],
+    generatedAt: receipt.generatedAt
+  });
+  return { receiptPath, integrityManifestPath, snapshotPaths };
+}
+
 export function buildAgentDecisionReceipt(input: {
   state: AgentRunState;
   evidence: AgentEvidenceBundle;
@@ -344,6 +534,51 @@ function fileSha256(filePath: string): string {
   return sha256(fs.readFileSync(filePath));
 }
 
+function receiptSigningPayload(receipt: DecisionReceipt): Buffer {
+  const unsigned = { ...receipt } as DecisionReceipt & { signature?: DecisionReceiptSignature };
+  delete unsigned.signature;
+  return Buffer.from(`${JSON.stringify(unsigned, null, 2)}\n`, "utf8");
+}
+
+function privateKeyObject(privateKey: string | KeyObject): KeyObject {
+  return typeof privateKey === "string" ? createPrivateKey(privateKey) : privateKey;
+}
+
+export function signReceiptDirectory(input: {
+  directory: string;
+  privateKey: string | KeyObject;
+  keyId: string;
+}): string {
+  const rootDir = path.resolve(input.directory);
+  const receiptPath = path.join(rootDir, "receipt.json");
+  if (!fs.existsSync(receiptPath)) throw new Error(`receipt.json is missing: ${receiptPath}`);
+  if (!input.keyId.trim()) throw new Error("signature keyId is required");
+  const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8")) as DecisionReceipt;
+  if (receipt.type !== "decision-receipt") throw new Error("cannot sign a non-decision receipt");
+  const privateKey = privateKeyObject(input.privateKey);
+  if (privateKey.asymmetricKeyType !== "ed25519") throw new Error("receipt signing requires an Ed25519 private key");
+  const signatureBase64 = signBytes(null, receiptSigningPayload(receipt), privateKey).toString("base64");
+  const publicKeyPem = createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString();
+  const signedReceipt: DecisionReceipt = {
+    ...receipt,
+    signature: {
+      algorithm: "ed25519",
+      keyId: input.keyId.trim(),
+      publicKeyPem,
+      signatureBase64,
+      signedBytes: "receipt-without-signature"
+    }
+  };
+  writeJsonAtomic(receiptPath, signedReceipt);
+  const manifestPath = path.join(rootDir, "integrity-manifest.json");
+  const existingManifest = fs.existsSync(manifestPath)
+    ? JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Partial<ReceiptIntegrityManifest>
+    : null;
+  const files = (existingManifest?.files ?? []).map((entry) => path.join(rootDir, String(entry.path)));
+  writeReceiptIntegrityManifest({ rootDir, files: [receiptPath, ...files], generatedAt: existingManifest?.generatedAt || receipt.generatedAt });
+  return receiptPath;
+}
+
 function trimText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -443,6 +678,15 @@ function validateReceiptShape(receipt: unknown, rootDir: string, errors: string[
   if (!candidate.integrity || candidate.integrity.manifestPath !== "integrity-manifest.json") {
     errors.push("receipt must point to integrity-manifest.json");
   }
+  if (candidate.signature) {
+    const signature = candidate.signature as Partial<DecisionReceiptSignature>;
+    if (signature.algorithm !== "ed25519" || signature.signedBytes !== "receipt-without-signature") {
+      errors.push("receipt signature has an unsupported algorithm or signed-bytes marker");
+    }
+    if (!signature.keyId || !signature.publicKeyPem || !signature.signatureBase64) {
+      errors.push("receipt signature is incomplete");
+    }
+  }
 
   const sources = Array.isArray(candidate.sources) ? candidate.sources : [];
   const sourceIds = new Set<string>();
@@ -518,6 +762,26 @@ function validateReceiptShape(receipt: unknown, rootDir: string, errors: string[
   return errors.length === 0;
 }
 
+function validateReceiptSignature(receipt: DecisionReceipt, errors: string[]): void {
+  if (!receipt.signature) return;
+  try {
+    const publicKey = createPublicKey(receipt.signature.publicKeyPem);
+    if (publicKey.asymmetricKeyType !== "ed25519") {
+      errors.push("receipt signature public key is not Ed25519");
+      return;
+    }
+    const valid = verifyBytes(
+      null,
+      receiptSigningPayload(receipt),
+      publicKey,
+      Buffer.from(receipt.signature.signatureBase64, "base64")
+    );
+    if (!valid) errors.push(`receipt signature verification failed for key ${receipt.signature.keyId}`);
+  } catch (error) {
+    errors.push(`could not verify receipt signature: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationResult {
   const rootDir = path.resolve(inputDir);
   const errors: string[] = [];
@@ -533,6 +797,7 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
       const parsed: unknown = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
       if (validateReceiptShape(parsed, rootDir, errors)) {
         receipt = parsed;
+        validateReceiptSignature(receipt, errors);
       }
     } catch (error) {
       errors.push(`could not parse receipt.json: ${error instanceof Error ? error.message : String(error)}`);

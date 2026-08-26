@@ -40,7 +40,9 @@ import { logStructured } from "./lib/local-logging";
 import { assessStorageHealth } from "./lib/storage-validation";
 import {
   compareDecisionReceipts,
+  importExternalDecisionResult,
   renderDecisionReceiptComparison,
+  signReceiptDirectory,
   verifyReceiptDirectory
 } from "./lib/receipt";
 import {
@@ -272,6 +274,67 @@ Use "web-task-agent <command> --help" for the full option list.
           `Decision changed: ${comparison.decisionChanged ? "yes" : "no"}`
         ]
       });
+    });
+
+  receipt
+    .command("import <inputPath>")
+    .description("Import a provider-neutral research result into a validated receipt package")
+    .option("--output <path>", "Destination directory for the imported package")
+    .option("--force", "Replace files in an existing destination")
+    .action((inputPath, options) => {
+      const sourcePath = path.resolve(String(inputPath));
+      if (!fs.existsSync(sourcePath)) {
+        throw new Error(`external result file does not exist: ${sourcePath}`);
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
+      } catch (error) {
+        throw new Error(`could not parse external result JSON: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      const outputDir = options.output
+        ? path.resolve(String(options.output))
+        : path.resolve("reports", "receipts", "imports", path.basename(sourcePath, path.extname(sourcePath)));
+      const written = importExternalDecisionResult({
+        result: parsed as Parameters<typeof importExternalDecisionResult>[0]["result"],
+        outputDir,
+        force: Boolean(options.force)
+      });
+      const verification = verifyReceiptDirectory(outputDir);
+      if (!verification.valid) {
+        throw new Error(`imported receipt failed validation: ${verification.errors.join("; ")}`);
+      }
+      console.log("External result imported as a valid receipt.");
+      console.log(`Package: ${outputDir}`);
+      console.log(`Receipt: ${written.receiptPath}`);
+      console.log(`Snapshots: ${written.snapshotPaths.length}`);
+      console.log("Status: valid");
+    });
+
+  receipt
+    .command("sign <directory>")
+    .description("Attach an optional Ed25519 operator signature to a receipt")
+    .requiredOption("--private-key <path>", "Path to an Ed25519 private key in PEM format")
+    .requiredOption("--key-id <id>", "Human-readable key identifier")
+    .action((directory, options) => {
+      const privateKeyPath = path.resolve(String(options.privateKey));
+      if (!fs.existsSync(privateKeyPath)) {
+        throw new Error(`private key file does not exist: ${privateKeyPath}`);
+      }
+      const receiptPath = signReceiptDirectory({
+        directory: String(directory),
+        privateKey: fs.readFileSync(privateKeyPath, "utf8"),
+        keyId: String(options.keyId)
+      });
+      const verification = verifyReceiptDirectory(String(directory));
+      if (!verification.valid) {
+        throw new Error(`signed receipt failed validation: ${verification.errors.join("; ")}`);
+      }
+      console.log("Operator signature attached and verified.");
+      console.log(`Receipt: ${receiptPath}`);
+      console.log(`Key ID: ${String(options.keyId)}`);
+      console.log("Status: valid");
+      console.log("Note: the signature attests to control of the key, not to the truth of the decision.");
     });
 
   const browser = program

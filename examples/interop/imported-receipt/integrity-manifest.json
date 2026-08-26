@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "type": "receipt-integrity-manifest",
+  "algorithm": "sha256",
+  "receiptPath": "receipt.json",
+  "generatedAt": "2026-08-26T00:00:00.000Z",
+  "files": [
+    {
+      "path": "evidence/snapshots/01-browser-use-docs.md",
+      "sha256": "7e4c55018a67a336e696865ebc9b0f25fbc012f1d804e986cd073d36bc78ff5d",
+      "bytes": 96
+    },
+    {
+      "path": "evidence/snapshots/02-local-first-principles.md",
+      "sha256": "407275470dc9b91ca99e30570fd7925ba30340b38c934ae428828c66c1d86b33",
+      "bytes": 116
+    },
+    {
+      "path": "receipt.json",
+      "sha256": "d69c36592641f6e386c9d28b1c1ceaba59488eaf1afd0a994ae89e6af2a82652",
+      "bytes": 2630
+    }
+  ]
+}

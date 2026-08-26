@@ -8,6 +8,7 @@ This file is intentionally lightweight.
 - Added a tag-only public release workflow that attaches a versioned tarball, `SHA256SUMS`, and build-provenance attestation after a clean first-success install; documented the trust model and release evidence.
 - Added an eight-case deterministic receipt scorecard with four adversarial policy fixtures, explicit denominators, and documented limits against benchmark inflation.
 - Added contribution issue forms, three reproducible case studies, and privacy-safe activation measures so feedback becomes fixtures, tests, or focused pull requests.
+- Added a provider-neutral `receipt import` boundary, a checked-in interoperability fixture, and optional Ed25519 operator signatures with offline verification.
 
 ## 0.4.0 — 2026-08-26
 
