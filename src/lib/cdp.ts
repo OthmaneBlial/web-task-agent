@@ -16,6 +16,18 @@ export const DEBUG_PORT = Number(process.env.CDP_PORT ?? process.env.CHROME_PORT
 const execFileAsync = promisify(execFile);
 const LIGHTPANDA_START_SCRIPT = path.resolve(process.cwd(), "scripts", "start-lightpanda.sh");
 
+export type CdpBackendKind = "lightpanda" | "chrome" | "unknown" | "unavailable";
+
+export interface CdpBackendStatus {
+  endpoint: string;
+  port: number;
+  backend: CdpBackendKind;
+  browser: string | null;
+  protocolVersion: string | null;
+  reachable: boolean;
+  message: string;
+}
+
 type LightpandaCommandAction = "start" | "restart";
 type LightpandaCommandRunner = (action: LightpandaCommandAction) => Promise<void>;
 
@@ -47,6 +59,71 @@ export async function sleep(ms: number, jitterRatio: number = 0.18): Promise<voi
 function logLightpandaSupervisor(message: string): void {
   const stamp = new Date().toISOString();
   console.log(`[${stamp}] ${message}`);
+}
+
+export function classifyCdpBackend(browser: string | null | undefined): CdpBackendKind {
+  const normalized = String(browser ?? "").toLowerCase();
+  if (normalized.includes("lightpanda")) return "lightpanda";
+  if (normalized.includes("chrome") || normalized.includes("chromium")) return "chrome";
+  return normalized ? "unknown" : "unavailable";
+}
+
+/**
+ * Inspect the configured local CDP endpoint without starting, restarting, or
+ * attaching to a browser. This is deliberately safe to run before a live job.
+ */
+export async function inspectCdpBackend(timeoutMs: number = 1_500): Promise<CdpBackendStatus> {
+  const endpoint = `http://127.0.0.1:${DEBUG_PORT}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${endpoint}/json/version`, { signal: controller.signal });
+    if (!response.ok) {
+      return {
+        endpoint,
+        port: DEBUG_PORT,
+        backend: "unavailable",
+        browser: null,
+        protocolVersion: null,
+        reachable: false,
+        message: `CDP endpoint returned HTTP ${response.status}`
+      };
+    }
+
+    const payload = (await response.json()) as { Browser?: unknown; "Protocol-Version"?: unknown };
+    const browser = typeof payload.Browser === "string" ? payload.Browser : null;
+    const protocolVersion =
+      typeof payload["Protocol-Version"] === "string" ? payload["Protocol-Version"] : null;
+    const backend = classifyCdpBackend(browser);
+    return {
+      endpoint,
+      port: DEBUG_PORT,
+      backend,
+      browser,
+      protocolVersion,
+      reachable: true,
+      message:
+        backend === "lightpanda"
+          ? "Lightpanda CDP endpoint is reachable."
+          : backend === "chrome"
+            ? "Chrome/Chromium CDP endpoint is reachable."
+            : "A reachable CDP endpoint reported an unrecognized browser name."
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      endpoint,
+      port: DEBUG_PORT,
+      backend: "unavailable",
+      browser: null,
+      protocolVersion: null,
+      reachable: false,
+      message: `CDP endpoint is not reachable: ${reason}`
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function isDebuggerReachable(timeoutMs: number = 1_500): Promise<boolean> {

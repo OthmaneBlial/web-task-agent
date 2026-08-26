@@ -12,7 +12,7 @@ The repo currently includes automated tests for:
 - workflow output packaging
 - interrupted agent checkpoints
 
-The standard test command currently runs 112 unit tests and 4 integration tests. It also regenerates workflow/docs outputs and rejects drift before a change can merge.
+The standard test command currently runs 113 unit tests and 4 integration tests. It also regenerates workflow/docs outputs and rejects drift before a change can merge.
 
 ## Working Quality Bar
 

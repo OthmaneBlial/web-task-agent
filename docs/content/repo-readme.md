@@ -85,6 +85,7 @@ The same decision families are available across AI developer tools, API platform
 
 ```bash
 web-task-agent pack plan validate-an-idea --topic "local research assistant" --dry-run
+web-task-agent browser status
 web-task-agent workflow enqueue market-opportunity --topic "offline PDF tools"
 web-task-agent worker run --once
 web-task-agent queue list
@@ -100,6 +101,8 @@ web-task-agent server run --port 4317
 ```
 
 `pack plan --dry-run` prints its report destinations plus aggregate query, candidate, and runtime bounds without writing a plan or launching a browser/LLM step. The bounds are deliberately not a price estimate: actual usage depends on the selected sources and model.
+
+`browser status` reports whether the configured local CDP endpoint is Lightpanda, Chrome/Chromium, another CDP implementation, or unavailable — without starting or touching a browser. See the browser-backend table in the [getting started guide](docs/content/getting-started.md).
 
 The dashboard is local at `http://127.0.0.1:4317`. Runtime data is kept outside the code tree:
 

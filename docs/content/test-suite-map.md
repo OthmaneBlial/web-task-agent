@@ -23,6 +23,7 @@ This page maps the main product surfaces to the current automated coverage.
   - `src/tests/recommendation-generation.test.ts`
   - `src/tests/claim-checklist.test.ts`
 - Extraction, browser, and fallback behavior:
+  - `src/tests/cdp-backend.test.ts`
   - `src/tests/extraction-dedup.test.ts`
   - `src/tests/scoring-balance.test.ts`
   - `src/tests/llm-synthesis-hardening.test.ts`

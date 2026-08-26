@@ -25,6 +25,7 @@ import {
 import { normalizeCliArgv } from "./lib/cli-argv";
 import { formatCliErrorMessage } from "./lib/cli-error";
 import { ensureLlmRuntimeEnvironment } from "./lib/runtime-env";
+import { inspectCdpBackend } from "./lib/cdp";
 import {
   formatQueuedJobDebugLines,
   formatStoredJobDebugLines
@@ -194,6 +195,31 @@ Use "web-task-agent <command> --help" for the full option list.
       console.log(`Brief: ${written.workflowBriefPath}`);
       console.log(`Report: ${written.reportPath}`);
       console.log(`Sources: ${written.sourcesPath}`);
+    });
+
+  const browser = program
+    .command("browser")
+    .description("Inspect the configured local Chrome DevTools Protocol endpoint without opening a page");
+
+  browser
+    .command("status")
+    .description("Show the configured CDP backend and its safe operating boundary")
+    .action(async () => {
+      const status = await inspectCdpBackend();
+      console.log(`CDP endpoint: ${status.endpoint}`);
+      console.log(`Reachable: ${status.reachable ? "yes" : "no"}`);
+      console.log(`Backend: ${status.backend}`);
+      if (status.browser) console.log(`Browser: ${status.browser}`);
+      if (status.protocolVersion) console.log(`Protocol: ${status.protocolVersion}`);
+      console.log(`Status: ${status.message}`);
+      console.log("Permission: status does not launch, restart, attach to, or navigate a browser.");
+      if (status.backend === "lightpanda" || status.backend === "unavailable") {
+        console.log("Guidance: Lightpanda is the default managed backend; use npm run lightpanda:start to start it deliberately.");
+      } else if (status.backend === "chrome") {
+        console.log("Guidance: Chrome/Chromium is an operator-managed CDP backend. Keep its debugging port local and manage its lifecycle yourself.");
+      } else {
+        console.log("Guidance: this endpoint is reachable but unrecognized; use a browser that supports the CDP operations needed by the workflow.");
+      }
     });
 
   program

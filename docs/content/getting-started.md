@@ -40,6 +40,22 @@ ANTHROPIC_MODEL=your-local-compatible-model
 
 This is not a generic OpenAI-compatible mode: use a proxy or local server that explicitly implements the Anthropic Messages contract, including its `x-api-key` authentication header. The automated suite starts a local endpoint fixture and verifies the request path, authentication header, payload, and parsed response without contacting a provider.
 
+### Choose a browser backend deliberately
+
+The fetcher attaches to a local Chrome DevTools Protocol (CDP) endpoint. Check the current choice without launching or navigating a browser:
+
+```bash
+web-task-agent browser status
+```
+
+| Backend | Best fit in this project | Operating boundary |
+| --- | --- | --- |
+| Lightpanda | Default managed, headless research backend | `npm run lightpanda:start` installs/starts it locally; its telemetry disable flag defaults to `true`. Treat site-specific compatibility as something to test on the target source. |
+| Chrome or Chromium | An existing local CDP session when a source needs a fuller browser engine | Launch it yourself with a local debugging port (for example `scripts/start-chrome.sh --headless`). The project attaches through CDP; it does not use an authenticated browsing profile or bypass access controls. |
+| Other CDP endpoint | Advanced operator setup | `browser status` labels it `unknown`; verify the CDP methods the workflow needs before a live run. |
+
+Both paths keep durable job state, reports, and artifacts on disk. The browser only receives source URLs the operator asks the workflow to research; a live workflow may still send selected extracted evidence to the configured LLM endpoint.
+
 ## 3. Preview A Workflow Before Spending Time Or Tokens
 
 ```bash
