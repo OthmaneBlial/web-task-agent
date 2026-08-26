@@ -45,7 +45,11 @@ import {
   renderJobExport,
   type JobExportFormat
 } from "./lib/job-export";
-import { createManagementServer } from "./server/management-server";
+import {
+  createManagementServer,
+  formatManagementServerUrl,
+  requireLoopbackManagementHost
+} from "./server/management-server";
 import { AgentRunnerTask } from "./tasks/agent-runner";
 import { GitHubScannerTask } from "./tasks/github-scanner";
 import { PlayStoreAnalyzerTask } from "./tasks/playstore-analyzer";
@@ -1346,7 +1350,12 @@ Use "web-task-agent <command> --help" for the full option list.
     .description("Run the local management API and HTML dashboard")
     .command("run")
     .description("Start the local API and HTML dashboard")
-    .option("--host <host>", "Host to bind", "127.0.0.1")
+    .option(
+      "--host <host>",
+      "Loopback host to bind (127.0.0.1 or ::1; network hosts are refused)",
+      (value) => requireLoopbackManagementHost(String(value)),
+      "127.0.0.1"
+    )
     .option(
       "--port <number>",
       "Port to bind",
@@ -1355,13 +1364,15 @@ Use "web-task-agent <command> --help" for the full option list.
     )
     .action(async (options) => {
       const server = createManagementServer();
+      const host = requireLoopbackManagementHost(String(options.host));
+      const port = Number(options.port);
       await new Promise<void>((resolve, reject) => {
         server.once("error", reject);
-        server.listen(Number(options.port), String(options.host), () => resolve());
+        server.listen(port, host, () => resolve());
       });
 
       console.log(`Management server running.`);
-      console.log(`URL: http://${String(options.host)}:${Number(options.port)}`);
+      console.log(`URL: ${formatManagementServerUrl(host, port)}`);
 
       await new Promise<void>(() => {
         // Keep the process alive until it is interrupted.

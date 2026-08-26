@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { evaluateRobotsText, SourceAcquisitionPolicy } from "../lib/source-acquisition-policy";
 
+const resolvePublicHostname = async () => [{ address: "93.184.216.34", family: 4 }];
+
 test("robots policy honors the most specific matching rule and user agent group", () => {
   const robotsText = [
     "User-agent: *",
@@ -42,7 +44,8 @@ test("source acquisition caches robots decisions and paces repeated domains", as
     fetchRobots: async () => {
       robotsCalls += 1;
       return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
-    }
+    },
+    resolveHostname: resolvePublicHostname
   });
 
   const first = await policy.prepare("https://docs.example.com/one");
@@ -58,11 +61,13 @@ test("source acquisition caches robots decisions and paces repeated domains", as
 test("source acquisition denies known robots exclusions and records unavailable robots", async () => {
   const denyPolicy = new SourceAcquisitionPolicy({
     minDomainDelayMs: 0,
-    fetchRobots: async () => ({ ok: true, status: 200, text: async () => "User-agent: *\nDisallow: /private\n" })
+    fetchRobots: async () => ({ ok: true, status: 200, text: async () => "User-agent: *\nDisallow: /private\n" }),
+    resolveHostname: resolvePublicHostname
   });
   const unavailablePolicy = new SourceAcquisitionPolicy({
     minDomainDelayMs: 0,
-    fetchRobots: async () => ({ ok: false, status: 503, text: async () => "" })
+    fetchRobots: async () => ({ ok: false, status: 503, text: async () => "" }),
+    resolveHostname: resolvePublicHostname
   });
 
   assert.equal((await denyPolicy.prepare("https://docs.example.com/private/audit")).action, "deny");
@@ -78,7 +83,8 @@ test("source acquisition enforces a per-domain budget and leaves sensitive domai
     fetchRobots: async () => {
       robotsCalls += 1;
       return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
-    }
+    },
+    resolveHostname: resolvePublicHostname
   });
 
   const first = await policy.prepare("https://docs.example.com/one");
@@ -95,4 +101,37 @@ test("source acquisition enforces a per-domain budget and leaves sensitive domai
   assert.equal(sensitive.action, "deny");
   assert.ok(sensitive.signals.includes("review_domain"));
   assert.equal(robotsCalls, 1);
+});
+
+test("source acquisition denies DNS answers that point at private networks before robots or browser access", async () => {
+  let robotsCalls = 0;
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: async () => [{ address: "10.0.0.7", family: 4 }],
+    fetchRobots: async () => {
+      robotsCalls += 1;
+      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+    }
+  });
+
+  const decision = await policy.prepare("https://public-looking.example/research");
+
+  assert.equal(decision.action, "deny");
+  assert.ok(decision.signals.includes("resolved_private_network"));
+  assert.ok(decision.signals.includes("human_review_required"));
+  assert.equal(robotsCalls, 0);
+});
+
+test("source acquisition fails closed when hostname resolution is unavailable", async () => {
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: async () => {
+      throw new Error("DNS unavailable");
+    }
+  });
+
+  const decision = await policy.prepare("https://docs.example.com/research");
+
+  assert.equal(decision.action, "deny");
+  assert.ok(decision.signals.includes("hostname_resolution_failed"));
 });

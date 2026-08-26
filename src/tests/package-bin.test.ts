@@ -21,7 +21,8 @@ test("published CLI entrypoint and required modules are present in the npm tarba
     "dist/packs/index.js",
     "dist/server/management-server.js",
     "dist/tasks/agent-runner.js",
-    "dist/workflows/index.js"
+    "dist/workflows/index.js",
+    ".env.example"
   ]) {
     assert.ok(publishedFiles.has(requiredPath), `${requiredPath} must be included in the npm tarball`);
   }

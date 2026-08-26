@@ -20,6 +20,36 @@ interface ManagementServerOptions {
   databasePath?: string;
 }
 
+export const MAX_MANAGEMENT_REQUEST_BODY_BYTES = 64 * 1024;
+
+class ManagementRequestError extends Error {
+  constructor(
+    readonly statusCode: number,
+    readonly errorCode: string,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * The dashboard exposes local job metadata and control actions. It must never
+ * be bound to a LAN or public interface without an authentication layer.
+ */
+export function requireLoopbackManagementHost(rawHost: string): "127.0.0.1" | "::1" {
+  const host = rawHost.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "127.0.0.1" || host === "::1") {
+    return host;
+  }
+  throw new Error(
+    "server run only accepts loopback hosts (127.0.0.1 or ::1) because the dashboard can inspect and control local research jobs. Do not expose it to a network without an authentication boundary."
+  );
+}
+
+export function formatManagementServerUrl(host: "127.0.0.1" | "::1", port: number): string {
+  return host === "::1" ? `http://[::1]:${port}` : `http://${host}:${port}`;
+}
+
 function sendJson(res: ServerResponse, statusCode: number, body: unknown): void {
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
@@ -27,6 +57,7 @@ function sendJson(res: ServerResponse, statusCode: number, body: unknown): void 
     "Referrer-Policy": "no-referrer",
     "X-Frame-Options": "DENY",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cross-Origin-Resource-Policy": "same-origin",
     "Cache-Control": "no-store"
   });
   res.end(JSON.stringify(body, null, 2));
@@ -49,6 +80,7 @@ function sendHtml(res: ServerResponse, html: string): void {
     "Referrer-Policy": "no-referrer",
     "X-Frame-Options": "DENY",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cross-Origin-Resource-Policy": "same-origin",
     "Content-Security-Policy":
       "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     "Cache-Control": "no-store"
@@ -60,6 +92,7 @@ function sendSseHeaders(res: ServerResponse): void {
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "X-Content-Type-Options": "nosniff",
+    "Cross-Origin-Resource-Policy": "same-origin",
     "Cache-Control": "no-store",
     Connection: "keep-alive"
   });
@@ -78,7 +111,8 @@ function isSameOriginRequest(req: IncomingMessage): boolean {
 
   try {
     const origin = new URL(String(rawOrigin));
-    return origin.host === host;
+    const requestProtocol = (req.socket as { encrypted?: boolean }).encrypted ? "https:" : "http:";
+    return origin.protocol === requestProtocol && origin.host === host;
   } catch {
     return false;
   }
@@ -98,9 +132,28 @@ function methodNotAllowed(res: ServerResponse): void {
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const declaredLength = Number(req.headers["content-length"] ?? 0);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_MANAGEMENT_REQUEST_BODY_BYTES) {
+    throw new ManagementRequestError(
+      413,
+      "request_body_too_large",
+      `Request body exceeds ${MAX_MANAGEMENT_REQUEST_BODY_BYTES} bytes`
+    );
+  }
+
   const chunks: Buffer[] = [];
+  let sizeBytes = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    sizeBytes += buffer.length;
+    if (sizeBytes > MAX_MANAGEMENT_REQUEST_BODY_BYTES) {
+      throw new ManagementRequestError(
+        413,
+        "request_body_too_large",
+        `Request body exceeds ${MAX_MANAGEMENT_REQUEST_BODY_BYTES} bytes`
+      );
+    }
+    chunks.push(buffer);
   }
 
   const raw = Buffer.concat(chunks).toString("utf8").trim();
@@ -108,8 +161,16 @@ async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknow
     return {};
   }
 
-  const parsed = JSON.parse(raw) as unknown;
-  return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    throw new ManagementRequestError(400, "invalid_json_body", "Request body must contain valid JSON");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new ManagementRequestError(400, "invalid_json_body", "Request body must be a JSON object");
+  }
+  return parsed as Record<string, unknown>;
 }
 
 function dashboardHtml(): string {
@@ -1159,6 +1220,10 @@ export function createManagementServer(options?: ManagementServerOptions): http.
 
         notFound(res);
       } catch (error) {
+      if (error instanceof ManagementRequestError) {
+        sendApiError(res, error.statusCode, error.errorCode, error.message);
+        return;
+      }
       sendApiError(res, 500, "server_error", "Unexpected server error", {
         detail: error instanceof Error ? error.message : String(error)
       });

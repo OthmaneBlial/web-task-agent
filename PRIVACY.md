@@ -6,7 +6,7 @@ Web Task Agent is local-first: it has no required hosted control plane and does 
 
 - Job state, queue state, source metadata, evidence links, and artifact metadata are stored in the local SQLite database.
 - Resumable caches, reports, workflow packages, prompt traces, and exports are written to local paths chosen by the operator.
-- The local dashboard listens on `127.0.0.1` by default.
+- The local dashboard only accepts loopback bindings (`127.0.0.1` or `::1`); it refuses LAN and public interfaces because it can inspect and control local jobs.
 - `job export` and `job compare` only write local files; they do not upload or synchronize a package.
 
 ## What can leave the machine
@@ -17,7 +17,7 @@ You are responsible for choosing an endpoint and credentials appropriate for the
 
 ## Source acquisition safeguards
 
-- URLs that are malformed, credential-bearing, local, private-network, or explicitly blocked are refused before browser navigation.
+- URLs that are malformed, credential-bearing, local, private-network, or explicitly blocked are refused before browser navigation. Hostnames are resolved first and a private or reserved DNS answer is refused as well.
 - Public source paths are checked against `robots.txt` when it is available, with a configurable per-domain delay and a default cap of 12 browser requests per domain; an unsafe redirect target is quarantined before its content is extracted or persisted.
 - Page text is treated as untrusted; suspected prompt-injection instructions are quarantined from extraction.
 - Configure `WEB_TASK_AGENT_ALLOWED_DOMAINS`, `WEB_TASK_AGENT_BLOCKED_DOMAINS`, `WEB_TASK_AGENT_DOMAIN_MIN_DELAY_MS`, `WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS`, `WEB_TASK_AGENT_REVIEW_DOMAINS`, and `WEB_TASK_AGENT_USER_AGENT` for tighter operating boundaries. Domains on the review list are not opened: the operator must review their relevance and deliberately remove them from that list before a new run.

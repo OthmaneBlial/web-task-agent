@@ -1,4 +1,6 @@
-import { evaluateSourceUrlPolicy } from "./source-policy";
+import { lookup } from "node:dns/promises";
+
+import { evaluateSourceUrlPolicy, isPublicInternetAddress } from "./source-policy";
 
 export interface RobotsFetchResponse {
   ok: boolean;
@@ -21,6 +23,7 @@ export interface SourceAcquisitionPolicyOptions {
   maxRequestsPerDomain?: number | null;
   reviewDomains?: readonly string[];
   fetchRobots?: (url: string, init: RequestInit) => Promise<RobotsFetchResponse>;
+  resolveHostname?: (hostname: string) => Promise<Array<{ address: string; family: number }>>;
   now?: () => number;
   sleep?: (milliseconds: number) => Promise<void>;
 }
@@ -67,6 +70,10 @@ function defaultSleep(milliseconds: number): Promise<void> {
 
 function defaultFetchRobots(url: string, init: RequestInit): Promise<RobotsFetchResponse> {
   return fetch(url, init);
+}
+
+async function defaultResolveHostname(hostname: string): Promise<Array<{ address: string; family: number }>> {
+  return lookup(hostname, { all: true, verbatim: true });
 }
 
 function normalizeAgent(value: string): string {
@@ -135,6 +142,7 @@ export class SourceAcquisitionPolicy {
   readonly maxRequestsPerDomain: number | null;
   readonly reviewDomains: readonly string[];
   private readonly fetchRobots: (url: string, init: RequestInit) => Promise<RobotsFetchResponse>;
+  private readonly resolveHostname: (hostname: string) => Promise<Array<{ address: string; family: number }>>;
   private readonly now: () => number;
   private readonly sleep: (milliseconds: number) => Promise<void>;
   private readonly robotsByOrigin = new Map<string, string | null>();
@@ -142,7 +150,7 @@ export class SourceAcquisitionPolicy {
   private readonly requestsByDomain = new Map<string, number>();
 
   constructor(options: SourceAcquisitionPolicyOptions = {}) {
-    this.userAgent = options.userAgent?.trim() || process.env.WEB_TASK_AGENT_USER_AGENT?.trim() || "web-task-agent/0.2";
+    this.userAgent = options.userAgent?.trim() || process.env.WEB_TASK_AGENT_USER_AGENT?.trim() || "web-task-agent (+https://github.com/OthmaneBlial/web-task-agent)";
     this.minDomainDelayMs = options.minDomainDelayMs ?? configuredDelay();
     this.maxRequestsPerDomain = options.maxRequestsPerDomain === undefined
       ? configuredDomainRequestLimit()
@@ -154,6 +162,7 @@ export class SourceAcquisitionPolicy {
       ...configuredDomains(process.env.WEB_TASK_AGENT_REVIEW_DOMAINS)
     ].map(normalizeDomain).filter(Boolean);
     this.fetchRobots = options.fetchRobots ?? defaultFetchRobots;
+    this.resolveHostname = options.resolveHostname ?? defaultResolveHostname;
     this.now = options.now ?? Date.now;
     this.sleep = options.sleep ?? defaultSleep;
   }
@@ -203,6 +212,44 @@ export class SourceAcquisitionPolicy {
     return { allowed: true, count, limit: this.maxRequestsPerDomain };
   }
 
+  private async evaluateResolvedHostname(hostname: string): Promise<SourceAcquisitionDecision | null> {
+    try {
+      const addresses = await this.resolveHostname(hostname);
+      if (addresses.length === 0) {
+        return {
+          action: "deny",
+          reason: "source acquisition denied hostname with no DNS answers; review the URL before trying again",
+          signals: ["hostname_resolution_empty", "human_review_required"],
+          waitedMs: 0,
+          domainRequestCount: null,
+          domainRequestLimit: this.maxRequestsPerDomain
+        };
+      }
+
+      if (addresses.some(({ address }) => !isPublicInternetAddress(address))) {
+        return {
+          action: "deny",
+          reason: "source acquisition denied hostname that resolves to a private or reserved network address",
+          signals: ["resolved_private_network", "human_review_required"],
+          waitedMs: 0,
+          domainRequestCount: null,
+          domainRequestLimit: this.maxRequestsPerDomain
+        };
+      }
+    } catch {
+      return {
+        action: "deny",
+        reason: "source acquisition could not resolve hostname safely; review the URL or retry when DNS is available",
+        signals: ["hostname_resolution_failed", "human_review_required"],
+        waitedMs: 0,
+        domainRequestCount: null,
+        domainRequestLimit: this.maxRequestsPerDomain
+      };
+    }
+
+    return null;
+  }
+
   async prepare(rawUrl: string): Promise<SourceAcquisitionDecision> {
     const sourceDecision = evaluateSourceUrlPolicy(rawUrl);
     if (sourceDecision.action === "deny") {
@@ -211,6 +258,10 @@ export class SourceAcquisitionPolicy {
 
     const parsed = new URL(rawUrl);
     const hostname = normalizeDomain(parsed.hostname);
+    const resolvedHostnameDecision = await this.evaluateResolvedHostname(hostname);
+    if (resolvedHostnameDecision) {
+      return resolvedHostnameDecision;
+    }
     if (this.reviewDomains.some((domain) => isDomainMatch(hostname, domain))) {
       return {
         action: "deny",

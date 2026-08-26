@@ -2,6 +2,12 @@
 
 This file is intentionally lightweight.
 
+## 0.3.4 — 2026-08-26
+
+- Denied source hostnames that resolve to private, reserved, documentation, or otherwise unsafe addresses before robots lookup or browser navigation.
+- Kept the local management dashboard on loopback hosts only, bounded JSON control payloads, and returned actionable client errors for malformed requests.
+- Added an installable, documented `.env.example` and reduced CI token permissions to read-only repository contents.
+
 ## 0.3.3 — 2026-08-26
 
 - Published the scoped GitHub Packages mirror `@othmaneblial/web-task-agent` from a repository-owned manual workflow using the ephemeral GitHub Actions token.

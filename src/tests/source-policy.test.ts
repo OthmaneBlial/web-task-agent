@@ -4,7 +4,8 @@ import test from "node:test";
 import {
   detectPromptInjectionSignals,
   evaluateRedirectTargetPolicy,
-  evaluateSourceUrlPolicy
+  evaluateSourceUrlPolicy,
+  isPublicInternetAddress
 } from "../lib/source-policy";
 
 test("source policy allows public HTTPS and rejects unsafe URL targets", () => {
@@ -16,12 +17,37 @@ test("source policy allows public HTTPS and rejects unsafe URL targets", () => {
     "http://localhost:4317",
     "http://127.0.0.1:4317",
     "http://10.0.0.4/internal",
+    "http://100.64.0.1/internal",
     "http://192.168.1.10/admin",
+    "http://198.18.0.1/benchmark",
+    "http://203.0.113.8/example",
     "http://[::1]/",
-    "http://[fc00::1]/"
+    "http://[fc00::1]/",
+    "http://[fe90::1]/"
   ]) {
     assert.equal(evaluateSourceUrlPolicy(url).action, "deny", url);
   }
+});
+
+test("public-address classifier rejects private, reserved, and documentation ranges", () => {
+  for (const address of [
+    "127.0.0.1",
+    "10.2.3.4",
+    "100.64.0.1",
+    "192.0.2.1",
+    "198.51.100.2",
+    "203.0.113.3",
+    "::1",
+    "::ffff:7f00:1",
+    "fc00::1",
+    "fe90::1",
+    "2001:db8::1"
+  ]) {
+    assert.equal(isPublicInternetAddress(address), false, address);
+  }
+
+  assert.equal(isPublicInternetAddress("93.184.216.34"), true);
+  assert.equal(isPublicInternetAddress("2606:2800:220:1:248:1893:25c8:1946"), true);
 });
 
 test("source policy supports explicit allow and block domain controls", () => {

@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 export interface SourcePolicyDecision {
   action: "allow" | "deny";
   reason: string;
@@ -17,18 +19,73 @@ function isDomainMatch(hostname: string, domain: string): boolean {
   return hostname === domain || hostname.endsWith(`.${domain}`);
 }
 
-function isPrivateIpv4(hostname: string): boolean {
-  const parts = hostname.split(".");
+function normalizeIpAddress(value: string): string {
+  return value.trim().toLowerCase().replace(/^\[|\]$/g, "");
+}
+
+function isPublicIpv4(address: string): boolean {
+  const parts = address.split(".");
   if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return false;
   const values = parts.map(Number);
   if (values.some((part) => part < 0 || part > 255)) return false;
   const [first, second] = values;
-  return first === 0 || first === 10 || first === 127 || (first === 100 && second >= 64 && second <= 127) || (first === 169 && second === 254) || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168) || first >= 224;
+  if (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && (second === 0 || second === 168)) ||
+    (first === 198 && (second === 18 || second === 19 || second === 51)) ||
+    (first === 203 && second === 0) ||
+    first >= 224
+  ) {
+    return false;
+  }
+  return true;
 }
 
-function isPrivateIpv6(hostname: string): boolean {
-  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  return normalized === "::" || normalized === "::1" || normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:") || normalized.startsWith("::ffff:127.") || normalized.startsWith("::ffff:10.") || normalized.startsWith("::ffff:192.168.") || normalized.startsWith("::ffff:172.16.");
+function isPublicIpv6(address: string): boolean {
+  if (address === "::" || address === "::1") return false;
+
+  const ipv4Tail = address.match(/(?:^|:)(\d+\.\d+\.\d+\.\d+)$/)?.[1];
+  if (ipv4Tail) return isPublicIpv4(ipv4Tail);
+
+  const mappedIpv4 = address.match(/^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (mappedIpv4) {
+    const high = Number.parseInt(mappedIpv4[1]!, 16);
+    const low = Number.parseInt(mappedIpv4[2]!, 16);
+    const embedded = [high >>> 8, high & 0xff, low >>> 8, low & 0xff].join(".");
+    return isPublicIpv4(embedded);
+  }
+
+  const firstSegment = Number.parseInt(address.split(":", 1)[0] ?? "", 16);
+  if (!Number.isFinite(firstSegment)) return false;
+
+  const isUniqueLocal = (firstSegment & 0xfe00) === 0xfc00;
+  const isLinkLocal = (firstSegment & 0xffc0) === 0xfe80;
+  if (isUniqueLocal || isLinkLocal) return false;
+
+  return !(
+    address.startsWith("2001:db8:") ||
+    address.startsWith("2001:0db8:") ||
+    address.startsWith("2001:0000:") ||
+    address.startsWith("2002:") ||
+    address.startsWith("64:ff9b:")
+  );
+}
+
+/**
+ * Returns whether an IP literal is safe to use as a public web destination.
+ * DNS answers must pass the same check before a browser opens a source.
+ */
+export function isPublicInternetAddress(value: string): boolean {
+  const address = normalizeIpAddress(value);
+  const family = isIP(address);
+  if (family === 4) return isPublicIpv4(address);
+  if (family === 6) return isPublicIpv6(address);
+  return false;
 }
 
 function configuredDomains(value: string | undefined): string[] {
@@ -47,7 +104,9 @@ export function evaluateSourceUrlPolicy(rawUrl: string, options: SourcePolicyOpt
 
   const hostname = normalizeDomain(parsed.hostname);
   if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local")) return { action: "deny", reason: "source policy denied local hostname", signals: ["local_hostname"] };
-  if (isPrivateIpv4(hostname) || isPrivateIpv6(hostname)) return { action: "deny", reason: "source policy denied private or reserved network address", signals: ["private_network"] };
+  if (isIP(normalizeIpAddress(hostname)) !== 0 && !isPublicInternetAddress(hostname)) {
+    return { action: "deny", reason: "source policy denied private or reserved network address", signals: ["private_network"] };
+  }
 
   const blocked = [...(options.blockedDomains ?? []), ...configuredDomains(process.env.WEB_TASK_AGENT_BLOCKED_DOMAINS)].map(normalizeDomain).filter(Boolean);
   if (blocked.some((domain) => isDomainMatch(hostname, domain))) return { action: "deny", reason: "source policy denied configured blocked domain", signals: ["blocked_domain"] };
