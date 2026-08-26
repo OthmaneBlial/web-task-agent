@@ -53,7 +53,7 @@ jobs:
         run: |
           mkdir -p release
           npm pack --pack-destination release
-          sha256sum release/*.tgz > release/SHA256SUMS
+          (cd release && sha256sum *.tgz > SHA256SUMS)
 
       - name: Attest the release tarball
         uses: actions/attest-build-provenance@v2
