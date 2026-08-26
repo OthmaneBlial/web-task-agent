@@ -85,6 +85,12 @@ The smallest useful contribution is a reproducible decision artifact:
 
 Do not optimize for star count, benchmark theater, or a large prompt catalog. A contribution is ready when another operator can inspect it, disagree with it, and run the next validation.
 
+### Starter issues
+
+- [Verify a golden-path receipt on a clean machine](https://github.com/OthmaneBlial/web-task-agent/issues/2)
+- [Add one adversarial receipt regression fixture](https://github.com/OthmaneBlial/web-task-agent/issues/3)
+- [Propose one bounded decision with a receipt fixture](https://github.com/OthmaneBlial/web-task-agent/issues/4)
+
 ## Project Shape
 
 - `reports/` is for human-facing output.
