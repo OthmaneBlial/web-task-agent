@@ -94,12 +94,14 @@ test("core diff separates source, policy, model, prompt, claim, and decision cha
 test("a clean TypeScript project installs only the core tarball and renders a diff", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-consumer-"));
   try {
-    const pack = JSON.parse(execFileSync("npm", ["pack", "--json", "--pack-destination", tempDir], {
+    const packJson = JSON.parse(execFileSync("npm", ["pack", "--json", "--pack-destination", tempDir], {
       cwd: path.resolve("packages", "decision-receipt"),
       encoding: "utf8"
-    })) as Array<{ filename: string; unpackedSize: number }>;
-    assert.ok(pack[0]!.unpackedSize <= 180_000, `core unpacked size ${pack[0]!.unpackedSize} exceeds 180 KB`);
-    const tarball = path.join(tempDir, pack[0]!.filename);
+    })) as Array<{ filename: string; unpackedSize: number }> | Record<string, { filename: string; unpackedSize: number }>;
+    const pack = Array.isArray(packJson) ? packJson[0] : Object.values(packJson)[0];
+    assert.ok(pack, "npm pack must describe the generated core tarball");
+    assert.ok(pack.unpackedSize <= 180_000, `core unpacked size ${pack.unpackedSize} exceeds 180 KB`);
+    const tarball = path.join(tempDir, pack.filename);
     execFileSync("npm", ["init", "-y"], { cwd: tempDir, stdio: "ignore" });
     execFileSync("npm", ["install", "--ignore-scripts", "--no-package-lock", tarball], { cwd: tempDir, stdio: "ignore" });
     const source = [

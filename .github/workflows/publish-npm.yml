@@ -41,7 +41,7 @@ jobs:
 
       - name: Require an OIDC-capable npm CLI
         run: |
-          npm install --global npm@latest
+          npm install --global npm@11
           npm --version
           node -e 'const [major, minor] = require("child_process").execFileSync("npm", ["--version"], {encoding:"utf8"}).trim().split(".").map(Number); if (major < 11 || (major === 11 && minor < 5)) process.exit(1)'
 

@@ -10,10 +10,12 @@ test("published CLI entrypoint and required modules are present in the npm tarba
 
   assert.ok(contents.startsWith("#!/usr/bin/env node\n"));
 
-  const packed = JSON.parse(execFileSync("npm", ["pack", "--dry-run", "--json"], { encoding: "utf8" })) as Array<{
+  const packJson = JSON.parse(execFileSync("npm", ["pack", "--dry-run", "--json"], { encoding: "utf8" })) as Array<{
     files: Array<{ path: string }>;
-  }>;
-  const publishedFiles = new Set(packed[0].files.map((file) => file.path));
+  }> | Record<string, { files: Array<{ path: string }> }>;
+  const packed = Array.isArray(packJson) ? packJson[0] : Object.values(packJson)[0];
+  assert.ok(packed, "npm pack must describe the generated tarball");
+  const publishedFiles = new Set(packed.files.map((file) => file.path));
 
   for (const requiredPath of [
     "dist/cli.js",
