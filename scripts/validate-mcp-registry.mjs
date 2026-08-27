@@ -23,6 +23,6 @@ assert.deepEqual(publishedPackage.packageArguments, [
 assert.equal("environmentVariables" in publishedPackage, false, "the public entry must not require secrets or environment setup");
 assert.equal("remotes" in server, false, "the local-only server must not advertise remote transports");
 assert.ok(packageJson.files.includes("server.json"), "server.json must ship in the npm tarball");
-assert.equal(packageJson.bin[packageJson.name], "dist/cli.js", "the package identifier must resolve to the CLI that handles mcp serve");
+assert.equal(packageJson.bin[packageJson.name], "dist/entrypoint.js", "the package identifier must resolve to the lightweight entrypoint that handles mcp serve");
 
 console.log("MCP registry metadata is internally consistent, local-only, and version-aligned.");

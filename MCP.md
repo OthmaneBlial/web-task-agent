@@ -43,7 +43,7 @@ The packaged CLI path is equivalent after `npm run build`:
   "mcpServers": {
     "decision-receipt": {
       "command": "node",
-      "args": ["/absolute/path/to/web-task-agent/dist/cli.js", "mcp", "serve"],
+      "args": ["/absolute/path/to/web-task-agent/dist/entrypoint.js", "mcp", "serve"],
       "env": {
         "DECISION_RECEIPT_ROOT": "/absolute/path/to/the/authorized/workspace"
       }

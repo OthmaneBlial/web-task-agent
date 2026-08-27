@@ -17,11 +17,12 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "web-task-agent": "dist/cli.js",
+    "web-task-agent": "dist/entrypoint.js",
     "decision-receipt-mcp": "dist/mcp/server.js"
   },
   "files": [
     "dist/cli.js",
+    "dist/entrypoint.js",
     "dist/demos/**/*.js",
     "dist/lib/**/*.js",
     "dist/mcp/**/*.js",
@@ -67,7 +68,7 @@
     "build": "npm run build:receipt-core && tsc -p tsconfig.json",
     "typecheck": "npm run build:receipt-core && npm run typecheck:web-verifier && tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist packages/decision-receipt/dist",
-    "start": "npm run build && node dist/cli.js",
+    "start": "npm run build && node dist/entrypoint.js",
     "test": "npm run test:ci",
     "test:unit": "node --test $(find dist/tests -maxdepth 1 -name '*.test.js' | sort)",
     "test:integration": "node --test dist/tests/integration/*.test.js",

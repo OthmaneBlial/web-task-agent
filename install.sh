@@ -267,7 +267,7 @@ else
 fi
 
 cd "\${APP_DIR}"
-exec "\${NODE_BIN}" dist/cli.js "\$@"
+exec "\${NODE_BIN}" dist/entrypoint.js "\$@"
 EOF
   chmod +x "${launcher_path}"
 }

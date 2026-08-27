@@ -5,8 +5,12 @@ import path from "node:path";
 import test from "node:test";
 
 test("published CLI entrypoint and required modules are present in the npm tarball", () => {
-  const cliPath = path.resolve("dist/cli.js");
-  const contents = fs.readFileSync(cliPath, "utf8");
+  const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8")) as {
+    bin: Record<string, string>;
+    mcpName?: string;
+  };
+  const entrypointPath = path.resolve(packageJson.bin["web-task-agent"]!);
+  const contents = fs.readFileSync(entrypointPath, "utf8");
 
   assert.ok(contents.startsWith("#!/usr/bin/env node\n"));
 
@@ -19,6 +23,7 @@ test("published CLI entrypoint and required modules are present in the npm tarba
 
   for (const requiredPath of [
     "dist/cli.js",
+    "dist/entrypoint.js",
     "dist/mcp/server.js",
     "dist/demos/index.js",
     "dist/packs/index.js",
@@ -37,7 +42,6 @@ test("published CLI entrypoint and required modules are present in the npm tarba
     assert.ok(publishedFiles.has(requiredPath), `${requiredPath} must be included in the npm tarball`);
   }
 
-  const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8")) as { mcpName?: string };
   const serverJson = JSON.parse(fs.readFileSync("server.json", "utf8")) as { name?: string };
   assert.equal(packageJson.mcpName, serverJson.name);
 });

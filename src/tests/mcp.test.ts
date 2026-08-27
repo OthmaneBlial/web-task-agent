@@ -160,7 +160,7 @@ test("main CLI exposes the same offline MCP server through mcp serve", async () 
     'net.connect = deny;',
     'net.createConnection = deny;'
   ].join("\n"), "utf8");
-  const client = new LocalMcpClient(root, guard, [path.resolve("dist", "cli.js"), "mcp", "serve"]);
+  const client = new LocalMcpClient(root, guard, [path.resolve("dist", "entrypoint.js"), "mcp", "serve"]);
   try {
     const initialized = resultObject(await client.request("initialize", {
       protocolVersion: "2025-11-25",
