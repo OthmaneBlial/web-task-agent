@@ -15,6 +15,7 @@ This file is intentionally lightweight.
 - Added a lightweight package-level `mcp serve` entrypoint that avoids loading the research runtime, schema-validated official MCP registry metadata, clean-tarball client proof, and a pinned checksum-verified GitHub OIDC publication step that runs only after the npm version is public.
 - Added a consent-gated manual handoff from the local Reviewer Evidence Lab to a dedicated public result form, with explicit GitHub account-linkage warnings and regression tests proving the page never submits or uploads the response.
 - Added an executable six-surface security-review baseline with drift-checked evidence anchors, a focused regression command, and a safe public attestation form that keeps vulnerability details in private advisories.
+- Added a credential-free npm publication preflight that locks the tokenless OIDC contract, probes exact public versions without authenticating, and documents the mandatory bootstrap-then-version-bump sequence.
 
 ## 0.5.1 — 2026-08-26
 
