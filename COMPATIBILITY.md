@@ -7,11 +7,11 @@
 | JSON Schema | v1 | `1.x` shape | — | implemented |
 | Web Task Agent CLI | `0.5.1` + unreleased | `1.x` | `1.0.0` | implemented |
 | `@othmaneblial/decision-receipt` | `0.1.x` | `1.x` | helpers target `1.0.0` | implemented, publication pending P3 |
-| Local web verifier | unreleased static build | `1.x` | verification report `1.0.0` | implemented, publication pending P3 |
-| GitHub Action | — | — | — | planned in P3 |
+| Local web verifier | live static build | `1.x` | verification report `1.0.0` | published, local-only |
+| GitHub Action | `v1.0.0` / maintained `v1` | `1.x` | privacy report `1.0.0` | released, Node 24 |
 | Provider/MCP adapters | experimental import boundary | `1.0.0` | `1.0.0` | broader adapters planned in P4 |
 
-The table distinguishes code present in this repository from externally published surfaces. “Implemented” does not mean the npm package has been released.
+The table distinguishes code present in this repository from externally published surfaces. “Implemented” does not mean the npm package has been released. The Action vendors the reviewed core from protocol commit `8a871b7`; its release is verified in a [green PR](https://github.com/OthmaneBlial/web-task-agent/pull/9) and a [reproducible red PR](https://github.com/OthmaneBlial/decision-receipt-demo/pull/1).
 
 ## Compatibility policy
 

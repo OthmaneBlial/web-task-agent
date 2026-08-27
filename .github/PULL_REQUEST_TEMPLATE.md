@@ -2,6 +2,22 @@
 
 Describe the operator-facing behavior, not only the implementation.
 
+## Decision
+
+What decision should a reviewer be able to make from this change?
+
+## Strongest contradiction
+
+Name the most important contrary evidence or unresolved objection. Write “none found” only after looking.
+
+## Invalidation condition
+
+What observable result would invalidate the decision or require rollback?
+
+## Next validation
+
+Name the smallest useful next check, its owner, and when it should happen.
+
 ## Verification
 
 - [ ] Relevant tests pass.

@@ -184,8 +184,8 @@ Le badge doit dire **integrity verified**, jamais **decision is true**. Un hash 
 - [ ] Publier le noyau et le CLI sur le registre npm public depuis un tag protégé.
 - [ ] Utiliser npm Trusted Publishing/OIDC et la provenance automatique ; ne pas conserver de token npm longue durée en CI.
 - [ ] Faire fonctionner un premier succès du type `npx … verify fixture/` sans clé, navigateur ou configuration.
-- [ ] Tester l'installation dans un répertoire neuf sur la matrice Node LTS officiellement supportée.
-- [ ] Conserver le tarball GitHub, SHA-256 et attestation comme chemin de vérification indépendant.
+- [x] Tester l'installation dans un répertoire neuf sur la matrice Node LTS officiellement supportée.
+- [x] Conserver le tarball GitHub, SHA-256 et attestation comme chemin de vérification indépendant.
 
 **Porte externe :** la réservation du nom, la configuration du trusted publisher et la première publication exigent l'autorisation du propriétaire npm. Une CI verte ne permet pas de déclarer ce point livré.
 
@@ -195,12 +195,12 @@ Le badge doit dire **integrity verified**, jamais **decision is true**. Un hash 
 
 Créer un dépôt étroit `OthmaneBlial/decision-receipt-action`, car GitHub Marketplace attend une Action clairement empaquetée autour d'un `action.yml` racine.
 
-- [ ] Entrées : glob de receipts, version de spec acceptée, seuil de fraîcheur et politique de claims insuffisants.
-- [ ] Sorties : statut, compteurs, chemin du rapport, résumé Markdown et diff éventuel.
-- [ ] Ajouter des annotations de fichiers et un Step Summary lisible ; le mode par défaut reste `contents: read` sans commentaire ni écriture.
-- [ ] Rendre le commentaire de PR optionnel et documenter la permission explicite requise.
-- [ ] Publier des tags majeurs immuables/maintenus, notes de release, checksums et tests contre des PRs de fixtures.
-- [ ] Proposer une intégration de trois lignes :
+- [x] Entrées : glob de receipts, version de spec acceptée, seuil de fraîcheur et politique de claims insuffisants.
+- [x] Sorties : statut, compteurs, chemin du rapport, résumé Markdown et diff éventuel.
+- [x] Ajouter des annotations de fichiers et un Step Summary lisible ; le mode par défaut reste `contents: read` sans commentaire ni écriture.
+- [x] Rendre le commentaire de PR optionnel et documenter la permission explicite requise.
+- [x] Publier des tags majeurs immuables/maintenus, notes de release, checksums et tests contre des PRs de fixtures.
+- [x] Proposer une intégration de trois lignes :
 
 ```yaml
 - uses: OthmaneBlial/decision-receipt-action@v1
@@ -210,12 +210,14 @@ Créer un dépôt étroit `OthmaneBlial/decision-receipt-action`, car GitHub Mar
 
 **Preuve d'acceptation :** deux dépôts publics distincts montrent une PR verte et une PR rouge reproductibles. La PR rouge nomme le claim, la source ou le hash fautif. L'Action ne reçoit aucun secret et ne fait aucun appel réseau hors téléchargement normal de l'Action.
 
+**État :** livré dans [`OthmaneBlial/decision-receipt-action`](https://github.com/OthmaneBlial/decision-receipt-action) et publié en `v1.0.0` avec tag immuable, tag majeur maintenu, release illustrée et checksums revérifiés. La [PR verte du dépôt principal](https://github.com/OthmaneBlial/web-task-agent/pull/9) et la [PR rouge du dépôt de démonstration](https://github.com/OthmaneBlial/decision-receipt-demo/pull/1) exécutent toutes deux `@v1` sans secret. La rouge expose trois annotations sur `evidence/source.md` : octets, SHA-256 du manifeste et hash du snapshot. Un test exécute le chemin par défaut avec les primitives réseau bloquées ; le commentaire reste un opt-in séparé.
+
 ### 3. Faire de chaque intégration une surface de découverte
 
-- [ ] Badge `Decision Receipt verified` lié au rapport ou à la documentation du protocole.
-- [ ] Template de PR/RFC qui demande : décision, contradiction principale, invalidation et prochaine validation.
-- [ ] Exemple complet dans un petit dépôt de démonstration, pas seulement dans le monorepo.
-- [ ] Release notes illustrées avec un receipt et son diff, jamais une liste abstraite de commits.
+- [x] Badge `Decision Receipt verified` lié au rapport ou à la documentation du protocole.
+- [x] Template de PR/RFC qui demande : décision, contradiction principale, invalidation et prochaine validation.
+- [x] Exemple complet dans un petit dépôt de démonstration, pas seulement dans le monorepo.
+- [x] Release notes illustrées avec un receipt et son diff, jamais une liste abstraite de commits.
 
 ---
 
