@@ -25,7 +25,7 @@ La viralité ne se programme pas et aucune roadmap ne peut promettre des étoile
 | Signal public | Baseline | Lecture honnête |
 | --- | ---: | --- |
 | Étoiles / forks / watchers | 0 / 0 / 0 | Le dépôt n'a pas encore de portée externe mesurable. |
-| Issues ouvertes | 3 | Elles ont toutes été amorcées par le mainteneur. |
+| Issues ouvertes | 6 | Elles ont toutes été amorcées par le mainteneur ; trois nouvelles issues ouvrent adapter, revue sécurité et validation externe sans compter comme adoption. |
 | Discussions | 5 | Elles ont toutes été amorcées par le mainteneur, sans réponse choisie. |
 | Téléchargements des deux assets `v0.5.1` | 1 chacun | Cela prouve la vérification de release, pas l'adoption. |
 | Package public npm | absent | Le chemin sans authentification reste le tarball GitHub. |
@@ -269,6 +269,8 @@ Créer un dépôt étroit `OthmaneBlial/decision-receipt-action`, car GitHub Mar
 - [ ] Pour chaque cas : question, entrée, policy, receipt, contradiction, décision, invalidation, temps de revue et retour critique.
 - [ ] Ne pas sélectionner uniquement les succès ; publier au moins un cas où le receipt reste `insufficient` ou ne change pas la décision.
 
+**Recrutement ouvert, baseline inchangée :** [l'issue #12](https://github.com/OthmaneBlial/web-task-agent/issues/12) invite trois tracks consentis et accepte explicitement résultats négatifs, neutres, abandonnés, `insufficient` ou sans changement. Elle ne constitue ni un participant ni un usage ; les quatre cases restent ouvertes jusqu'à des cas externes réels.
+
 ### Test de valeur reviewer
 
 Comparer un rapport Markdown seul avec le même rapport accompagné d'un receipt. Mesurer :
@@ -283,11 +285,11 @@ Publier protocole, petits dénominateurs, données anonymisées consenties et li
 
 ### Revue de sécurité indépendante
 
-- [ ] Demander une revue externe du schéma, de la canonicalisation, des chemins d'archive, des signatures, du rendu HTML et de la frontière local-only.
+- [x] Demander une revue externe du schéma, de la canonicalisation, des chemins d'archive, des signatures, du rendu HTML et de la frontière local-only.
 - [ ] Convertir chaque faille en test de non-régression et advisory si nécessaire.
 - [x] Publier ce qui a été testé et ce qui ne l'a pas été.
 
-**Préparation livrée, adoption non simulée :** `EXTERNAL_VALIDATION.md` fixe trois tracks, le protocole reviewer, le consentement granulaire et une baseline externe à zéro. `SECURITY_REVIEW.md` publie le commit pinning, les six surfaces prioritaires, les commandes, les preuves mainteneur et les zones non auditées. Aucun participant ni reviewer indépendant n'est compté avant une trace réelle.
+**Préparation livrée, adoption non simulée :** `EXTERNAL_VALIDATION.md` fixe trois tracks, le protocole reviewer, le consentement granulaire et une baseline externe à zéro. `SECURITY_REVIEW.md` publie le commit pinning, les six surfaces prioritaires, les commandes, les preuves mainteneur et les zones non auditées. La [demande publique de revue #10](https://github.com/OthmaneBlial/web-task-agent/issues/10) borne le résultat attendu et redirige toute faille vers une advisory privée. Aucun participant, audit reçu ni reviewer indépendant n'est compté avant une trace réelle.
 
 **Preuve d'acceptation :** au moins cinq receipts ont été vérifiés par des non-mainteneurs, trois utilisateurs ont produit un second receipt ou un diff, et une revue indépendante a laissé une trace publique exploitable.
 
@@ -317,14 +319,14 @@ Chaque publication doit pointer directement vers l'artefact essayable, pas seule
 
 ### Contributions qui renforcent le moat
 
-- [ ] `good first adapter` avec fixture et contrat.
-- [ ] `good first policy case` avec charge adversariale.
-- [ ] `receipt review` avec preuve de reproduction.
+- [x] `good first adapter` avec fixture et contrat.
+- [x] `good first policy case` avec charge adversariale.
+- [x] `receipt review` avec preuve de reproduction.
 - [x] RFC obligatoire pour toute rupture de schéma.
 - [x] `MAINTAINERS.md`, politique de compatibilité et règles de release v1.
 - [x] Galerie opt-in de receipts publics, licenciés et expurgés ; aucune collecte automatique.
 
-**État intermédiaire :** les contrats de contribution existent comme issue forms testées. Le RFC définit les surfaces byte-level et la migration obligatoires ; la gouvernance nomme honnêtement un seul mainteneur ; la galerie exige licence, consentement et redaction, ne collecte rien et reste vide jusqu'à une vraie soumission. Les trois cases d'issues ne seront cochées qu'après publication d'issues publiques avec une acceptance reproductible.
+**État :** les contrats existent comme issue forms testées et comme issues publiques : [adapter #11](https://github.com/OthmaneBlial/web-task-agent/issues/11), [policy case #3](https://github.com/OthmaneBlial/web-task-agent/issues/3) et [receipt review #2](https://github.com/OthmaneBlial/web-task-agent/issues/2). Le RFC définit les surfaces byte-level et la migration obligatoires ; la gouvernance nomme honnêtement un seul mainteneur ; la galerie exige licence, consentement et redaction, ne collecte rien et reste vide jusqu'à une vraie soumission. Les topics `decision-receipt`, `provenance`, `json-schema`, `github-actions`, `mcp` et `ai-safety` ne sont ajoutés qu'après livraison des surfaces correspondantes. Une issue ouverte n'est pas une contribution externe fusionnée.
 
 **Preuve d'acceptation :** deux PRs externes fusionnées, trois dépôts publics utilisant l'Action et au moins un cas communautaire devenu fixture, adapter ou décision de spec. Les posts manuels, partenariats et retours humains restent des tâches externes ; ils ne peuvent pas être simulés par le code.
 

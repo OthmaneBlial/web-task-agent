@@ -2,6 +2,8 @@
 
 The repository currently has maintainer-produced proofs and no claimed external adoption baseline. This protocol lets real reviewers test usefulness without hidden telemetry or pressure to report a positive outcome.
 
+Volunteers can coordinate through [issue #12](https://github.com/OthmaneBlial/web-task-agent/issues/12). The maintainer-authored invitation is not a participant, case study, or usage event.
+
 ## Three case-study tracks
 
 Recruit one consenting participant for each track before calling the set complete:

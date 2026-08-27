@@ -2,6 +2,8 @@
 
 This is the public review scope for Decision Receipt v1. It distinguishes maintainer tests from independent review and gives reviewers a bounded, reproducible target. Suspected vulnerabilities must be reported through the private process in [SECURITY.md](SECURITY.md), not a public issue.
 
+The public coordination request is [issue #10](https://github.com/OthmaneBlial/web-task-agent/issues/10). Opening that issue asks for review; it does not count as a completed independent assessment.
+
 ## Review target
 
 Review a named commit of `OthmaneBlial/web-task-agent`; do not review a moving branch without recording the final SHA. The high-value surfaces are:

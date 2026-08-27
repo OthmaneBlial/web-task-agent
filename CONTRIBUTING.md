@@ -87,9 +87,12 @@ Do not optimize for star count, benchmark theater, or a large prompt catalog. A 
 
 ### Starter issues
 
-- [Verify a golden-path receipt on a clean machine](https://github.com/OthmaneBlial/web-task-agent/issues/2)
-- [Add one adversarial receipt regression fixture](https://github.com/OthmaneBlial/web-task-agent/issues/3)
+- [Map one redistributable agent output through a strict adapter](https://github.com/OthmaneBlial/web-task-agent/issues/11)
+- [Add one adversarial policy regression fixture](https://github.com/OthmaneBlial/web-task-agent/issues/3)
+- [Reproduce a golden-path receipt on a clean machine](https://github.com/OthmaneBlial/web-task-agent/issues/2)
 - [Propose one bounded decision with a receipt fixture](https://github.com/OthmaneBlial/web-task-agent/issues/4)
+- [Independently review one Decision Receipt security boundary](https://github.com/OthmaneBlial/web-task-agent/issues/10)
+- [Run one consented external reviewer study](https://github.com/OthmaneBlial/web-task-agent/issues/12)
 
 The dedicated issue forms also define complete acceptance contracts for a provider-neutral adapter, adversarial policy case, reproducible receipt review, schema RFC, and opt-in gallery entry. A form is an invitation, not evidence that an external contribution exists.
 
