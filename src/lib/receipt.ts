@@ -229,6 +229,7 @@ export interface ExternalDecisionResult {
   limitations?: string[];
   nextValidation?: string;
   generatedAt?: string;
+  runId?: string | null;
   policyVersion?: string | null;
   model?: string | null;
   fixture?: boolean;
@@ -255,6 +256,7 @@ function normalizeExternalResult(result: ExternalDecisionResult | DecisionReceip
     title: contract.decision.title,
     summary: contract.decision.summary,
     generatedAt: contract.producer.exportedAt,
+    runId: contract.producer.runId,
     policyVersion: contract.policyVersion,
     model: contract.model,
     fixture: contract.producer.fixture,
@@ -406,7 +408,7 @@ export function importExternalDecisionResult(input: {
     generatedAt: result.generatedAt || new Date().toISOString(),
     provenance: {
       kind: "imported",
-      runId: null,
+      runId: result.runId ?? null,
       cliVersion: null,
       workflowId: null,
       policyVersion: result.policyVersion ?? "source-policy-v1",

@@ -1,0 +1,68 @@
+{
+  "adapterContractVersion": "1.0.0",
+  "producer": {
+    "adapterId": "browser-use-public-page",
+    "adapterVersion": "1.0.0",
+    "engine": "Browser Use",
+    "engineVersion": "0.13.8",
+    "runId": "browser-use-20260827T094732Z",
+    "exportedAt": "2026-08-27T09:47:40.285224Z",
+    "fixture": false
+  },
+  "decision": {
+    "title": "Can this captured page support a bounded documentation claim?",
+    "summary": "Yes, for the narrow claim that this page is explicitly for documentation examples.",
+    "nextValidation": "Repeat the same capture against a second public documentation page before generalizing beyond this single source.",
+    "origin": {
+      "kind": "operator-attested",
+      "note": "The adapter author framed the decision and next validation around the actual bounded run."
+    }
+  },
+  "sources": [
+    {
+      "id": "example-domain",
+      "title": "Example Domain",
+      "url": "https://example.com/",
+      "publisher": "Internet Assigned Numbers Authority",
+      "role": "redistributable public documentation example",
+      "collectedAt": "2026-08-27T09:47:40.285224Z",
+      "excerpt": "This domain is for use in documentation examples without needing permission. Avoid use in operations.",
+      "origin": {
+        "kind": "captured",
+        "note": null
+      }
+    }
+  ],
+  "claims": [
+    {
+      "id": "page-is-for-documentation-examples",
+      "text": "This page is explicitly for documentation examples.",
+      "status": "supported",
+      "origin": {
+        "kind": "inferred",
+        "note": "The local qwen3:0.6b-q4_K_M via local Ollama model summarized the captured paragraph; the adapter separately requires the evidence excerpt to occur verbatim in the page markdown."
+      },
+      "evidence": [
+        {
+          "id": "browser-use-captured-paragraph",
+          "sourceId": "example-domain",
+          "excerpt": "This domain is for use in documentation examples without needing permission. Avoid use in operations.",
+          "relation": "supports",
+          "origin": {
+            "kind": "captured",
+            "note": null
+          }
+        }
+      ]
+    }
+  ],
+  "contradictions": [],
+  "limitations": [
+    "This run captured one intentionally simple public page and cannot establish broader Browser Use interoperability.",
+    "The 0.6B local model produced a narrow summary; the adapter verifies only that its cited excerpt exists verbatim in captured markdown.",
+    "No authenticated session, screenshot, raw network trace, or provider prompt is included.",
+    "Receipt integrity does not prove that the page or inferred claim is true, complete, representative, or fresh."
+  ],
+  "policyVersion": "browser-use-public-page-v1",
+  "model": "qwen3:0.6b-q4_K_M via local Ollama"
+}

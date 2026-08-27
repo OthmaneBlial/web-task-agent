@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "specVersion": "1.0.0",
+  "profile": "minimal",
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-27T09:47:40.285224Z",
+  "provenance": {
+    "kind": "imported",
+    "runId": "browser-use-20260827T094732Z",
+    "cliVersion": null,
+    "workflowId": null,
+    "policyVersion": "browser-use-public-page-v1",
+    "promptVersion": null,
+    "model": "qwen3:0.6b-q4_K_M via local Ollama",
+    "fixture": false
+  },
+  "decision": {
+    "title": "Can this captured page support a bounded documentation claim?",
+    "summary": "Yes, for the narrow claim that this page is explicitly for documentation examples.",
+    "adapterOrigin": {
+      "kind": "operator-attested",
+      "note": "The adapter author framed the decision and next validation around the actual bounded run."
+    }
+  },
+  "claims": [
+    {
+      "id": "page-is-for-documentation-examples",
+      "text": "This page is explicitly for documentation examples.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "browser-use-captured-paragraph",
+          "sourceId": "example-domain",
+          "excerpt": "This domain is for use in documentation examples without needing permission. Avoid use in operations.",
+          "relation": "supports",
+          "adapterOrigin": {
+            "kind": "captured",
+            "note": null
+          }
+        }
+      ],
+      "adapterOrigin": {
+        "kind": "inferred",
+        "note": "The local qwen3:0.6b-q4_K_M via local Ollama model summarized the captured paragraph; the adapter separately requires the evidence excerpt to occur verbatim in the page markdown."
+      }
+    }
+  ],
+  "sources": [
+    {
+      "id": "example-domain",
+      "title": "Example Domain",
+      "url": "https://example.com/",
+      "publisher": "Internet Assigned Numbers Authority",
+      "role": "redistributable public documentation example",
+      "collectedAt": "2026-08-27T09:47:40.285224Z",
+      "captureType": "imported-excerpt",
+      "snapshotPath": "evidence/snapshots/01-example-domain.md",
+      "snapshotSha256": "d0717d9fa2f10535873d848000b98c410e3b4d3853b71826635c0e90eaae50b4",
+      "adapterOrigin": {
+        "kind": "captured",
+        "note": null
+      }
+    }
+  ],
+  "contradictions": [],
+  "nextValidation": "Repeat the same capture against a second public documentation page before generalizing beyond this single source.",
+  "limitations": [
+    "Imported evidence preserves the provider result but does not prove that its sources are true, complete, authorized, or fresh.",
+    "Adapter browser-use-public-page@1.0.0 imported Browser Use@0.13.8; engine run id: browser-use-20260827T094732Z.",
+    "This run captured one intentionally simple public page and cannot establish broader Browser Use interoperability.",
+    "The 0.6B local model produced a narrow summary; the adapter verifies only that its cited excerpt exists verbatim in captured markdown.",
+    "No authenticated session, screenshot, raw network trace, or provider prompt is included.",
+    "Receipt integrity does not prove that the page or inferred claim is true, complete, representative, or fresh."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "The manifest covers the imported receipt and snapshots; provider-specific provenance remains outside this contract."
+  }
+}

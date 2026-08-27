@@ -236,10 +236,12 @@ Créer un dépôt étroit `OthmaneBlial/decision-receipt-action`, car GitHub Mar
 
 ### 2. Prouver deux imports authentiques
 
-- [ ] Choisir le premier adapter à partir d'une demande réelle, pas du prestige du fournisseur.
+- [x] Choisir le premier adapter à partir d'une demande réelle, pas du prestige du fournisseur.
 - [ ] Importer un run authentique de deux moteurs parmi Browser Use, Stagehand et GPT Researcher.
 - [ ] Publier les commandes, versions, données redistribuables, limites et receipts résultants.
 - [ ] Ajouter ces runs à la matrice de compatibilité sans promettre que les sources tierces sont vraies.
+
+**État intermédiaire — 1/2 :** la demande d'implémentation P4 et la contrainte réelle de disque de l'opérateur ont déterminé le premier adapter : Browser Use pouvait tourner localement avec Chrome et un modèle Ollama ultra-light de 523 Mo, sans compte. Le run authentique `browser-use-20260827T094732Z` est publié avec sortie moteur privacy-safe, version `0.13.8`, commande reproductible, adapter, limites et receipt vérifié. Il ne couvre qu'une page publique simple ; ce jalon ne coche donc ni la preuve à deux moteurs ni l'acceptation P4.
 
 ### 3. Exposer les opérations via MCP local
 

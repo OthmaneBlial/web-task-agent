@@ -50,3 +50,5 @@ node dist/cli.js receipt verify reports/imports/my-engine
 The scaffold is a strict pass-through mapper and includes a clearly synthetic raw fixture. Replace it with a redistributable engine output, record the exact command/version, and preserve limitations. The shared tests generate a scaffold in a temporary directory, execute it, validate it independently, import it, and refuse overwrite.
 
 The existing `examples/interop/browser-use-result.json` remains a synthetic contract fixture and now says so in machine-readable provenance. It is not one of the two authentic external runs required by P4.
+
+The first authentic run is documented separately at [`examples/interop/runs/browser-use`](examples/interop/runs/browser-use/README.md). Its adapter refuses authenticated sessions and telemetry-enabled captures, verifies that cited bytes occur verbatim in Browser Use Markdown, and preserves the external run ID in receipt provenance. It counts as one of two P4 engines, not as broad Browser Use compatibility.

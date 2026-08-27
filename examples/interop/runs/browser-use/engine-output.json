@@ -1,0 +1,36 @@
+{
+  "engine": "Browser Use",
+  "engineVersion": "0.13.8",
+  "runId": "browser-use-20260827T094732Z",
+  "startedAt": "2026-08-27T09:47:32.676396Z",
+  "finishedAt": "2026-08-27T09:47:40.285224Z",
+  "browser": "Google Chrome (local headless, isolated temporary profile)",
+  "model": "qwen3:0.6b-q4_K_M via local Ollama",
+  "source": {
+    "url": "https://example.com/",
+    "title": "example.com",
+    "markdown": "# Example Domain\nThis domain is for use in documentation examples without needing permission. Avoid use in operations.\n[Learn more](https://iana.org/domains/example)",
+    "markdownStats": {
+      "method": "enhanced_dom_tree",
+      "original_html_chars": 242,
+      "initial_markdown_chars": 167,
+      "filtered_chars_removed": 2,
+      "final_filtered_chars": 165,
+      "url": "https://example.com/"
+    }
+  },
+  "modelOutput": {
+    "heading": "Example Domain",
+    "paragraph": "This domain is for use in documentation examples without needing permission. Avoid use in operations.",
+    "claim": "This page is explicitly for documentation examples."
+  },
+  "limits": {
+    "allowedDomains": [
+      "example.com"
+    ],
+    "telemetry": false,
+    "cloudSync": false,
+    "authenticatedSession": false,
+    "screenshotCaptured": false
+  }
+}
