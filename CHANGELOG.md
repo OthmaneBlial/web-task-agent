@@ -13,6 +13,7 @@ This file is intentionally lightweight.
 - Added a reproducible reviewer-value study kit with counterbalanced Markdown/receipt cases, exact controlled tampering, privacy-bounded response validation, fixture exclusion, and descriptive no-hype aggregation.
 - Added the static Reviewer Evidence Lab with per-trial timing, embedded bounded ZIPs, anonymous JSON export, responsive keyboard-accessible UI, and no telemetry, persistence, or submission endpoint.
 - Added a lightweight package-level `mcp serve` entrypoint that avoids loading the research runtime, schema-validated official MCP registry metadata, clean-tarball client proof, and a pinned checksum-verified GitHub OIDC publication step that runs only after the npm version is public.
+- Added a consent-gated manual handoff from the local Reviewer Evidence Lab to a dedicated public result form, with explicit GitHub account-linkage warnings and regression tests proving the page never submits or uploads the response.
 
 ## 0.5.1 — 2026-08-26
 

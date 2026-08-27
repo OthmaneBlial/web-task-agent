@@ -1,0 +1,46 @@
+name: Reviewer Evidence Lab result
+description: Share one manually reviewed, consented, anonymous reviewer-study export.
+title: "reviewer study: "
+labels: [external-validation, needs-evidence]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Complete the [local-only Reviewer Evidence Lab](https://othmaneblial.github.io/web-task-agent/study.html), download the JSON, and inspect every byte before sharing it. This issue is public and linked to your GitHub account. The page never opens this form, uploads the file, or submits anything automatically.
+
+        Do not use this form if you need an anonymous handoff. Coordinate a private consent record with the maintainer first. Never attach credentials, cookies, private URLs, proprietary text, prompt traces, personal data, or an unreviewed export.
+  - type: input
+    id: study_version
+    attributes:
+      label: Study version and reviewed commit
+      placeholder: reviewer-value 1.0.0 at 40-character commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Local validation proof
+      description: Paste the redacted output of `npm run study:reviewer -- validate /path/to/response.json`.
+      placeholder: valid true, fixture false, anonymous participant ID, two trials
+    validations:
+      required: true
+  - type: textarea
+    id: response
+    attributes:
+      label: Manually reviewed anonymous response
+      description: "Drag the reviewed JSON here or link a public copy. The file must have `fixture: false` and `consent.publishAnonymizedRow: true`."
+    validations:
+      required: true
+  - type: checkboxes
+    id: publication_boundary
+    attributes:
+      label: Public handoff boundary
+      options:
+        - label: I manually reviewed the export and confirm it contains no identity, credential, session, private URL, proprietary text, or prompt data.
+          required: true
+        - label: The response records consent for anonymized measures and `publishAnonymizedRow` is true.
+          required: true
+        - label: I understand this public issue is linked to my GitHub account and I intentionally accept that public linkage.
+          required: true
+        - label: I understand a fixture is not a participant, integrity is not truth, and negative, neutral, abandoned, or no-improvement results remain valid.
+          required: true

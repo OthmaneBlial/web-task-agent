@@ -45,6 +45,9 @@ test("reviewer study page exposes a complete accessible local workflow", () => {
   assert.match(html, /id="setup-form"/);
   assert.match(html, /id="trial-form"/);
   assert.match(html, /id="download-response"/);
+  assert.match(html, /id="submit-study-result"/);
+  assert.match(html, /template=reviewer_value_study\.yml/);
+  assert.match(html, /aria-disabled="true"/);
   assert.match(html, /role="status" aria-live="polite"/);
   assert.match(html, /Skip to the study/);
   assert.match(html, /No analytics, cookies, account, storage, model, or API/);
@@ -62,6 +65,9 @@ test("reviewer study browser code has no submission, telemetry, or persistence s
   assert.match(script, /identityAttribution: false/);
   assert.match(script, /fixture: false/);
   assert.match(script, /Nothing was submitted by this page/);
+  assert.match(script, /responseExported/);
+  assert.match(script, /publishAnonymizedRow/);
+  assert.doesNotMatch(script, /\.click\(\).*submit-study-result|window\.open/i);
 });
 
 test("embedded study ZIPs preserve valid and exact controlled-tamper outcomes", async () => {

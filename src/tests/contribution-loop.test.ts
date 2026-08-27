@@ -13,6 +13,7 @@ test("contribution loop exposes safe forms for feedback and case studies", () =>
     ".github/ISSUE_TEMPLATE/receipt_review.yml",
     ".github/ISSUE_TEMPLATE/schema_rfc.yml",
     ".github/ISSUE_TEMPLATE/public_receipt_gallery.yml",
+    ".github/ISSUE_TEMPLATE/reviewer_value_study.yml",
     "docs/content/case-studies.md",
     "docs/activation.md",
     "docs/rfcs/README.md",
@@ -29,6 +30,10 @@ test("contribution loop exposes safe forms for feedback and case studies", () =>
   assert.match(feedbackForm, /Never include API keys/);
   assert.match(feedbackForm, /Decision Change Review/);
   assert.match(feedbackForm, /First-success install/);
+  const reviewerForm = fs.readFileSync(path.join(root, ".github/ISSUE_TEMPLATE/reviewer_value_study.yml"), "utf8");
+  assert.match(reviewerForm, /This issue is public and linked to your GitHub account/);
+  assert.match(reviewerForm, /publishAnonymizedRow/);
+  assert.match(reviewerForm, /never opens this form, uploads the file, or submits anything automatically/);
   const activation = fs.readFileSync(path.join(root, "docs/activation.md"), "utf8");
   assert.match(activation, /No event is sent by the CLI/);
   assert.match(activation, /first_success_completed/);

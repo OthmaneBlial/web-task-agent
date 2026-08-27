@@ -51,6 +51,20 @@ npm run study:reviewer -- validate /private/path/p-1234abcd.json
 npm run study:reviewer -- aggregate /private/path/responses --format=markdown
 ```
 
+## Optional public handoff
+
+The web lab unlocks a link to the dedicated [reviewer-study result form](https://github.com/OthmaneBlial/web-task-agent/issues/new?template=reviewer_value_study.yml) only after a response has been downloaded with `publishAnonymizedRow` consent. The link is a manual handoff, not a submission endpoint: the page never opens it automatically and never sends or attaches the JSON.
+
+Before opening a public issue:
+
+1. validate the exported response with the command above;
+2. inspect every JSON field and remove any identifying or private free text;
+3. confirm `fixture` is `false`, `anonymizedMeasures` is `true`, and `publishAnonymizedRow` is `true`;
+4. understand that the GitHub issue is public and linked to the submitting GitHub account;
+5. attach the file manually only if that public linkage is acceptable.
+
+If public account linkage is not acceptable, do not open the form. A maintainer-held private consent record must be coordinated separately before any count or aggregate changes.
+
 Aggregation excludes fixtures and responses without `anonymizedMeasures` consent. It publishes numerator/denominator pairs, abandoned trials, medians, exclusions, and limits. It performs no significance test and emits no superiority claim.
 
 ## Rebuild and verify the materials

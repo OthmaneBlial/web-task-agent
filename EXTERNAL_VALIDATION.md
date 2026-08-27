@@ -41,6 +41,8 @@ Do not claim a speed, accuracy, or confidence improvement unless the observed da
 
 The executable [`studies/reviewer-value/`](studies/reviewer-value/) kit now fixes the protocol before recruitment: two parallel synthetic cases, `AB`/`BA` assignment, four exact-answer tasks, valid and deliberately tampered receipts, a strict privacy-bounded response schema, and a descriptive aggregator. The [Reviewer Evidence Lab](https://othmaneblial.github.io/web-task-agent/study.html) runs the same assignment in a static page, starts each timer on reveal, downloads bounded receipt ZIPs, and exports a schema-shaped JSON response without telemetry, persistence, or a submission endpoint. Both valid bundles pass offline verification; each controlled falsification fails at its intended evidence path. Its checked-in response is a fixture and is excluded from the default aggregate, so the real participant count remains zero.
 
+After a consenting participant downloads and manually reviews the export, the lab can reveal a link to a dedicated public GitHub issue form. The page never opens that form automatically and never sends or attaches the response. A public issue is visibly linked to the participant's GitHub account, so it is only appropriate when `publishAnonymizedRow` is true and that separate account-linkage boundary is accepted. Otherwise use a separately coordinated private consent record; do not turn the security-advisory channel into a study inbox.
+
 ## Consent checkpoints
 
 Consent is granular: participation, anonymized measures, public receipt, public quote, and identity attribution are separate choices. A participant may withdraw unpublished data. Already-merged open-source contributions remain governed by their repository license and Git history.

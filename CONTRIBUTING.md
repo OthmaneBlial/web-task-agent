@@ -93,6 +93,7 @@ Do not optimize for star count, benchmark theater, or a large prompt catalog. A 
 - [Propose one bounded decision with a receipt fixture](https://github.com/OthmaneBlial/web-task-agent/issues/4)
 - [Independently review one Decision Receipt security boundary](https://github.com/OthmaneBlial/web-task-agent/issues/10)
 - [Run one consented external reviewer study](https://github.com/OthmaneBlial/web-task-agent/issues/12) in the [local-only Evidence Lab](https://othmaneblial.github.io/web-task-agent/study.html) or with the fixed [`AB`/`BA` study kit](studies/reviewer-value/)
+- [Share a manually reviewed reviewer-study export](https://github.com/OthmaneBlial/web-task-agent/issues/new?template=reviewer_value_study.yml) only when anonymized-row consent and public GitHub account linkage are both explicit
 
 The dedicated issue forms also define complete acceptance contracts for a provider-neutral adapter, adversarial policy case, reproducible receipt review, schema RFC, and opt-in gallery entry. A form is an invitation, not evidence that an external contribution exists.
 
