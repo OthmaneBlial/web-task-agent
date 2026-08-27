@@ -18,8 +18,8 @@ class LocalMcpClient {
   readonly stderr: string[] = [];
   readonly child: ChildProcessWithoutNullStreams;
 
-  constructor(root: string, networkGuard: string) {
-    this.child = spawn(process.execPath, [path.resolve("dist", "mcp", "server.js")], {
+  constructor(root: string, networkGuard: string, entrypointArgs = [path.resolve("dist", "mcp", "server.js")]) {
+    this.child = spawn(process.execPath, entrypointArgs, {
       cwd: root,
       env: {
         ...process.env,
@@ -143,6 +143,39 @@ test("local MCP exposes exactly four bounded offline receipt tools", async () =>
     }));
     assert.equal(escaped.isError, true);
     assert.match(JSON.stringify(escaped.content), /escapes DECISION_RECEIPT_ROOT/);
+    assert.equal(client.stderr.join(""), "");
+  } finally {
+    await client.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("main CLI exposes the same offline MCP server through mcp serve", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-cli-mcp-"));
+  const guard = path.join(root, "deny-network.cjs");
+  fs.writeFileSync(guard, [
+    'const net = require("node:net");',
+    'function deny() { throw new Error("unexpected MCP network access"); }',
+    'globalThis.fetch = deny;',
+    'net.connect = deny;',
+    'net.createConnection = deny;'
+  ].join("\n"), "utf8");
+  const client = new LocalMcpClient(root, guard, [path.resolve("dist", "cli.js"), "mcp", "serve"]);
+  try {
+    const initialized = resultObject(await client.request("initialize", {
+      protocolVersion: "2025-11-25",
+      capabilities: {},
+      clientInfo: { name: "cli-entrypoint-test", version: "1.0.0" }
+    }));
+    assert.equal(initialized.protocolVersion, "2025-11-25");
+    const listed = resultObject(await client.request("tools/list", {}));
+    const tools = listed.tools as Array<{ name: string }>;
+    assert.deepEqual(tools.map((tool) => tool.name), [
+      "verify_receipt",
+      "compare_receipts",
+      "import_result",
+      "render_receipt"
+    ]);
     assert.equal(client.stderr.join(""), "");
   } finally {
     await client.close();

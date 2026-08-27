@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.othmaneblial/decision-receipt",
+  "title": "Decision Receipt",
+  "description": "Verify, compare, import, and render local Decision Receipts offline through four bounded MCP tools.",
+  "repository": {
+    "url": "https://github.com/OthmaneBlial/web-task-agent",
+    "source": "github"
+  },
+  "version": "0.5.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "web-task-agent",
+      "version": "0.5.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        },
+        {
+          "type": "positional",
+          "value": "serve"
+        }
+      ]
+    }
+  ]
+}

@@ -94,6 +94,11 @@ jobs:
           else
             npx --no-install web-task-agent demo export browser-agent-landscape --output "$consumer_dir/receipt"
             npx --no-install web-task-agent receipt verify "$consumer_dir/receipt"
+            MCP_SERVER_COMMAND="$consumer_dir/node_modules/.bin/web-task-agent" \
+              MCP_SERVER_ARGS='["mcp","serve"]' \
+              MCP_SERVER_CWD="$consumer_dir" \
+              MCP_VERIFY_PATH="receipt" \
+              node "$GITHUB_WORKSPACE/scripts/test-mcp-sdk.mjs"
           fi
           mkdir -p "$GITHUB_WORKSPACE/release-npm"
           cp "$release_dir"/* "$GITHUB_WORKSPACE/release-npm/"
@@ -102,6 +107,50 @@ jobs:
         if: github.event_name == 'push'
         working-directory: ${{ steps.package.outputs.directory }}
         run: npm publish --access public
+
+      - name: Wait for the CLI version to become public on npm
+        if: github.event_name == 'push' && steps.package.outputs.package == 'web-task-agent'
+        env:
+          EXPECTED_VERSION: ${{ github.ref_name }}
+        run: |
+          expected="${EXPECTED_VERSION#v}"
+          for attempt in {1..20}; do
+            observed="$(npm view "web-task-agent@$expected" version 2>/dev/null || true)"
+            if [[ "$observed" == "$expected" ]]; then
+              echo "Observed web-task-agent@$expected on the public npm registry."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "web-task-agent@$expected did not become visible on the public npm registry in time" >&2
+          exit 1
+
+      - name: Download the pinned MCP publisher on the GitHub runner
+        if: github.event_name == 'push' && steps.package.outputs.package == 'web-task-agent'
+        id: mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.1
+          MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          publisher_dir="$(mktemp -d)"
+          archive="$publisher_dir/mcp-publisher.tar.gz"
+          curl --fail --silent --show-error --location \
+            "https://github.com/modelcontextprotocol/registry/releases/download/$MCP_PUBLISHER_VERSION/mcp-publisher_linux_amd64.tar.gz" \
+            --output "$archive"
+          echo "$MCP_PUBLISHER_SHA256  $archive" | sha256sum --check --strict
+          tar --extract --gzip --file "$archive" --directory "$publisher_dir"
+          publisher_path="$(find "$publisher_dir" -type f -name mcp-publisher -perm -u+x -print -quit)"
+          test -n "$publisher_path"
+          "$publisher_path" --version
+          echo "path=$publisher_path" >> "$GITHUB_OUTPUT"
+
+      - name: Publish official MCP registry metadata with GitHub OIDC
+        if: github.event_name == 'push' && steps.package.outputs.package == 'web-task-agent'
+        env:
+          MCP_PUBLISHER_PATH: ${{ steps.mcp-publisher.outputs.path }}
+        run: |
+          "$MCP_PUBLISHER_PATH" login github-oidc
+          "$MCP_PUBLISHER_PATH" publish
 
       - uses: actions/upload-artifact@v4
         with:

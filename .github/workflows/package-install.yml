@@ -61,3 +61,8 @@ jobs:
           npm install --ignore-scripts --no-package-lock "$package_dir"/*.tgz
           npx --no-install web-task-agent demo export browser-agent-landscape --output "$consumer_dir/receipt"
           npx --no-install web-task-agent receipt verify "$consumer_dir/receipt"
+          MCP_SERVER_COMMAND="$consumer_dir/node_modules/.bin/web-task-agent" \
+            MCP_SERVER_ARGS='["mcp","serve"]' \
+            MCP_SERVER_CWD="$consumer_dir" \
+            MCP_VERIFY_PATH="receipt" \
+            node "$GITHUB_WORKSPACE/scripts/test-mcp-sdk.mjs"

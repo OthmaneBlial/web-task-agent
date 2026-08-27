@@ -178,6 +178,17 @@ Use "web-task-agent <command> --help" for the full option list.
 `
   );
 
+  const mcp = program
+    .command("mcp")
+    .description("Expose bounded Decision Receipt operations to a local MCP host");
+
+  mcp
+    .command("serve")
+    .description("Run the offline Decision Receipt MCP server over STDIO")
+    .action(async () => {
+      await import("./mcp/server");
+    });
+
   const demo = program
     .command("demo")
     .description("Inspect deterministic, source-linked package demos without an API key or browser session");

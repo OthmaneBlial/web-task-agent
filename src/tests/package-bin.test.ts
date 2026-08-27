@@ -31,8 +31,13 @@ test("published CLI entrypoint and required modules are present in the npm tarba
     "schema/decision-receipt.v1.schema.json",
     "schema/decision-receipt-adapter.v1.schema.json",
     "conformance/cases.json",
+    "server.json",
     ".env.example"
   ]) {
     assert.ok(publishedFiles.has(requiredPath), `${requiredPath} must be included in the npm tarball`);
   }
+
+  const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8")) as { mcpName?: string };
+  const serverJson = JSON.parse(fs.readFileSync("server.json", "utf8")) as { name?: string };
+  assert.equal(packageJson.mcpName, serverJson.name);
 });

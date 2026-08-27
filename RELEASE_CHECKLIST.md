@@ -21,6 +21,7 @@ Expected result: tests, generated-content checks, Markdown-link checks, publicat
 - Run `npm run audit:secrets` again immediately before a visibility change or release. A clean audit is not a substitute for rotating a credential that was ever committed in prior Git history.
 - Inspect the eight deterministic receipts in `examples/receipts/`; they are fixtures, not current research claims.
 - Confirm the npm tarball file list from `npm pack --dry-run` only includes the intended CLI, runtime modules, installer, and public policies.
+- Run `npm run validate:mcp-registry`; confirm `server.json`, `mcpName`, the npm version, STDIO transport, and the `mcp serve` entrypoint remain aligned.
 - Run `npm run first-success` to install the packed artifact in a fresh directory, export the deterministic demo, and verify its receipt offline.
 - Search tracked source for accidental credentials or private artifacts before releasing. Do not add real keys to test fixtures or documentation.
 - Confirm that a live research run uses a narrow, operator-owned key and that no report, cache, database, cookie, or prompt trace is staged.
@@ -37,5 +38,6 @@ Expected result: tests, generated-content checks, Markdown-link checks, publicat
 
 - Open the public repository, release/tag, package registry page, and site from a clean browser context. For the GitHub Packages mirror, authenticate with a classic GitHub personal access token limited to `read:packages`, then install `@othmaneblial/web-task-agent` from `https://npm.pkg.github.com` in a temporary directory and run `web-task-agent demo list`; never commit that token.
 - Install the released package in a temporary directory and run `web-task-agent demo export browser-agent-landscape`.
+- After the root package release, resolve `io.github.othmaneblial/decision-receipt` in the official MCP registry and use a clean MCP client to list the four tools and verify a local fixture. Prepared metadata or a successful npm publication alone is not registry proof.
 - Check that the generated package opens, cites its source metadata, and clearly identifies its fixture status.
 - Announce one evidence-backed demo to a relevant community; do not claim virality, freshness, benchmark superiority, or hosted operation that has not been demonstrated.
