@@ -14,6 +14,11 @@ const runs = [
     id: "browser-use",
     adapterPath: "adapters/browser-use/adapter.mjs",
     exportName: "adaptBrowserUse"
+  },
+  {
+    id: "gpt-researcher",
+    adapterPath: "adapters/gpt-researcher/adapter.mjs",
+    exportName: "adaptGptResearcher"
   }
 ];
 

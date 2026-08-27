@@ -1,0 +1,35 @@
+{
+  "engine": "GPT Researcher",
+  "engineVersion": "0.16.0",
+  "runId": "research_676db66e727e",
+  "startedAt": "2026-08-27T09:56:33.886148Z",
+  "finishedAt": "2026-08-27T09:56:37.469166Z",
+  "query": "What narrow conclusion follows from the supplied Decision Receipt trust boundary?",
+  "reportType": "research_report",
+  "reportSource": "local",
+  "model": "qwen3:0.6b-q4_K_M via local Ollama",
+  "source": {
+    "title": "Decision Receipt trust boundary",
+    "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/docs/content/trust-model.md",
+    "excerpt": "Verification is offline and deterministic. A valid status means the package is internally consistent; it is not a fact-check, freshness guarantee, or authorization check.",
+    "documentSha256": "cc3339ae3778bdda40caedba5f65ae695966509bb9f3d2b476f3ccd3172284a2"
+  },
+  "reportProjection": "# Finding,  \n## Evidence,  \n## Limitation,  \n## Next validation  \n\n**Source:** https://github.com/OthmaneBlial/web-task-agent/blob/main/docs/content/trust-model.md  \n\n- **Finding:** Verification is offline and deterministic. A valid status means the package is internally consistent.  \n- **Evidence:** The content states that verification is offline and deterministic.  \n- **Limitation:** It is not a fact-check, freshness guarantee, or authorization check.  \n- **Next validation:** Further validation will be conducted to ensure accuracy and reliability.",
+  "rawReportSha256": "150ddb115bd60b1f9ce9c29e5a3a725d60a592068c18cb95e6d85f509e0601a3",
+  "reasoningRedacted": true,
+  "visitedUrls": [],
+  "estimatedCostUsd": 0.00245,
+  "runtimePatch": "PyPI gpt-researcher 0.16.0 query_processing.py typing imports were moved before the first Any annotation to match the upstream source import order.",
+  "warnings": [
+    "The optional MCPRetriever dependency was unavailable; MCP was explicitly disabled.",
+    "estimatedCostUsd is GPT Researcher's static estimate, not a billed local Ollama charge."
+  ],
+  "limits": {
+    "preloadedRedistributableContext": true,
+    "retrievalSkippedToAvoidSecondEmbeddingModel": true,
+    "webSearch": false,
+    "mcp": false,
+    "authenticatedSession": false,
+    "rawReasoningPublished": false
+  }
+}

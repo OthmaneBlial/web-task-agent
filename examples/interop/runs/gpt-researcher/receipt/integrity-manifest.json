@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "specVersion": "1.0.0",
+  "type": "receipt-integrity-manifest",
+  "algorithm": "sha256",
+  "receiptPath": "receipt.json",
+  "generatedAt": "2026-08-27T09:56:37.469166Z",
+  "files": [
+    {
+      "path": "evidence/snapshots/01-web-task-agent-trust-model.md",
+      "sha256": "a3c9d6efb560f17e629aef914d8e7a01cefb305c0c86d65056a3b9af9eee5211",
+      "bytes": 206
+    },
+    {
+      "path": "receipt.json",
+      "sha256": "16d1d6ab59173538e66203d76f6919b4aced3d357468dd5df0537b14b299ce1e",
+      "bytes": 4101
+    }
+  ]
+}

@@ -17,3 +17,5 @@ node dist/cli.js receipt verify /tmp/web-task-agent-import
 The generated directory contains a `receipt.json`, source snapshots, and `integrity-manifest.json`. Its provenance is `imported` and its fixture flag stays true, so a valid receipt does not claim a real provider run or that any source is true, complete, authorized, or fresh.
 
 The checked-in [imported receipt](imported-receipt/receipt.json) is generated from the same input by `npm run generate:interop` and is used as a compatibility fixture.
+
+The two authentic, deliberately bounded engine proofs live under [`runs/browser-use`](runs/browser-use/README.md) and [`runs/gpt-researcher`](runs/gpt-researcher/README.md). Each directory records the exact version, reproduction boundary, privacy-safe engine projection, adapter result, verified receipt, and limitations.

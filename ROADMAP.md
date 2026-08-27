@@ -237,11 +237,11 @@ Créer un dépôt étroit `OthmaneBlial/decision-receipt-action`, car GitHub Mar
 ### 2. Prouver deux imports authentiques
 
 - [x] Choisir le premier adapter à partir d'une demande réelle, pas du prestige du fournisseur.
-- [ ] Importer un run authentique de deux moteurs parmi Browser Use, Stagehand et GPT Researcher.
-- [ ] Publier les commandes, versions, données redistribuables, limites et receipts résultants.
-- [ ] Ajouter ces runs à la matrice de compatibilité sans promettre que les sources tierces sont vraies.
+- [x] Importer un run authentique de deux moteurs parmi Browser Use, Stagehand et GPT Researcher.
+- [x] Publier les commandes, versions, données redistribuables, limites et receipts résultants.
+- [x] Ajouter ces runs à la matrice de compatibilité sans promettre que les sources tierces sont vraies.
 
-**État intermédiaire — 1/2 :** la demande d'implémentation P4 et la contrainte réelle de disque de l'opérateur ont déterminé le premier adapter : Browser Use pouvait tourner localement avec Chrome et un modèle Ollama ultra-light de 523 Mo, sans compte. Le run authentique `browser-use-20260827T094732Z` est publié avec sortie moteur privacy-safe, version `0.13.8`, commande reproductible, adapter, limites et receipt vérifié. Il ne couvre qu'une page publique simple ; ce jalon ne coche donc ni la preuve à deux moteurs ni l'acceptation P4.
+**État — 2/2 :** la demande d'implémentation P4 et la contrainte réelle de disque de l'opérateur ont déterminé les adapters. Browser Use `0.13.8` a capturé une page publique avec Chrome ; GPT Researcher `0.16.0` a synthétisé un extrait public préchargé. Les deux runs réutilisent le seul modèle Ollama ultra-light de 523 Mo, n'ouvrent aucune session authentifiée et publient sortie moteur privacy-safe, commande, version, limites, adapter et receipt vérifié. Le second run évite volontairement la retrieval pour ne pas télécharger un modèle d'embedding ; il prouve l'import de la sortie du moteur, pas sa recherche web. La trace de raisonnement émise malgré `/no_think` est supprimée de la projection, dont seul le hash brut est conservé.
 
 ### 3. Exposer les opérations via MCP local
 
@@ -253,6 +253,8 @@ Créer un dépôt étroit `OthmaneBlial/decision-receipt-action`, car GitHub Mar
 **État intermédiaire :** le serveur négocie MCP `2025-11-25`, borne requêtes et réponses à 2 Mo, confine tous les chemins à `DECISION_RECEIPT_ROOT` et refuse les liens symboliques. Un test avec primitives réseau bloquées couvre les quatre outils ; un second test passe par le client TypeScript MCP officiel pour le handshake, la découverte et la vérification. La publication npm et les métadonnées du registre restent liées à la porte propriétaire de P3.
 
 **Preuve d'acceptation :** deux sorties authentiques de moteurs externes passent le corpus de conformité et conservent leurs limites. Un client MCP peut vérifier et comparer hors ligne ; aucune session fournisseur ni donnée privée n'entre dans le package.
+
+**Acceptation observée :** les receipts Browser Use et GPT Researcher passent le même validateur runtime, le JSON Schema indépendant et la vérification d'intégrité. Le client MCP officiel négocie et vérifie hors ligne. L'enregistrement au registre MCP reste bloqué, comme la publication npm dont il dépend ; ce canal de distribution n'est pas présenté comme livré.
 
 ---
 

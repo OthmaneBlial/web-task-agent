@@ -1,0 +1,70 @@
+{
+  "adapterContractVersion": "1.0.0",
+  "producer": {
+    "adapterId": "gpt-researcher-preloaded-context",
+    "adapterVersion": "1.0.0",
+    "engine": "GPT Researcher",
+    "engineVersion": "0.16.0",
+    "runId": "research_676db66e727e",
+    "exportedAt": "2026-08-27T09:56:37.469166Z",
+    "fixture": false
+  },
+  "decision": {
+    "title": "Does a valid offline receipt verification establish factual truth?",
+    "summary": "No. The imported report limits a valid status to internal consistency and explicitly excludes fact-checking, freshness, and authorization.",
+    "nextValidation": "Give the same receipt to an independent reviewer and measure whether they preserve this limitation when explaining its verification status.",
+    "origin": {
+      "kind": "operator-attested",
+      "note": "The adapter author framed the decision around the exact public trust-model excerpt and the authentic engine report."
+    }
+  },
+  "sources": [
+    {
+      "id": "web-task-agent-trust-model",
+      "title": "Decision Receipt trust boundary",
+      "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/docs/content/trust-model.md",
+      "publisher": "OthmaneBlial/web-task-agent maintainers",
+      "role": "redistributable repository documentation supplied as bounded local context",
+      "collectedAt": "2026-08-27T09:56:37.469166Z",
+      "excerpt": "Verification is offline and deterministic. A valid status means the package is internally consistent; it is not a fact-check, freshness guarantee, or authorization check.",
+      "origin": {
+        "kind": "captured",
+        "note": null
+      }
+    }
+  ],
+  "claims": [
+    {
+      "id": "verification-is-not-truth",
+      "text": "A valid offline Decision Receipt verification establishes internal consistency, not factual truth, freshness, or authorization.",
+      "status": "supported",
+      "origin": {
+        "kind": "inferred",
+        "note": "The authentic 0.16.0 report reproduced every bounded limitation; the adapter separately pins the exact source excerpt and document hash."
+      },
+      "evidence": [
+        {
+          "id": "trust-model-verification-boundary",
+          "sourceId": "web-task-agent-trust-model",
+          "excerpt": "Verification is offline and deterministic. A valid status means the package is internally consistent; it is not a fact-check, freshness guarantee, or authorization check.",
+          "relation": "supports",
+          "origin": {
+            "kind": "captured",
+            "note": null
+          }
+        }
+      ]
+    }
+  ],
+  "contradictions": [],
+  "limitations": [
+    "This is one short preloaded-context report, not a benchmark of GPT Researcher retrieval, browsing, citation discovery, or multi-source synthesis.",
+    "Retrieval was deliberately skipped so the run reused the only installed 0.6B Ollama model instead of downloading a second embedding model.",
+    "The PyPI 0.16.0 import-order defect required the documented two-import patch; the optional MCP adapter warning was ignored because MCP was disabled.",
+    "The 0.6B model emitted a reasoning trace despite /no_think; the projection removes it and preserves only its SHA-256, never the private trace.",
+    "GPT Researcher's cost number is a static estimate; this local Ollama run made no billed provider call.",
+    "Receipt integrity does not prove that the supplied source or inferred claim is true, complete, representative, or fresh."
+  ],
+  "policyVersion": "gpt-researcher-preloaded-local-v1",
+  "model": "qwen3:0.6b-q4_K_M via local Ollama"
+}

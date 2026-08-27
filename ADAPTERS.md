@@ -51,4 +51,9 @@ The scaffold is a strict pass-through mapper and includes a clearly synthetic ra
 
 The existing `examples/interop/browser-use-result.json` remains a synthetic contract fixture and now says so in machine-readable provenance. It is not one of the two authentic external runs required by P4.
 
-The first authentic run is documented separately at [`examples/interop/runs/browser-use`](examples/interop/runs/browser-use/README.md). Its adapter refuses authenticated sessions and telemetry-enabled captures, verifies that cited bytes occur verbatim in Browser Use Markdown, and preserves the external run ID in receipt provenance. It counts as one of two P4 engines, not as broad Browser Use compatibility.
+Two authentic runs are documented separately:
+
+- [`examples/interop/runs/browser-use`](examples/interop/runs/browser-use/README.md) refuses authenticated sessions and telemetry-enabled captures, verifies cited bytes against Browser Use Markdown, and preserves the external run ID;
+- [`examples/interop/runs/gpt-researcher`](examples/interop/runs/gpt-researcher/README.md) refuses web/session/MCP data, pins the supplied public excerpt and document hash, and strips a private reasoning trace while retaining only the raw report hash.
+
+They satisfy the two-engine P4 proof, but establish only these bounded outputs—not broad Browser Use or GPT Researcher compatibility and never source truth.

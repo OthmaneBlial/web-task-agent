@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "specVersion": "1.0.0",
+  "profile": "minimal",
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-27T09:56:37.469166Z",
+  "provenance": {
+    "kind": "imported",
+    "runId": "research_676db66e727e",
+    "cliVersion": null,
+    "workflowId": null,
+    "policyVersion": "gpt-researcher-preloaded-local-v1",
+    "promptVersion": null,
+    "model": "qwen3:0.6b-q4_K_M via local Ollama",
+    "fixture": false
+  },
+  "decision": {
+    "title": "Does a valid offline receipt verification establish factual truth?",
+    "summary": "No. The imported report limits a valid status to internal consistency and explicitly excludes fact-checking, freshness, and authorization.",
+    "adapterOrigin": {
+      "kind": "operator-attested",
+      "note": "The adapter author framed the decision around the exact public trust-model excerpt and the authentic engine report."
+    }
+  },
+  "claims": [
+    {
+      "id": "verification-is-not-truth",
+      "text": "A valid offline Decision Receipt verification establishes internal consistency, not factual truth, freshness, or authorization.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "trust-model-verification-boundary",
+          "sourceId": "web-task-agent-trust-model",
+          "excerpt": "Verification is offline and deterministic. A valid status means the package is internally consistent; it is not a fact-check, freshness guarantee, or authorization check.",
+          "relation": "supports",
+          "adapterOrigin": {
+            "kind": "captured",
+            "note": null
+          }
+        }
+      ],
+      "adapterOrigin": {
+        "kind": "inferred",
+        "note": "The authentic 0.16.0 report reproduced every bounded limitation; the adapter separately pins the exact source excerpt and document hash."
+      }
+    }
+  ],
+  "sources": [
+    {
+      "id": "web-task-agent-trust-model",
+      "title": "Decision Receipt trust boundary",
+      "url": "https://github.com/OthmaneBlial/web-task-agent/blob/main/docs/content/trust-model.md",
+      "publisher": "OthmaneBlial/web-task-agent maintainers",
+      "role": "redistributable repository documentation supplied as bounded local context",
+      "collectedAt": "2026-08-27T09:56:37.469166Z",
+      "captureType": "imported-excerpt",
+      "snapshotPath": "evidence/snapshots/01-web-task-agent-trust-model.md",
+      "snapshotSha256": "a3c9d6efb560f17e629aef914d8e7a01cefb305c0c86d65056a3b9af9eee5211",
+      "adapterOrigin": {
+        "kind": "captured",
+        "note": null
+      }
+    }
+  ],
+  "contradictions": [],
+  "nextValidation": "Give the same receipt to an independent reviewer and measure whether they preserve this limitation when explaining its verification status.",
+  "limitations": [
+    "Imported evidence preserves the provider result but does not prove that its sources are true, complete, authorized, or fresh.",
+    "Adapter gpt-researcher-preloaded-context@1.0.0 imported GPT Researcher@0.16.0; engine run id: research_676db66e727e.",
+    "This is one short preloaded-context report, not a benchmark of GPT Researcher retrieval, browsing, citation discovery, or multi-source synthesis.",
+    "Retrieval was deliberately skipped so the run reused the only installed 0.6B Ollama model instead of downloading a second embedding model.",
+    "The PyPI 0.16.0 import-order defect required the documented two-import patch; the optional MCP adapter warning was ignored because MCP was disabled.",
+    "The 0.6B model emitted a reasoning trace despite /no_think; the projection removes it and preserves only its SHA-256, never the private trace.",
+    "GPT Researcher's cost number is a static estimate; this local Ollama run made no billed provider call.",
+    "Receipt integrity does not prove that the supplied source or inferred claim is true, complete, representative, or fresh."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "The manifest covers the imported receipt and snapshots; provider-specific provenance remains outside this contract."
+  }
+}
