@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import { strToU8, zipSync } from "fflate";
+
 const root = process.cwd();
 const studyRoot = path.join(root, "studies", "reviewer-value");
 const generatedAt = "2026-08-27T10:30:00.000Z";
@@ -268,6 +270,16 @@ function asBundle(files) {
   return Object.fromEntries(Object.entries(files).map(([filePath, content]) => [filePath, Buffer.from(content)]));
 }
 
+function zipBase64(files) {
+  const archive = Object.fromEntries(Object.entries(files).map(([filePath, content]) => [
+    filePath,
+    [strToU8(content), { mtime: new Date("1980-01-01T00:00:00.000Z") }]
+  ]));
+  return Buffer.from(zipSync(archive, { level: 6, mtime: new Date("1980-01-01T00:00:00.000Z") })).toString("base64");
+}
+
+const publicCases = {};
+
 for (const studyCase of cases) {
   const caseRoot = path.join(studyRoot, "materials", studyCase.id);
   fs.rmSync(caseRoot, { recursive: true, force: true });
@@ -285,6 +297,15 @@ for (const studyCase of cases) {
   if (tamperedResult.valid || !tamperedResult.issues.some((issue) => issue.code === "integrity_hash_mismatch" && issue.message.includes(bundle.tamperedPath))) {
     throw new Error(`${studyCase.id} controlled tamper was not identified at ${bundle.tamperedPath}`);
   }
+  publicCases[studyCase.id] = {
+    title: studyCase.title,
+    question: studyCase.question,
+    report: markdownReport(studyCase),
+    receiptFilename: `${studyCase.id}-receipt.zip`,
+    receiptZipBase64: zipBase64(bundle.valid),
+    tamperedFilename: `${studyCase.id}-tampered-receipt.zip`,
+    tamperedReceiptZipBase64: zipBase64(tampered)
+  };
 }
 
 const assignments = {
@@ -321,4 +342,11 @@ const answers = {
 
 write("assignments.json", json(assignments));
 write("answer-key.json", json(answers));
+const publicAssetPath = path.join(root, "docs", "assets", "reviewer-study-materials.js");
+fs.mkdirSync(path.dirname(publicAssetPath), { recursive: true });
+fs.writeFileSync(
+  publicAssetPath,
+  `window.WEB_TASK_AGENT_REVIEWER_STUDY = ${JSON.stringify({ studyVersion: "1.0.0", assignments, cases: publicCases }, null, 2)};\n`,
+  "utf8"
+);
 console.log(`Generated and verified ${cases.length} counterbalanced reviewer-study cases.`);

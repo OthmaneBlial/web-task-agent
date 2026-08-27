@@ -39,7 +39,7 @@ Use a small counterbalanced comparison rather than presenting a demo as a study:
 
 Do not claim a speed, accuracy, or confidence improvement unless the observed data supports it. With very small samples, publish descriptive results rather than significance theater.
 
-The executable [`studies/reviewer-value/`](studies/reviewer-value/) kit now fixes the protocol before recruitment: two parallel synthetic cases, `AB`/`BA` assignment, four exact-answer tasks, valid and deliberately tampered receipts, a strict privacy-bounded response schema, and a descriptive aggregator. Both valid bundles pass offline verification; each controlled falsification fails at its intended evidence path. Its checked-in response is a fixture and is excluded from the default aggregate, so the real participant count remains zero.
+The executable [`studies/reviewer-value/`](studies/reviewer-value/) kit now fixes the protocol before recruitment: two parallel synthetic cases, `AB`/`BA` assignment, four exact-answer tasks, valid and deliberately tampered receipts, a strict privacy-bounded response schema, and a descriptive aggregator. The [Reviewer Evidence Lab](https://othmaneblial.github.io/web-task-agent/study.html) runs the same assignment in a static page, starts each timer on reveal, downloads bounded receipt ZIPs, and exports a schema-shaped JSON response without telemetry, persistence, or a submission endpoint. Both valid bundles pass offline verification; each controlled falsification fails at its intended evidence path. Its checked-in response is a fixture and is excluded from the default aggregate, so the real participant count remains zero.
 
 ## Consent checkpoints
 

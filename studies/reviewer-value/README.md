@@ -2,6 +2,8 @@
 
 This kit implements the counterbalanced comparison defined in [`EXTERNAL_VALIDATION.md`](../../EXTERNAL_VALIDATION.md). It measures review mechanics for a Markdown report versus the same facts packaged with a Decision Receipt. It contains no telemetry, live source, model call, browser session, or participant data.
 
+The hosted [Reviewer Evidence Lab](https://othmaneblial.github.io/web-task-agent/study.html) presents this same protocol, timers, local ZIP downloads, and anonymous JSON export in the browser. It has no submission endpoint or persistence. The CLI remains the authoritative validator and aggregator for exported responses.
+
 The two cases are deliberately synthetic and structurally parallel. Each has:
 
 - `report.md` with the decision, three claims, source dates, contradiction, limitations, and next validation;

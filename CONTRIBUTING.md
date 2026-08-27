@@ -92,7 +92,7 @@ Do not optimize for star count, benchmark theater, or a large prompt catalog. A 
 - [Reproduce a golden-path receipt on a clean machine](https://github.com/OthmaneBlial/web-task-agent/issues/2)
 - [Propose one bounded decision with a receipt fixture](https://github.com/OthmaneBlial/web-task-agent/issues/4)
 - [Independently review one Decision Receipt security boundary](https://github.com/OthmaneBlial/web-task-agent/issues/10)
-- [Run one consented external reviewer study](https://github.com/OthmaneBlial/web-task-agent/issues/12) with the fixed [`AB`/`BA` study kit](studies/reviewer-value/)
+- [Run one consented external reviewer study](https://github.com/OthmaneBlial/web-task-agent/issues/12) in the [local-only Evidence Lab](https://othmaneblial.github.io/web-task-agent/study.html) or with the fixed [`AB`/`BA` study kit](studies/reviewer-value/)
 
 The dedicated issue forms also define complete acceptance contracts for a provider-neutral adapter, adversarial policy case, reproducible receipt review, schema RFC, and opt-in gallery entry. A form is an invitation, not evidence that an external contribution exists.
 

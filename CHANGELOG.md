@@ -11,6 +11,7 @@ This file is intentionally lightweight.
 - Added two authentic, privacy-bounded Browser Use and GPT Researcher imports, strict adapters, a four-tool local MCP server, and verified receipts that retain engine limits.
 - Added mandatory breaking-schema RFCs, maintainer/release rules, an independent-security-review brief, a consented external-validation protocol, and an empty-by-design opt-in receipt gallery.
 - Added a reproducible reviewer-value study kit with counterbalanced Markdown/receipt cases, exact controlled tampering, privacy-bounded response validation, fixture exclusion, and descriptive no-hype aggregation.
+- Added the static Reviewer Evidence Lab with per-trial timing, embedded bounded ZIPs, anonymous JSON export, responsive keyboard-accessible UI, and no telemetry, persistence, or submission endpoint.
 
 ## 0.5.1 — 2026-08-26
 
