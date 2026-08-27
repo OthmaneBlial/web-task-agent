@@ -84,7 +84,7 @@ jobs:
         run: |
           release_dir="$(mktemp -d)"
           consumer_dir="$(mktemp -d)"
-          npm pack "$PACKAGE_DIRECTORY" --pack-destination "$release_dir"
+          npm pack "$GITHUB_WORKSPACE/$PACKAGE_DIRECTORY" --pack-destination "$release_dir"
           (cd "$release_dir" && sha256sum *.tgz > SHA256SUMS)
           cd "$consumer_dir"
           npm init -y >/dev/null
