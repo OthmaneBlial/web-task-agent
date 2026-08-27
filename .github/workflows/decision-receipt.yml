@@ -13,8 +13,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
-      - uses: OthmaneBlial/decision-receipt-action@v1
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          path: examples/receipt-spec/minimal/receipt.json
-          freshness-days: 0
+          node-version: 24
+          cache: npm
+
+      - name: Install the reviewed lockfile
+        run: npm ci
+
+      - name: Build the local verifier
+        run: npm run build
+
+      - name: Verify the valid receipt fixture
+        run: node dist/entrypoint.js receipt verify examples/receipt-spec/minimal
+
+      - name: Confirm that tampered evidence is rejected
+        shell: bash
+        run: |
+          if node dist/entrypoint.js receipt verify examples/receipt-spec/tampered; then
+            echo "::error::The tampered receipt fixture unexpectedly passed verification."
+            exit 1
+          fi

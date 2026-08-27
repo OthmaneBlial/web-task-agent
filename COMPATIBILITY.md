@@ -8,13 +8,13 @@
 | Web Task Agent CLI | `0.5.1` + unreleased | `1.x` | `1.0.0` | implemented |
 | `@othmaneblial/decision-receipt` | `0.1.x` | `1.x` | helpers target `1.0.0` | implemented, publication pending P3 |
 | Local web verifier | live static build | `1.x` | verification report `1.0.0` | published, local-only |
-| GitHub Action | `v1.0.0` / maintained `v1` | `1.x` | privacy report `1.0.0` | released, Node 24 |
+| Built-in GitHub Actions workflow | repository `main` | `1.x` | verification result | implemented, Node 24 |
 | Provider-neutral adapter contract | `1.0.0` | `1.0.0` | `1.0.0` | implemented; two authentic engine outputs verified |
 | Browser Use public-page adapter | Browser Use `0.13.8` | adapter `1.0.0` | receipt `1.0.0` | authentic local run verified; one-page scope |
 | GPT Researcher preloaded-context adapter | GPT Researcher `0.16.0` | adapter `1.0.0` | receipt `1.0.0` | authentic local report verified; retrieval intentionally skipped |
 | Local MCP server | protocol `2025-11-25` | receipt `1.x` | receipt `1.0.0` | implemented; npm publication pending |
 
-The table distinguishes code present in this repository from externally published surfaces. “Implemented” does not mean the npm package has been released. The Action vendors the reviewed core from protocol commit `8a871b7`; its release is verified in a [green PR](https://github.com/OthmaneBlial/web-task-agent/pull/9) and a [reproducible red PR](https://github.com/OthmaneBlial/decision-receipt-demo/pull/1).
+The table distinguishes code present in this repository from externally published surfaces. “Implemented” does not mean the npm package has been released. The repository-local workflow builds the same reviewed core as the CLI, verifies the valid fixture, and requires the tampered fixture to fail. Its permissions remain read-only and it receives no secret.
 
 The adapter fixture directly under `examples/interop` is deliberately synthetic and marked `fixture: true`; it proves the contract and import boundary. Separately, [`examples/interop/runs/browser-use`](examples/interop/runs/browser-use/README.md) records a real local Chrome capture with Browser Use, and [`examples/interop/runs/gpt-researcher`](examples/interop/runs/gpt-researcher/README.md) records a real GPT Researcher report over preloaded public context. Both reuse the same 523 MB local model, exclude authenticated sessions, and state deliberately narrow limits. Neither row promises that a third-party source or model inference is true. The MCP matrix row is backed by both a network-blocked process test and a handshake through the official TypeScript MCP client.
 

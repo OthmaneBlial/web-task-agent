@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -46,4 +47,18 @@ test("launch materials identify v0.5.1 and record the delivered roadmap", () => 
   assert.match(launch, /does not prove that a source, claim, or decision is true/);
   assert.doesNotMatch(launch, /v0\.4\.0/);
   assert.match(changelog, /Completed the previous P0–P4 productization roadmap/);
+});
+
+test("public surfaces stay inside web-task-agent instead of retired auxiliary repositories", () => {
+  const trackedFiles = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean)
+    .filter((relativePath) => fs.existsSync(path.join(process.cwd(), relativePath)));
+
+  const forbiddenRepositoryReference = /decision-receipt-(?:action|demo)/i;
+  for (const relativePath of trackedFiles) {
+    const contents = fs.readFileSync(path.join(process.cwd(), relativePath));
+    if (contents.includes(0)) continue;
+    assert.doesNotMatch(contents.toString("utf8"), forbiddenRepositoryReference, relativePath);
+  }
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 const REPOSITORY_ROOT = resolve(import.meta.dirname, "..");
@@ -44,6 +44,7 @@ function ignoredLocalState() {
 
 function isTextFile(path) {
   const absolute = resolve(REPOSITORY_ROOT, path);
+  if (!existsSync(absolute)) return false;
   const metadata = statSync(absolute);
   if (!metadata.isFile() || metadata.size > MAX_TEXT_BYTES) return false;
   return !readFileSync(absolute).subarray(0, 8_192).includes(0);
