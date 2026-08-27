@@ -6,6 +6,9 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "decision-receipt": "dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -26,6 +29,19 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OthmaneBlial/web-task-agent.git",
+    "directory": "packages/decision-receipt"
+  },
+  "homepage": "https://othmaneblial.github.io/web-task-agent/docs.html#page=decision-receipt-spec",
+  "bugs": {
+    "url": "https://github.com/OthmaneBlial/web-task-agent/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   },
   "sideEffects": false
 }

@@ -24,6 +24,7 @@ test("published CLI entrypoint and required modules are present in the npm tarba
     "dist/workflows/index.js",
     "packages/decision-receipt/dist/index.js",
     "packages/decision-receipt/dist/index.d.ts",
+    "packages/decision-receipt/dist/cli.js",
     "schema/decision-receipt.v1.schema.json",
     "conformance/cases.json",
     ".env.example"

@@ -31,7 +31,7 @@ Local decision package
 
 This is local research infrastructure, not a hosted scraper, access-control bypass, or generic browser-agent wrapper.
 
-**See the full product story:** [live documentation](https://othmaneblial.github.io/web-task-agent/) · [Decision Receipt spec](docs/content/decision-receipt-spec.md) · [compatibility matrix](COMPATIBILITY.md) · [trust model](docs/content/trust-model.md) · [case studies](docs/content/case-studies.md) · [activation measures](docs/activation.md) · [eight inspectable receipts](RESEARCH_RECEIPTS.md) · [latest release](https://github.com/OthmaneBlial/web-task-agent/releases/latest)
+**See the full product story:** [live documentation](https://othmaneblial.github.io/web-task-agent/) · [Decision Receipt spec](docs/content/decision-receipt-spec.md) · [compatibility matrix](COMPATIBILITY.md) · [publishing contract](PUBLISHING.md) · [trust model](docs/content/trust-model.md) · [case studies](docs/content/case-studies.md) · [activation measures](docs/activation.md) · [eight inspectable receipts](RESEARCH_RECEIPTS.md) · [latest release](https://github.com/OthmaneBlial/web-task-agent/releases/latest)
 
 The GitHub Packages mirror is available as `@othmaneblial/web-task-agent`. GitHub's npm registry requires a classic personal access token with `read:packages` even for public packages. Authenticate without committing that token, then install the mirror:
 

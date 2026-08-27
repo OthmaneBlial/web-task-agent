@@ -1,0 +1,63 @@
+name: Clean package install
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Core package on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run build:receipt-core
+      - name: Install only the packed core and verify a fixture
+        run: |
+          package_dir="$(mktemp -d)"
+          consumer_dir="$(mktemp -d)"
+          npm pack ./packages/decision-receipt --pack-destination "$package_dir"
+          cd "$consumer_dir"
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-package-lock "$package_dir"/*.tgz
+          npx --no-install decision-receipt verify "$GITHUB_WORKSPACE/examples/receipt-spec/minimal"
+
+  cli:
+    name: Main CLI tarball on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run build
+      - name: Install the packed CLI without a checkout dependency
+        run: |
+          package_dir="$(mktemp -d)"
+          consumer_dir="$(mktemp -d)"
+          npm pack --pack-destination "$package_dir"
+          cd "$consumer_dir"
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-package-lock "$package_dir"/*.tgz
+          npx --no-install web-task-agent demo export browser-agent-landscape --output "$consumer_dir/receipt"
+          npx --no-install web-task-agent receipt verify "$consumer_dir/receipt"

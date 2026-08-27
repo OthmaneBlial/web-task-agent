@@ -50,6 +50,10 @@
     "url": "https://github.com/OthmaneBlial/web-task-agent/issues"
   },
   "homepage": "https://othmaneblial.github.io/web-task-agent/",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "engines": {
     "node": ">=22"
   },

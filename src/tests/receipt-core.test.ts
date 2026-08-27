@@ -122,6 +122,11 @@ test("a clean TypeScript project installs only the core tarball and renders a di
       "if (typeof core.validateDecisionReceipt !== 'function') throw new Error('ESM interoperability failed');"
     ].join("\n"), "utf8");
     execFileSync("node", ["consumer.mjs"], { cwd: tempDir, stdio: "pipe" });
+    const cliOutput = execFileSync(path.join(tempDir, "node_modules", ".bin", "decision-receipt"), [
+      "verify", path.resolve("examples", "receipt-spec", "minimal")
+    ], { cwd: tempDir, encoding: "utf8" });
+    assert.match(cliOutput, /integrity verified/);
+    assert.match(cliOutput, /integrity is not proof/);
     const installed = JSON.parse(fs.readFileSync(path.join(tempDir, "node_modules", "@othmaneblial", "decision-receipt", "package.json"), "utf8")) as { dependencies?: unknown };
     assert.equal(installed.dependencies, undefined);
   } finally {

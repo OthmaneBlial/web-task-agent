@@ -189,6 +189,8 @@ Le badge doit dire **integrity verified**, jamais **decision is true**. Un hash 
 
 **Porte externe :** la réservation du nom, la configuration du trusted publisher et la première publication exigent l'autorisation du propriétaire npm. Une CI verte ne permet pas de déclarer ce point livré.
 
+**État intermédiaire :** le noyau expose maintenant le binaire sans clé `decision-receipt`, les tarballs CLI/noyau sont installés puis exécutés en répertoires vierges sur Node 20/22/24, et `publish-npm.yml` demande uniquement OIDC avec provenance automatique. Les noms sont libres au moment du contrôle, mais la session locale n'est pas authentifiée à npm : réservation, trusted publisher, première publication, provenance publique et `npx` depuis le registre restent donc ouverts.
+
 ### 2. GitHub Action dédiée
 
 Créer un dépôt étroit `OthmaneBlial/decision-receipt-action`, car GitHub Marketplace attend une Action clairement empaquetée autour d'un `action.yml` racine.

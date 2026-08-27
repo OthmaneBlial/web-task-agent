@@ -1,0 +1,111 @@
+name: Publish npm packages
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "decision-receipt-v*.*.*"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to rehearse without publishing
+        required: true
+        type: choice
+        options:
+          - decision-receipt
+          - web-task-agent
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish-${{ github.ref }}-${{ inputs.package || 'tag' }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build, prove, and publish with npm OIDC
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Require an OIDC-capable npm CLI
+        run: |
+          npm install --global npm@latest
+          npm --version
+          node -e 'const [major, minor] = require("child_process").execFileSync("npm", ["--version"], {encoding:"utf8"}).trim().split(".").map(Number); if (major < 11 || (major === 11 && minor < 5)) process.exit(1)'
+
+      - name: Install and run the complete quality gate
+        run: |
+          npm ci
+          npm test
+          npm run audit:secrets
+          npm run audit:prod
+
+      - name: Resolve and validate the selected package
+        id: package
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SELECTED_PACKAGE: ${{ inputs.package }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            package="$SELECTED_PACKAGE"
+          elif [[ "$RELEASE_TAG" == decision-receipt-v* ]]; then
+            package="decision-receipt"
+            test "$RELEASE_TAG" = "decision-receipt-v$(node -p "require('./packages/decision-receipt/package.json').version")"
+          else
+            package="web-task-agent"
+            test "$RELEASE_TAG" = "v$(node -p "require('./package.json').version")"
+          fi
+          if [[ "$package" == "decision-receipt" ]]; then
+            echo "directory=packages/decision-receipt" >> "$GITHUB_OUTPUT"
+            echo "name=@othmaneblial/decision-receipt" >> "$GITHUB_OUTPUT"
+          else
+            echo "directory=." >> "$GITHUB_OUTPUT"
+            echo "name=web-task-agent" >> "$GITHUB_OUTPUT"
+          fi
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+
+      - name: Pack, checksum, and test the exact artifact
+        env:
+          PACKAGE_DIRECTORY: ${{ steps.package.outputs.directory }}
+          PACKAGE_NAME: ${{ steps.package.outputs.name }}
+        run: |
+          release_dir="$(mktemp -d)"
+          consumer_dir="$(mktemp -d)"
+          npm pack "$PACKAGE_DIRECTORY" --pack-destination "$release_dir"
+          (cd "$release_dir" && sha256sum *.tgz > SHA256SUMS)
+          cd "$consumer_dir"
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-package-lock "$release_dir"/*.tgz
+          if [[ "$PACKAGE_NAME" == "@othmaneblial/decision-receipt" ]]; then
+            npx --no-install decision-receipt verify "$GITHUB_WORKSPACE/examples/receipt-spec/minimal"
+          else
+            npx --no-install web-task-agent demo export browser-agent-landscape --output "$consumer_dir/receipt"
+            npx --no-install web-task-agent receipt verify "$consumer_dir/receipt"
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/release-npm"
+          cp "$release_dir"/* "$GITHUB_WORKSPACE/release-npm/"
+
+      - name: Publish through the configured npm trusted publisher
+        if: github.event_name == 'push'
+        working-directory: ${{ steps.package.outputs.directory }}
+        run: npm publish --access public
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-${{ steps.package.outputs.package }}-${{ github.ref_name }}
+          path: release-npm/
+          if-no-files-found: error
+          retention-days: 14

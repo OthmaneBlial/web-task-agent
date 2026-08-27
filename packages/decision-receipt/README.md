@@ -26,6 +26,17 @@ const verification = await verifyReceiptBundle({
 
 `valid: true` means the structure, internal references, available snapshots, declared hashes, byte counts, and optional signature were consistent. It does not mean that a source or decision is true, complete, authorized, or fresh.
 
+## No-key CLI
+
+After the public P3 release, verify a bundle without installing a browser, model, database, or provider SDK:
+
+```bash
+npx @othmaneblial/decision-receipt verify ./receipt-bundle
+npx @othmaneblial/decision-receipt compare ./before ./after
+```
+
+Until the registry publication gate is complete, use the release tarball or this repository checkout; do not treat the command above as live-registry proof.
+
 ## Compatibility
 
 | Spec | Package | Profiles | Status |

@@ -7,6 +7,7 @@ This file is intentionally lightweight.
 - Repositioned the public entry point around offline Decision Receipt verification, aligned the no-clone `v0.5.1` first run, and replaced workflow-volume hero metrics with integrity, evidence, contradiction, and diff proof.
 - Extracted the dependency-free Decision Receipt core, v1 JSON Schema, migration, compatibility matrix, examples, and conformance runners from the CLI monolith.
 - Added a 100% local browser verifier for folders and bounded ZIPs, exact tamper diagnosis, source freshness, claim-to-snapshot inspection, five-signal decision diffs, offline fixtures, and privacy-minimized JSON reports.
+- Added the dependency-free `decision-receipt` executable, clean-install Node 20/22/24 matrices, and tokenless npm OIDC publishing workflow with exact-tarball verification.
 
 ## 0.5.1 — 2026-08-26
 
