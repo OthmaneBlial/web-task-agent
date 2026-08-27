@@ -12,8 +12,17 @@ import path from "node:path";
 import { ensureDir, writeJsonAtomic } from "./cache";
 import { evaluateSourceUrlPolicy } from "./source-policy";
 import type { AgentEvidenceBundle, AgentRunState } from "../types";
+import {
+  DECISION_RECEIPT_SPEC_VERSION,
+  canonicalizeReceiptForSigning,
+  compareDecisionReceipts as compareCoreDecisionReceipts,
+  isSupportedDecisionReceiptSpecVersion,
+  renderDecisionReceiptComparison as renderCoreDecisionReceiptComparison,
+  validateDecisionReceipt
+} from "../../packages/decision-receipt/dist";
 
 export const DECISION_RECEIPT_SCHEMA_VERSION = 1;
+export { DECISION_RECEIPT_SPEC_VERSION };
 export const RECEIPT_HASH_ALGORITHM = "sha256" as const;
 
 export type ReceiptClaimStatus = "supported" | "contradicted" | "insufficient";
@@ -47,6 +56,8 @@ export interface DecisionReceiptClaim {
 
 export interface DecisionReceipt {
   schemaVersion: typeof DECISION_RECEIPT_SCHEMA_VERSION;
+  specVersion: typeof DECISION_RECEIPT_SPEC_VERSION;
+  profile: "minimal" | "full";
   type: "decision-receipt";
   generatedAt: string;
   provenance: {
@@ -86,7 +97,7 @@ export interface DecisionReceiptSignature {
   keyId: string;
   publicKeyPem: string;
   signatureBase64: string;
-  signedBytes: "receipt-without-signature";
+  signedBytes: "canonical-receipt-without-signature";
 }
 
 export interface ReceiptIntegrityManifestFile {
@@ -97,6 +108,7 @@ export interface ReceiptIntegrityManifestFile {
 
 export interface ReceiptIntegrityManifest {
   schemaVersion: typeof DECISION_RECEIPT_SCHEMA_VERSION;
+  specVersion: typeof DECISION_RECEIPT_SPEC_VERSION;
   type: "receipt-integrity-manifest";
   algorithm: typeof RECEIPT_HASH_ALGORITHM;
   receiptPath: "receipt.json";
@@ -125,6 +137,14 @@ export interface DecisionReceiptComparison {
     earlier: DecisionReceiptClaim | null;
     later: DecisionReceiptClaim | null;
   }>;
+  changes: {
+    sources: boolean;
+    claims: boolean;
+    policy: boolean;
+    model: boolean;
+    prompt: boolean;
+    decision: boolean;
+  };
   changedBecause: string[];
 }
 
@@ -132,90 +152,14 @@ export function compareDecisionReceipts(
   earlier: DecisionReceipt,
   later: DecisionReceipt
 ): DecisionReceiptComparison {
-  const earlierSources = new Map(earlier.sources.map((source) => [source.url, source]));
-  const laterSources = new Map(later.sources.map((source) => [source.url, source]));
-  const earlierClaims = new Map(earlier.claims.map((claim) => [claim.id, claim]));
-  const laterClaims = new Map(later.claims.map((claim) => [claim.id, claim]));
-  const changedClaims = [...new Set([...earlierClaims.keys(), ...laterClaims.keys()])]
-    .map((id) => ({ id, earlier: earlierClaims.get(id) ?? null, later: laterClaims.get(id) ?? null }))
-    .filter((item) => JSON.stringify(item.earlier) !== JSON.stringify(item.later));
-  const newSources = [...laterSources.entries()]
-    .filter(([url]) => !earlierSources.has(url))
-    .map(([, source]) => source);
-  const disappearedSources = [...earlierSources.entries()]
-    .filter(([url]) => !laterSources.has(url))
-    .map(([, source]) => source);
-  const decisionChanged = earlier.decision.summary !== later.decision.summary;
-  const changedBecause: string[] = [];
-  if (newSources.length > 0) {
-    changedBecause.push(`${newSources.length} source(s) were added`);
-  }
-  if (disappearedSources.length > 0) {
-    changedBecause.push(`${disappearedSources.length} source(s) disappeared`);
-  }
-  if (changedClaims.length > 0) {
-    changedBecause.push(`${changedClaims.length} evidence-backed claim(s) changed`);
-  }
-  if (decisionChanged) {
-    changedBecause.push("the decision summary changed");
-  }
-  if (changedBecause.length === 0) {
-    changedBecause.push("no source, claim, or decision change was detected");
-  }
-  return {
-    earlierTitle: earlier.decision.title,
-    laterTitle: later.decision.title,
-    earlierGeneratedAt: earlier.generatedAt,
-    laterGeneratedAt: later.generatedAt,
-    decisionChanged,
-    newSources,
-    disappearedSources,
-    changedClaims,
-    changedBecause
-  };
+  return compareCoreDecisionReceipts(earlier, later) as DecisionReceiptComparison;
 }
 
 export function renderDecisionReceiptComparison(
   comparison: DecisionReceiptComparison,
   format: "markdown" | "json" = "markdown"
 ): string {
-  if (format === "json") {
-    return `${JSON.stringify(comparison, null, 2)}\n`;
-  }
-  const sourceLines = (items: DecisionReceiptSource[]) =>
-    items.length > 0 ? items.map((source) => `- [${source.title}](${source.url})`) : ["- None."];
-  const claimLines = comparison.changedClaims.length > 0
-    ? comparison.changedClaims.map((item) => `- \`${item.id}\`: ${item.earlier?.text ?? "(new)"} → ${item.later?.text ?? "(removed)"}`)
-    : ["- None."];
-  return [
-    `# Decision diff — ${comparison.earlierTitle} → ${comparison.laterTitle}`,
-    "",
-    `- Earlier receipt: ${comparison.earlierGeneratedAt}`,
-    `- Later receipt: ${comparison.laterGeneratedAt}`,
-    `- Decision changed: ${comparison.decisionChanged ? "yes" : "no"}`,
-    "",
-    "## Decision changed because",
-    "",
-    ...comparison.changedBecause.map((reason) => `- ${reason}.`),
-    "",
-    "## New sources",
-    "",
-    ...sourceLines(comparison.newSources),
-    "",
-    "## Sources no longer present",
-    "",
-    ...sourceLines(comparison.disappearedSources),
-    "",
-    "## Changed claims",
-    "",
-    ...claimLines,
-    "",
-    "## Review before relying on the later decision",
-    "",
-    "- Re-open the changed source excerpts and check their collection dates.",
-    "- Resolve any contradiction that remains unresolved in the later receipt.",
-    "- Run the later receipt's smallest next validation before treating the change as settled."
-  ].join("\n") + "\n";
+  return renderCoreDecisionReceiptComparison(comparison, format);
 }
 
 export interface FixtureReceiptInput {
@@ -380,6 +324,8 @@ export function importExternalDecisionResult(input: {
 
   const receipt: DecisionReceipt = {
     schemaVersion: DECISION_RECEIPT_SCHEMA_VERSION,
+    specVersion: DECISION_RECEIPT_SPEC_VERSION,
+    profile: "minimal",
     type: "decision-receipt",
     generatedAt: result.generatedAt || new Date().toISOString(),
     provenance: {
@@ -497,6 +443,8 @@ export function buildAgentDecisionReceipt(input: {
   ];
   return {
     schemaVersion: DECISION_RECEIPT_SCHEMA_VERSION,
+    specVersion: DECISION_RECEIPT_SPEC_VERSION,
+    profile: "full",
     type: "decision-receipt",
     generatedAt: state.updatedAt,
     provenance: {
@@ -535,9 +483,7 @@ function fileSha256(filePath: string): string {
 }
 
 function receiptSigningPayload(receipt: DecisionReceipt): Buffer {
-  const unsigned = { ...receipt } as DecisionReceipt & { signature?: DecisionReceiptSignature };
-  delete unsigned.signature;
-  return Buffer.from(`${JSON.stringify(unsigned, null, 2)}\n`, "utf8");
+  return Buffer.from(canonicalizeReceiptForSigning(receipt), "utf8");
 }
 
 function privateKeyObject(privateKey: string | KeyObject): KeyObject {
@@ -566,7 +512,7 @@ export function signReceiptDirectory(input: {
       keyId: input.keyId.trim(),
       publicKeyPem,
       signatureBase64,
-      signedBytes: "receipt-without-signature"
+      signedBytes: "canonical-receipt-without-signature"
     }
   };
   writeJsonAtomic(receiptPath, signedReceipt);
@@ -644,6 +590,7 @@ export function writeReceiptIntegrityManifest(input: {
   ensureDir(rootDir);
   const manifest: ReceiptIntegrityManifest = {
     schemaVersion: DECISION_RECEIPT_SCHEMA_VERSION,
+    specVersion: DECISION_RECEIPT_SPEC_VERSION,
     type: "receipt-integrity-manifest",
     algorithm: RECEIPT_HASH_ALGORITHM,
     receiptPath: "receipt.json",
@@ -655,6 +602,10 @@ export function writeReceiptIntegrityManifest(input: {
 }
 
 function validateReceiptShape(receipt: unknown, rootDir: string, errors: string[]): receipt is DecisionReceipt {
+  const coreValidation = validateDecisionReceipt(receipt);
+  for (const issue of coreValidation.issues) {
+    errors.push(`receipt core ${issue.code} at ${issue.path}: ${issue.message}`);
+  }
   if (!receipt || typeof receipt !== "object") {
     errors.push("receipt.json is not an object");
     return false;
@@ -680,7 +631,7 @@ function validateReceiptShape(receipt: unknown, rootDir: string, errors: string[
   }
   if (candidate.signature) {
     const signature = candidate.signature as Partial<DecisionReceiptSignature>;
-    if (signature.algorithm !== "ed25519" || signature.signedBytes !== "receipt-without-signature") {
+    if (signature.algorithm !== "ed25519" || signature.signedBytes !== "canonical-receipt-without-signature") {
       errors.push("receipt signature has an unsupported algorithm or signed-bytes marker");
     }
     if (!signature.keyId || !signature.publicKeyPem || !signature.signatureBase64) {
@@ -814,7 +765,11 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
   } else {
     try {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Partial<ReceiptIntegrityManifest>;
-      if (manifest.type !== "receipt-integrity-manifest" || manifest.schemaVersion !== DECISION_RECEIPT_SCHEMA_VERSION) {
+      if (
+        manifest.type !== "receipt-integrity-manifest" ||
+        manifest.schemaVersion !== DECISION_RECEIPT_SCHEMA_VERSION ||
+        !isSupportedDecisionReceiptSpecVersion(manifest.specVersion)
+      ) {
         errors.push("integrity manifest has an unsupported shape");
       }
       if (!Array.isArray(manifest.files)) {
@@ -874,6 +829,8 @@ export function buildFixtureDecisionReceipt(input: FixtureReceiptInput, paths: F
   }));
   return {
     schemaVersion: DECISION_RECEIPT_SCHEMA_VERSION,
+    specVersion: DECISION_RECEIPT_SPEC_VERSION,
+    profile: "full",
     type: "decision-receipt",
     generatedAt: input.generatedAt,
     provenance: {

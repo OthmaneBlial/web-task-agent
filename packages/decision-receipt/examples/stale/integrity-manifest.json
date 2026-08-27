@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "specVersion": "1.0.0",
+  "type": "receipt-integrity-manifest",
+  "algorithm": "sha256",
+  "receiptPath": "receipt.json",
+  "generatedAt": "2026-08-27T00:00:00.000Z",
+  "files": [
+    {
+      "path": "receipt.json",
+      "sha256": "6303c2ae9d9ec8c78be01b958413398c4c51fbdcfb63a1a3e4ed909f3527256b",
+      "bytes": 1657
+    },
+    {
+      "path": "evidence/source.md",
+      "sha256": "185d6920d4202d41d66106b0f6776d61eec94c34e708c767cc73195520158ad4",
+      "bytes": 65
+    }
+  ]
+}

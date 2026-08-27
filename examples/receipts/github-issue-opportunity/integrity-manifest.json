@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "specVersion": "1.0.0",
   "type": "receipt-integrity-manifest",
   "algorithm": "sha256",
   "receiptPath": "receipt.json",
@@ -47,8 +48,8 @@
     },
     {
       "path": "receipt.json",
-      "sha256": "1fa54fd6531409ea07cbfa2f7abbfce5750632c2b852727da5a1eb5c326548f7",
-      "bytes": 3259
+      "sha256": "66171068aabcaeed67d1758db2d3b40fa19378dd5913e5793fa52f0547ad9afa",
+      "bytes": 3306
     },
     {
       "path": "report.md",

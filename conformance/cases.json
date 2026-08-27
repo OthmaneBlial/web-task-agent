@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "specVersion": "1.0.0",
+  "description": "Versioned Decision Receipt conformance recipes. Each mutation starts from the same valid minimal bundle.",
+  "cases": [
+    {
+      "id": "valid-minimal",
+      "mutation": "none",
+      "expectedValid": true
+    },
+    {
+      "id": "invalid-shape",
+      "mutation": "remove-decision",
+      "expectedValid": false,
+      "expectedCode": "decision_missing"
+    },
+    {
+      "id": "duplicate-source",
+      "mutation": "duplicate-source",
+      "expectedValid": false,
+      "expectedCode": "source_id_duplicate"
+    },
+    {
+      "id": "unsafe-path",
+      "mutation": "unsafe-snapshot-path",
+      "expectedValid": false,
+      "expectedCode": "source_snapshot_path_unsafe"
+    },
+    {
+      "id": "unknown-version",
+      "mutation": "unknown-spec-version",
+      "expectedValid": false,
+      "expectedCode": "spec_version_unsupported"
+    },
+    {
+      "id": "tampered",
+      "mutation": "tamper-after-manifest",
+      "expectedValid": false,
+      "expectedCode": "integrity_hash_mismatch"
+    },
+    {
+      "id": "signature-mismatch",
+      "mutation": "signature-mismatch",
+      "expectedValid": false,
+      "expectedCode": "signature_mismatch"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "specVersion": "1.0.0",
+  "profile": "minimal",
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-27T00:00:00.000Z",
+  "provenance": {
+    "kind": "captured",
+    "runId": null,
+    "cliVersion": null,
+    "workflowId": null,
+    "policyVersion": null,
+    "promptVersion": null,
+    "model": null,
+    "fixture": true
+  },
+  "decision": {
+    "title": "Signed receipt example",
+    "summary": "Keep the decision only while the exported evidence remains inspectable."
+  },
+  "claims": [
+    {
+      "id": "claim-1",
+      "text": "The receipt contains enough evidence for review.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "evidence-1",
+          "sourceId": "source-1",
+          "excerpt": "The evidence remains inspectable after export.",
+          "relation": "supports"
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source-1",
+      "title": "Example source",
+      "url": "https://example.com/decision-receipt",
+      "publisher": "Example",
+      "role": "safe protocol fixture",
+      "collectedAt": "2026-08-27T00:00:00.000Z",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/source.md",
+      "snapshotSha256": "185d6920d4202d41d66106b0f6776d61eec94c34e708c767cc73195520158ad4"
+    }
+  ],
+  "contradictions": [],
+  "nextValidation": "Change one evidence byte and confirm integrity verification fails.",
+  "limitations": [
+    "This fixture demonstrates the contract; it does not establish source truth."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "Integrity proves bytes, not truth."
+  },
+  "signature": {
+    "algorithm": "ed25519",
+    "keyId": "public-example-key-do-not-use",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAdSB9Vhrj5dHcHKqXtO1y6dro9lulA7tZjjv3aocnD+I=\n-----END PUBLIC KEY-----\n",
+    "signatureBase64": "ZddvrHO8XPYCecIeO2LCaMNRMPCFf3dWy9IQWplr88S5ipk9/+UXzfOTXlqSppkdGyJNImd5l8XxEDMe/kn1CA==",
+    "signedBytes": "canonical-receipt-without-signature"
+  }
+}

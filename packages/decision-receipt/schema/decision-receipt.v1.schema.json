@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://othmaneblial.github.io/web-task-agent/schema/decision-receipt.v1.schema.json",
+  "title": "Decision Receipt v1",
+  "description": "Portable claim-to-evidence contract for an AI-assisted research decision. Structural validity and hashes do not prove truth, completeness, authorization, or freshness.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "specVersion",
+    "profile",
+    "type",
+    "generatedAt",
+    "provenance",
+    "decision",
+    "claims",
+    "sources",
+    "contradictions",
+    "nextValidation",
+    "limitations",
+    "integrity"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "specVersion": { "type": "string", "pattern": "^1\\.[0-9]+\\.[0-9]+$" },
+    "profile": { "enum": ["minimal", "full"] },
+    "type": { "const": "decision-receipt" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "decision": { "$ref": "#/$defs/decision" },
+    "claims": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/claim" }
+    },
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "contradictions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/contradiction" }
+    },
+    "nextValidation": { "type": "string", "minLength": 1 },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "signature": { "$ref": "#/$defs/signature" },
+    "integrity": { "$ref": "#/$defs/integrity" }
+  },
+  "$defs": {
+    "nullableString": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "null" }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["kind", "runId", "cliVersion", "workflowId", "policyVersion", "promptVersion", "model", "fixture"],
+      "properties": {
+        "kind": { "enum": ["live", "deterministic-demo", "imported", "captured", "inferred", "operator-attested"] },
+        "runId": { "$ref": "#/$defs/nullableString" },
+        "cliVersion": { "$ref": "#/$defs/nullableString" },
+        "workflowId": { "$ref": "#/$defs/nullableString" },
+        "policyVersion": { "$ref": "#/$defs/nullableString" },
+        "promptVersion": { "$ref": "#/$defs/nullableString" },
+        "model": { "$ref": "#/$defs/nullableString" },
+        "fixture": { "type": "boolean" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["title", "summary"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "title", "url", "publisher", "role", "collectedAt", "captureType", "snapshotPath", "snapshotSha256"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri", "pattern": "^https?://(?![^/?#]*@)" },
+        "publisher": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "collectedAt": {
+          "oneOf": [
+            {
+              "type": "string",
+              "oneOf": [
+                { "format": "date" },
+                { "format": "date-time" }
+              ]
+            },
+            { "type": "null" }
+          ]
+        },
+        "captureType": { "enum": ["live", "fixture-synthetic", "metadata-only", "imported-excerpt"] },
+        "snapshotPath": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*\\\\)(?!.*//)(?!\\.{1,2}(?:/|$))(?!.*(?:/)\\.{1,2}(?:/|$)).+$" },
+            { "type": "null" }
+          ]
+        },
+        "snapshotSha256": {
+          "oneOf": [
+            { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "snapshotPath": { "type": "string" } } },
+          "then": { "properties": { "snapshotSha256": { "type": "string" } } },
+          "else": { "properties": { "snapshotSha256": { "type": "null" } } }
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "sourceId", "excerpt", "relation"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "excerpt": { "type": "string", "minLength": 1 },
+        "relation": { "enum": ["supports", "contradicts", "context"] }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "text", "status", "evidence"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["supported", "contradicted", "insufficient"] },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence" }
+        },
+        "limitation": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "contradicted" } } },
+          "then": {
+            "properties": {
+              "evidence": {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "required": ["relation"],
+                  "properties": { "relation": { "const": "contradicts" } }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "insufficient" } } },
+          "then": {
+            "properties": { "limitation": { "type": "string", "minLength": 1 } },
+            "required": ["limitation"]
+          }
+        }
+      ]
+    },
+    "contradiction": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "topic", "evidenceIds", "note"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "topic": { "type": "string", "minLength": 1 },
+        "evidenceIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["algorithm", "keyId", "publicKeyPem", "signatureBase64", "signedBytes"],
+      "properties": {
+        "algorithm": { "const": "ed25519" },
+        "keyId": { "type": "string", "minLength": 1 },
+        "publicKeyPem": { "type": "string", "minLength": 1 },
+        "signatureBase64": { "type": "string", "minLength": 1 },
+        "signedBytes": { "const": "canonical-receipt-without-signature" }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["algorithm", "manifestPath", "note"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "manifestPath": { "const": "integrity-manifest.json" },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

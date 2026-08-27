@@ -1,0 +1,31 @@
+{
+  "name": "@othmaneblial/decision-receipt",
+  "version": "0.1.0",
+  "description": "Dependency-free Decision Receipt schema, validation, integrity verification, comparison, and rendering",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./schema": "./schema/decision-receipt.v1.schema.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "schema/**/*.json",
+    "conformance/**/*.json",
+    "examples/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false
+}

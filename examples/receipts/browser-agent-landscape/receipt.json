@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "specVersion": "1.0.0",
+  "profile": "full",
   "type": "decision-receipt",
   "generatedAt": "2026-08-26",
   "provenance": {

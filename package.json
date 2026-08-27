@@ -5,6 +5,16 @@
   "license": "MIT",
   "type": "commonjs",
   "main": "dist/cli.js",
+  "exports": {
+    ".": "./dist/cli.js",
+    "./receipt": {
+      "types": "./packages/decision-receipt/dist/index.d.ts",
+      "require": "./packages/decision-receipt/dist/index.js",
+      "default": "./packages/decision-receipt/dist/index.js"
+    },
+    "./receipt/schema": "./schema/decision-receipt.v1.schema.json",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "web-task-agent": "dist/cli.js"
   },
@@ -17,6 +27,10 @@
     "dist/tasks/**/*.js",
     "dist/types/**/*.js",
     "dist/workflows/**/*.js",
+    "packages/decision-receipt/dist/**/*.js",
+    "packages/decision-receipt/dist/**/*.d.ts",
+    "schema/**/*.json",
+    "conformance/**/*.json",
     ".env.example",
     "install.sh",
     "README.md",
@@ -40,26 +54,30 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "clean": "rm -rf dist",
+    "build:receipt-core": "tsc -p packages/decision-receipt/tsconfig.json",
+    "build": "npm run build:receipt-core && tsc -p tsconfig.json",
+    "typecheck": "npm run build:receipt-core && tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist packages/decision-receipt/dist",
     "start": "npm run build && node dist/cli.js",
     "test": "npm run test:ci",
     "test:unit": "node --test $(find dist/tests -maxdepth 1 -name '*.test.js' | sort)",
     "test:integration": "node --test dist/tests/integration/*.test.js",
-    "test:ci": "npm run typecheck && npm run build && npm run test:unit && npm run test:integration && npm run check:generated",
+    "test:ci": "npm run typecheck && npm run build && npm run test:unit && npm run test:integration && npm run test:conformance && npm run check:generated",
     "generate:workflows": "npm run build && node scripts/generate-workflow-examples.mjs",
     "generate:receipts": "npm run build && node scripts/generate-demo-receipts.mjs",
     "generate:golden-paths": "node scripts/generate-golden-paths.mjs",
     "first-success": "node scripts/first-success.mjs",
     "evaluate:receipts": "npm run build && node scripts/evaluate-receipts.mjs",
+    "generate:spec": "node scripts/sync-receipt-spec.mjs",
+    "generate:receipt-examples": "npm run build:receipt-core && node scripts/generate-receipt-spec-examples.mjs",
+    "test:conformance": "npm run build:receipt-core && node scripts/run-receipt-conformance.mjs && node scripts/run-schema-conformance.mjs",
     "generate:interop": "npm run build && node scripts/generate-interop-fixture.mjs",
     "generate:docs": "node scripts/sync-docs.mjs",
     "check:links": "node scripts/check-markdown-links.mjs",
     "audit:secrets": "node scripts/audit-publication-secrets.mjs",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "release:check": "npm test && npm run audit:secrets && npm run audit:prod && npm pack --dry-run",
-    "check:generated": "node scripts/generate-workflow-examples.mjs && node scripts/generate-demo-receipts.mjs && node scripts/generate-golden-paths.mjs && node scripts/generate-interop-fixture.mjs && node scripts/evaluate-receipts.mjs && node scripts/sync-docs.mjs --check && npm run check:links && git diff --exit-code -- docs site examples/workflows examples/receipts examples/golden-paths examples/interop evaluation",
+    "check:generated": "node scripts/generate-workflow-examples.mjs && node scripts/generate-demo-receipts.mjs && node scripts/generate-golden-paths.mjs && node scripts/generate-interop-fixture.mjs && node scripts/evaluate-receipts.mjs && node scripts/generate-receipt-spec-examples.mjs && node scripts/sync-receipt-spec.mjs --check && node scripts/sync-docs.mjs --check && npm run check:links && git diff --exit-code -- docs site examples/workflows examples/receipts examples/golden-paths examples/interop examples/receipt-spec evaluation packages/decision-receipt/schema packages/decision-receipt/conformance packages/decision-receipt/examples",
     "lightpanda:start": "./scripts/start-lightpanda.sh start",
     "lightpanda:stop": "./scripts/start-lightpanda.sh stop",
     "lightpanda:update": "./scripts/start-lightpanda.sh update"
@@ -73,6 +91,8 @@
   "devDependencies": {
     "@types/chrome-remote-interface": "^0.33.0",
     "@types/node": "^25.4.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "typescript": "^5.9.3"
   }
 }

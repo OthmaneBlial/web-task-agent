@@ -121,30 +121,32 @@ Cette boucle est défendable parce que chaque nouveau receipt peut améliorer le
 
 ### 1. Publier un contrat réellement indépendant
 
-- [ ] Ajouter `schema/decision-receipt.v1.schema.json` en JSON Schema Draft 2020-12.
-- [ ] Documenter champs obligatoires, enums, limites, canonicalisation, hash, signature, chemins sûrs et comportement pour champs inconnus.
-- [ ] Définir la compatibilité : patch rétrocompatible, minor additif, major avec migration explicite.
-- [ ] Ajouter `schemaVersion`, `specVersion` et un identifiant de profil séparés de la version du CLI.
-- [ ] Fournir des exemples minimaux, complets, contradictoires, incomplets, périmés, signés et falsifiés.
+- [x] Ajouter `schema/decision-receipt.v1.schema.json` en JSON Schema Draft 2020-12.
+- [x] Documenter champs obligatoires, enums, limites, canonicalisation, hash, signature, chemins sûrs et comportement pour champs inconnus.
+- [x] Définir la compatibilité : patch rétrocompatible, minor additif, major avec migration explicite.
+- [x] Ajouter `schemaVersion`, `specVersion` et un identifiant de profil séparés de la version du CLI.
+- [x] Fournir des exemples minimaux, complets, contradictoires, incomplets, périmés, signés et falsifiés.
 
 ### 2. Créer un noyau réutilisable
 
 Nom de package proposé : `@othmaneblial/decision-receipt`, à confirmer au moment de la publication.
 
-- [ ] Extraire validation, vérification, comparaison, rendu et types dans un package sans navigateur, LLM, SQLite ou réseau.
-- [ ] Publier `exports`, types TypeScript, ESM et CommonJS si la matrice de support le justifie.
-- [ ] Garder le cœur déterministe : aucun accès réseau implicite, aucune télémétrie, aucun code fournisseur.
-- [ ] Rendre le CLI principal consommateur de cette API au lieu de maintenir deux implémentations.
-- [ ] Fixer un budget de poids et auditer l'arbre de dépendances du package public.
+- [x] Extraire validation, vérification, comparaison, rendu et types dans un package sans navigateur, LLM, SQLite ou réseau.
+- [x] Publier `exports`, types TypeScript, ESM et CommonJS si la matrice de support le justifie.
+- [x] Garder le cœur déterministe : aucun accès réseau implicite, aucune télémétrie, aucun code fournisseur.
+- [x] Rendre le CLI principal consommateur de cette API au lieu de maintenir deux implémentations.
+- [x] Fixer un budget de poids et auditer l'arbre de dépendances du package public.
 
 ### 3. Ouvrir un kit de conformité
 
-- [ ] Créer un runner de conformance utilisable depuis TypeScript et en ligne de commande.
-- [ ] Versionner des cas `valid`, `invalid`, `tampered`, `unsafe-path`, `unknown-version` et `signature-mismatch`.
-- [ ] Tester les migrations N-1 → N et garantir qu'une version inconnue échoue explicitement.
-- [ ] Publier une matrice : spec, CLI, SDK, Action, web verifier et adapters compatibles.
+- [x] Créer un runner de conformance utilisable depuis TypeScript et en ligne de commande.
+- [x] Versionner des cas `valid`, `invalid`, `tampered`, `unsafe-path`, `unknown-version` et `signature-mismatch`.
+- [x] Tester les migrations N-1 → N et garantir qu'une version inconnue échoue explicitement.
+- [x] Publier une matrice : spec, CLI, SDK, Action, web verifier et adapters compatibles.
 
 **Preuve d'acceptation :** un projet TypeScript vierge installe uniquement le noyau, valide une fixture et rend un diff sans importer Anthropic, Chrome, la base de données ou le runner. Une seconde implémentation peut passer le corpus à partir du JSON Schema sans lire le code du CLI.
+
+**État :** livré et vérifié localement. Le test du tarball installe le noyau sans dépendance dans un projet TypeScript vierge, compile puis rend un diff ; le paquet reste sous le budget de 180 Ko décompressé. Le corpus passe via le runner exporté et, séparément, via Ajv sur le JSON Schema sans importer le noyau ni le CLI. La publication npm reste volontairement une porte externe de P3.
 
 ---
 
