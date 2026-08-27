@@ -9,6 +9,7 @@ Web Task Agent is the verification layer for AI research. It turns a run from a 
 Inspect the deterministic receipt before installing anything:
 
 - Receipt: https://othmaneblial.github.io/web-task-agent/receipt.html
+- 60-second tamper challenge: https://othmaneblial.github.io/web-task-agent/challenge.html
 - Project: https://othmaneblial.github.io/web-task-agent/
 
 Run the same package locally without an API key or browser:
@@ -29,12 +30,27 @@ The checksum proves artifact integrity. It does not prove that a source, claim, 
 ## Links to share
 
 - Featured Decision Receipt: https://othmaneblial.github.io/web-task-agent/receipt.html
+- 60-second tamper challenge: https://othmaneblial.github.io/web-task-agent/challenge.html
 - Project site: https://othmaneblial.github.io/web-task-agent/
 - Source and installation: https://github.com/OthmaneBlial/web-task-agent#readme
 - Release `v0.5.1`: https://github.com/OthmaneBlial/web-task-agent/releases/tag/v0.5.1
 - Receipt evaluation: https://github.com/OthmaneBlial/web-task-agent/blob/main/evaluation/scorecard.md
 - Trust model: https://github.com/OthmaneBlial/web-task-agent/blob/main/docs/content/trust-model.md
 - Contributing: https://github.com/OthmaneBlial/web-task-agent/blob/main/CONTRIBUTING.md
+
+## Artifact-first challenge draft
+
+**Title:** Can you catch one changed file in this AI research receipt?
+
+**Body:**
+
+One receipt, one changed evidence file, 60 seconds. The page uses the real Decision Receipt verifier and a synthetic bundle whose prose still looks plausible after tampering:
+
+https://othmaneblial.github.io/web-task-agent/challenge.html
+
+Nothing is uploaded, stored, scored, or submitted. After choosing a boundary, the verifier reveals the exact error code and file. Integrity proves which bytes changed; it does not prove that the source or decision is true.
+
+If you catch it, the useful follow-up is not a star request: try the full local verifier, reproduce a public receipt, or contribute a falsification case the current corpus misses.
 
 ## Show HN draft — hold until the launch gate passes
 

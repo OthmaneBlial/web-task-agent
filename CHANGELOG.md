@@ -16,6 +16,7 @@ This file is intentionally lightweight.
 - Added a consent-gated manual handoff from the local Reviewer Evidence Lab to a dedicated public result form, with explicit GitHub account-linkage warnings and regression tests proving the page never submits or uploads the response.
 - Added an executable six-surface security-review baseline with drift-checked evidence anchors, a focused regression command, and a safe public attestation form that keeps vulnerability details in private advisories.
 - Added a credential-free npm publication preflight that locks the tokenless OIDC contract, probes exact public versions without authenticating, and documents the mandatory bootstrap-then-version-bump sequence.
+- Added a telemetry-free 60-second tamper challenge that runs the real local verifier against the public falsified fixture, names the exact changed file, and hands off to the full verifier without uploading a result.
 
 ## 0.5.1 — 2026-08-26
 

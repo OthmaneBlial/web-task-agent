@@ -15,6 +15,8 @@ test("public positioning leads with Decision Receipt verification", () => {
   assert.match(readme, /verify, challenge, and compare offline/);
   assert.match(homepage, /Verify the decision, not just the answer/);
   assert.match(homepage, /Verify your receipt locally/);
+  assert.match(homepage, /Take the 60-second challenge/);
+  assert.match(homepage, /href="challenge\.html"/);
   assert.match(homepage, /href="verify\.html"/);
   assert.match(homepage, /Integrity checked/);
   assert.match(homepage, /Contradictions explicit/);
@@ -40,6 +42,7 @@ test("launch materials identify v0.5.1 and record the delivered roadmap", () => 
 
   assert.match(launch, /^# Launch kit — Web Task Agent v0\.5\.1/m);
   assert.match(launch, /receipt verify/);
+  assert.match(launch, /60-second tamper challenge/);
   assert.match(launch, /does not prove that a source, claim, or decision is true/);
   assert.doesNotMatch(launch, /v0\.4\.0/);
   assert.match(changelog, /Completed the previous P0–P4 productization roadmap/);
