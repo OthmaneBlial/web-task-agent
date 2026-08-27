@@ -1,0 +1,23 @@
+{
+  "studyVersion": "1.0.0",
+  "cases": {
+    "case-a": {
+      "supportingEvidenceId": "evidence-cache-policy",
+      "contradictedClaimId": "cross-architecture-safety",
+      "staleSourceId": "cache-incident",
+      "tamperResult": {
+        "markdown-only": "not-determinable",
+        "receipt": "evidence/cache-policy.md"
+      }
+    },
+    "case-b": {
+      "supportingEvidenceId": "evidence-update-policy",
+      "contradictedClaimId": "automatic-majors-safe",
+      "staleSourceId": "upgrade-incident",
+      "tamperResult": {
+        "markdown-only": "not-determinable",
+        "receipt": "evidence/update-policy.md"
+      }
+    }
+  }
+}

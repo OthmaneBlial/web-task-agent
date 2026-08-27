@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "studyVersion": "1.0.0",
+  "fixture": true,
+  "participantId": "p-00000000",
+  "orderGroup": "AB",
+  "participantRole": "developer",
+  "priorFamiliarity": "basic",
+  "consent": {
+    "participation": true,
+    "anonymizedMeasures": true,
+    "publishAnonymizedRow": false,
+    "publicQuote": false,
+    "identityAttribution": false,
+    "recordedAt": "2026-08-27T10:30:00.000Z"
+  },
+  "trials": [
+    {
+      "caseId": "case-a",
+      "condition": "markdown-only",
+      "startedAt": "2026-08-27T10:31:00.000Z",
+      "finishedAt": "2026-08-27T10:35:00.000Z",
+      "answers": {
+        "supportingEvidenceId": "evidence-cache-policy",
+        "contradictedClaimId": "cross-architecture-safety",
+        "staleSourceId": "cache-incident",
+        "tamperResult": "not-determinable"
+      },
+      "confidence": 4,
+      "friction": [
+        "Synthetic fixture: scanned the Markdown table before the source blocks."
+      ],
+      "abandoned": false
+    },
+    {
+      "caseId": "case-b",
+      "condition": "receipt",
+      "startedAt": "2026-08-27T10:36:00.000Z",
+      "finishedAt": "2026-08-27T10:39:00.000Z",
+      "answers": {
+        "supportingEvidenceId": "evidence-update-policy",
+        "contradictedClaimId": "automatic-majors-safe",
+        "staleSourceId": "upgrade-incident",
+        "tamperResult": "evidence/update-policy.md"
+      },
+      "confidence": 4,
+      "friction": [
+        "Synthetic fixture: used the CLI error path for the tampered bundle."
+      ],
+      "abandoned": false
+    }
+  ],
+  "criticalFeedback": "Synthetic example only; no external participant supplied this response."
+}

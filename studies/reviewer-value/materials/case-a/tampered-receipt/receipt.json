@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "specVersion": "1.0.0",
+  "profile": "minimal",
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-27T10:30:00.000Z",
+  "provenance": {
+    "kind": "captured",
+    "runId": "reviewer-study-case-a",
+    "cliVersion": null,
+    "workflowId": "reviewer-value-study-v1",
+    "policyVersion": "synthetic-public-fixture-v1",
+    "promptVersion": null,
+    "model": null,
+    "fixture": true
+  },
+  "decision": {
+    "title": "Should release CI adopt a shared build cache now?",
+    "summary": "Adopt only an architecture-scoped cache and keep the speed claim insufficient until measured."
+  },
+  "claims": [
+    {
+      "id": "architecture-scoped-keys",
+      "text": "The documented key can scope cache restoration by lockfile and runner architecture.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "evidence-cache-policy",
+          "sourceId": "cache-policy",
+          "relation": "supports",
+          "excerpt": "Cache keys include the dependency lockfile and runner architecture before a release artifact can be restored."
+        }
+      ]
+    },
+    {
+      "id": "cross-architecture-safety",
+      "text": "Cached native binaries are safe to restore across runner architectures.",
+      "status": "contradicted",
+      "evidence": [
+        {
+          "id": "evidence-cache-incident",
+          "sourceId": "cache-incident",
+          "relation": "contradicts",
+          "excerpt": "A stale cache restored incompatible native binaries after the runner architecture changed."
+        }
+      ]
+    },
+    {
+      "id": "thirty-percent-faster",
+      "text": "The cache will reduce median release duration by at least 30 percent.",
+      "status": "insufficient",
+      "evidence": [
+        {
+          "id": "evidence-cache-context",
+          "sourceId": "cache-policy",
+          "relation": "context",
+          "excerpt": "Cache keys include the dependency lockfile and runner architecture before a release artifact can be restored."
+        }
+      ],
+      "limitation": "Neither synthetic source contains measured release-duration data."
+    }
+  ],
+  "sources": [
+    {
+      "id": "cache-policy",
+      "title": "Synthetic build-cache policy",
+      "url": "https://example.com/studies/build-cache-policy",
+      "publisher": "Web Task Agent synthetic study fixture",
+      "role": "synthetic reviewer-value study evidence",
+      "collectedAt": "2026-08-20T09:00:00.000Z",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/cache-policy.md",
+      "snapshotSha256": "3dc3bcb4eba0afcf8cf67396f33783e097da689423ea1327fe0d295182e045a1"
+    },
+    {
+      "id": "cache-incident",
+      "title": "Synthetic cache incident note",
+      "url": "https://example.com/studies/build-cache-incident",
+      "publisher": "Web Task Agent synthetic study fixture",
+      "role": "synthetic reviewer-value study evidence",
+      "collectedAt": "2024-01-15T09:00:00.000Z",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/cache-incident.md",
+      "snapshotSha256": "021401a66c0c790851b9cb83910801c09d7920592ed49cc4e11fced17a4b680a"
+    }
+  ],
+  "contradictions": [
+    {
+      "id": "contradiction-cache-architecture",
+      "topic": "cross-architecture native-cache safety",
+      "evidenceIds": [
+        "evidence-cache-incident"
+      ],
+      "note": "The incident note directly contradicts cross-architecture restore safety."
+    }
+  ],
+  "nextValidation": "Measure 20 release builds per runner architecture and compare median duration plus cache-related failures.",
+  "limitations": [
+    "All sources and scenarios are synthetic study fixtures; they do not establish facts about a real CI or dependency workflow.",
+    "Source cache-incident is intentionally stale so freshness detection can be measured.",
+    "Integrity verification proves exported bytes and references, not source truth, decision quality, authorization, or freshness."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "Integrity proves bytes, not truth."
+  }
+}

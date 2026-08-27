@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "specVersion": "1.0.0",
+  "profile": "minimal",
+  "type": "decision-receipt",
+  "generatedAt": "2026-08-27T10:30:00.000Z",
+  "provenance": {
+    "kind": "captured",
+    "runId": "reviewer-study-case-b",
+    "cliVersion": null,
+    "workflowId": "reviewer-value-study-v1",
+    "policyVersion": "synthetic-public-fixture-v1",
+    "promptVersion": null,
+    "model": null,
+    "fixture": true
+  },
+  "decision": {
+    "title": "Should the repository enable automatic dependency updates now?",
+    "summary": "Enable grouped patch updates, block automatic majors, and measure patch latency before claiming improvement."
+  },
+  "claims": [
+    {
+      "id": "grouped-patch-updates",
+      "text": "The policy can group patch updates while reserving majors for manual review.",
+      "status": "supported",
+      "evidence": [
+        {
+          "id": "evidence-update-policy",
+          "sourceId": "update-policy",
+          "relation": "supports",
+          "excerpt": "Patch updates can be grouped weekly while major versions remain blocked for manual compatibility review."
+        }
+      ]
+    },
+    {
+      "id": "automatic-majors-safe",
+      "text": "Major dependency updates are safe to merge automatically without compatibility review.",
+      "status": "contradicted",
+      "evidence": [
+        {
+          "id": "evidence-upgrade-incident",
+          "sourceId": "upgrade-incident",
+          "relation": "contradicts",
+          "excerpt": "An automated major upgrade broke the plugin API and required a rollback before the next release."
+        }
+      ]
+    },
+    {
+      "id": "patch-latency-halved",
+      "text": "Automation will cut median patch-update latency in half.",
+      "status": "insufficient",
+      "evidence": [
+        {
+          "id": "evidence-update-context",
+          "sourceId": "update-policy",
+          "relation": "context",
+          "excerpt": "Patch updates can be grouped weekly while major versions remain blocked for manual compatibility review."
+        }
+      ],
+      "limitation": "Neither synthetic source contains before-and-after merge-latency measurements."
+    }
+  ],
+  "sources": [
+    {
+      "id": "update-policy",
+      "title": "Synthetic dependency-update policy",
+      "url": "https://example.com/studies/dependency-update-policy",
+      "publisher": "Web Task Agent synthetic study fixture",
+      "role": "synthetic reviewer-value study evidence",
+      "collectedAt": "2026-08-19T10:00:00.000Z",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/update-policy.md",
+      "snapshotSha256": "0ccfe6ddbb38cadf6ba80ac7079a4e7dbc2c4bf8ee5ab015f366e5ffe5bca014"
+    },
+    {
+      "id": "upgrade-incident",
+      "title": "Synthetic major-upgrade incident note",
+      "url": "https://example.com/studies/dependency-upgrade-incident",
+      "publisher": "Web Task Agent synthetic study fixture",
+      "role": "synthetic reviewer-value study evidence",
+      "collectedAt": "2024-02-10T10:00:00.000Z",
+      "captureType": "fixture-synthetic",
+      "snapshotPath": "evidence/upgrade-incident.md",
+      "snapshotSha256": "3a959f7183550dcf85311d28fbba311f697c27c359892e6b495483c96c3154a7"
+    }
+  ],
+  "contradictions": [
+    {
+      "id": "contradiction-major-upgrade",
+      "topic": "automatic major-version safety",
+      "evidenceIds": [
+        "evidence-upgrade-incident"
+      ],
+      "note": "The incident note directly contradicts unattended major-version safety."
+    }
+  ],
+  "nextValidation": "Run grouped patch-only updates for four weeks and record merge latency, rollback count, and maintainer time.",
+  "limitations": [
+    "All sources and scenarios are synthetic study fixtures; they do not establish facts about a real CI or dependency workflow.",
+    "Source upgrade-incident is intentionally stale so freshness detection can be measured.",
+    "Integrity verification proves exported bytes and references, not source truth, decision quality, authorization, or freshness."
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "manifestPath": "integrity-manifest.json",
+    "note": "Integrity proves bytes, not truth."
+  }
+}

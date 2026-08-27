@@ -1,0 +1,31 @@
+{
+  "studyVersion": "1.0.0",
+  "taskOrder": [
+    "supportingEvidenceId",
+    "contradictedClaimId",
+    "staleSourceId",
+    "tamperResult"
+  ],
+  "groups": {
+    "AB": [
+      {
+        "caseId": "case-a",
+        "condition": "markdown-only"
+      },
+      {
+        "caseId": "case-b",
+        "condition": "receipt"
+      }
+    ],
+    "BA": [
+      {
+        "caseId": "case-a",
+        "condition": "receipt"
+      },
+      {
+        "caseId": "case-b",
+        "condition": "markdown-only"
+      }
+    ]
+  }
+}

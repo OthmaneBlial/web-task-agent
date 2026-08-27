@@ -39,6 +39,8 @@ Use a small counterbalanced comparison rather than presenting a demo as a study:
 
 Do not claim a speed, accuracy, or confidence improvement unless the observed data supports it. With very small samples, publish descriptive results rather than significance theater.
 
+The executable [`studies/reviewer-value/`](studies/reviewer-value/) kit now fixes the protocol before recruitment: two parallel synthetic cases, `AB`/`BA` assignment, four exact-answer tasks, valid and deliberately tampered receipts, a strict privacy-bounded response schema, and a descriptive aggregator. Both valid bundles pass offline verification; each controlled falsification fails at its intended evidence path. Its checked-in response is a fixture and is excluded from the default aggregate, so the real participant count remains zero.
+
 ## Consent checkpoints
 
 Consent is granular: participation, anonymized measures, public receipt, public quote, and identity attribution are separate choices. A participant may withdraw unpublished data. Already-merged open-source contributions remain governed by their repository license and Git history.
@@ -51,5 +53,6 @@ Consent is granular: participation, anonymized measures, public receipt, public 
 | External receipts verified | 0 |
 | External users producing a second receipt/diff | 0 |
 | Independent security reviews received | 0 |
+| Real reviewer-value participants included | 0 |
 
 Update these counts only with a public link or a private consent record held by the maintainer. Stars, clones, maintainer runs, synthetic fixtures, and this protocol do not increment them.

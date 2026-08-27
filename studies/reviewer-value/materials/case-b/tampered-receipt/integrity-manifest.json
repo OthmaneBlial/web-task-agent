@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "specVersion": "1.0.0",
+  "type": "receipt-integrity-manifest",
+  "algorithm": "sha256",
+  "receiptPath": "receipt.json",
+  "generatedAt": "2026-08-27T10:30:00.000Z",
+  "files": [
+    {
+      "path": "evidence/update-policy.md",
+      "sha256": "0ccfe6ddbb38cadf6ba80ac7079a4e7dbc2c4bf8ee5ab015f366e5ffe5bca014",
+      "bytes": 143
+    },
+    {
+      "path": "evidence/upgrade-incident.md",
+      "sha256": "3a959f7183550dcf85311d28fbba311f697c27c359892e6b495483c96c3154a7",
+      "bytes": 138
+    },
+    {
+      "path": "receipt.json",
+      "sha256": "b48190e9aa8f0319012183dc56ae2387625539dc6217cc4ac9971e27b15ea3f4",
+      "bytes": 4162
+    }
+  ]
+}

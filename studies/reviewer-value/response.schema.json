@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://othmaneblial.github.io/web-task-agent/studies/reviewer-value/response.schema.json",
+  "title": "Decision Receipt reviewer-value response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "studyVersion",
+    "fixture",
+    "participantId",
+    "orderGroup",
+    "participantRole",
+    "priorFamiliarity",
+    "consent",
+    "trials",
+    "criticalFeedback"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "studyVersion": { "const": "1.0.0" },
+    "fixture": { "type": "boolean" },
+    "participantId": { "type": "string", "pattern": "^p-[a-f0-9]{8}$" },
+    "orderGroup": { "enum": ["AB", "BA"] },
+    "participantRole": {
+      "enum": ["maintainer", "developer", "agent-builder", "local-first-practitioner", "other"]
+    },
+    "priorFamiliarity": { "enum": ["none", "basic", "experienced"] },
+    "consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "participation",
+        "anonymizedMeasures",
+        "publishAnonymizedRow",
+        "publicQuote",
+        "identityAttribution",
+        "recordedAt"
+      ],
+      "properties": {
+        "participation": { "const": true },
+        "anonymizedMeasures": { "type": "boolean" },
+        "publishAnonymizedRow": { "type": "boolean" },
+        "publicQuote": { "type": "boolean" },
+        "identityAttribution": { "type": "boolean" },
+        "recordedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "trials": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "caseId",
+          "condition",
+          "startedAt",
+          "finishedAt",
+          "answers",
+          "confidence",
+          "friction",
+          "abandoned"
+        ],
+        "properties": {
+          "caseId": { "enum": ["case-a", "case-b"] },
+          "condition": { "enum": ["markdown-only", "receipt"] },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "finishedAt": { "type": "string", "format": "date-time" },
+          "answers": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["supportingEvidenceId", "contradictedClaimId", "staleSourceId", "tamperResult"],
+            "properties": {
+              "supportingEvidenceId": { "type": ["string", "null"], "maxLength": 120 },
+              "contradictedClaimId": { "type": ["string", "null"], "maxLength": 120 },
+              "staleSourceId": { "type": ["string", "null"], "maxLength": 120 },
+              "tamperResult": { "type": ["string", "null"], "maxLength": 200 }
+            }
+          },
+          "confidence": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "friction": {
+            "type": "array",
+            "maxItems": 10,
+            "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+          },
+          "abandoned": { "type": "boolean" }
+        }
+      }
+    },
+    "criticalFeedback": { "type": "string", "maxLength": 2000 },
+    "quoteForPublication": { "type": "string", "minLength": 1, "maxLength": 500 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "quoteForPublication": {}
+        },
+        "required": ["quoteForPublication"]
+      },
+      "then": {
+        "properties": {
+          "consent": {
+            "type": "object",
+            "properties": {
+              "publicQuote": { "const": true }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

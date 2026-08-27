@@ -10,6 +10,7 @@ This file is intentionally lightweight.
 - Added the dependency-free `decision-receipt` executable, clean-install Node 20/22/24 matrices, and tokenless npm OIDC publishing workflow with exact-tarball verification.
 - Added two authentic, privacy-bounded Browser Use and GPT Researcher imports, strict adapters, a four-tool local MCP server, and verified receipts that retain engine limits.
 - Added mandatory breaking-schema RFCs, maintainer/release rules, an independent-security-review brief, a consented external-validation protocol, and an empty-by-design opt-in receipt gallery.
+- Added a reproducible reviewer-value study kit with counterbalanced Markdown/receipt cases, exact controlled tampering, privacy-bounded response validation, fixture exclusion, and descriptive no-hype aggregation.
 
 ## 0.5.1 — 2026-08-26
 
