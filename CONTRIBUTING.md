@@ -92,6 +92,7 @@ Do not optimize for star count, benchmark theater, or a large prompt catalog. A 
 - [Reproduce a golden-path receipt on a clean machine](https://github.com/OthmaneBlial/web-task-agent/issues/2)
 - [Propose one bounded decision with a receipt fixture](https://github.com/OthmaneBlial/web-task-agent/issues/4)
 - [Independently review one Decision Receipt security boundary](https://github.com/OthmaneBlial/web-task-agent/issues/10)
+- [Publish a bounded security review attestation](https://github.com/OthmaneBlial/web-task-agent/issues/new?template=security_review_attestation.yml) only after any sensitive finding has entered the private advisory flow
 - [Run one consented external reviewer study](https://github.com/OthmaneBlial/web-task-agent/issues/12) in the [local-only Evidence Lab](https://othmaneblial.github.io/web-task-agent/study.html) or with the fixed [`AB`/`BA` study kit](studies/reviewer-value/)
 - [Share a manually reviewed reviewer-study export](https://github.com/OthmaneBlial/web-task-agent/issues/new?template=reviewer_value_study.yml) only when anonymized-row consent and public GitHub account linkage are both explicit
 
@@ -102,6 +103,7 @@ The dedicated issue forms also define complete acceptance contracts for a provid
 - Read [MAINTAINERS.md](MAINTAINERS.md) for authority, compatibility, and release rules.
 - Any breaking schema, canonicalization, signing, archive, path, or status-semantic change follows the mandatory [Decision Receipt RFC process](docs/rfcs/README.md) before implementation.
 - Use [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for the independent-review scope and private advisory boundary.
+- Run `npm run security:review` to reproduce the maintainer baseline for all six named threat surfaces; it is not a substitute for independent analysis.
 - External case studies follow [EXTERNAL_VALIDATION.md](EXTERNAL_VALIDATION.md), including granular consent and honest zero baselines.
 - Reviewer-value responses use the local [`studies/reviewer-value/`](studies/reviewer-value/) validator and aggregator; fixtures and non-consented measures never count as external adoption.
 - Public receipts enter the [opt-in gallery](gallery/README.md) only after license, redaction, consent, secret, and offline-integrity review. Nothing is collected automatically.

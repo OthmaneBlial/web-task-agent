@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "baselineVersion": "1.0.0",
+  "claimBoundary": "Maintainer-produced regression evidence only; independent review remains required.",
+  "surfaces": [
+    {
+      "id": "schema-runtime",
+      "title": "JSON Schema and runtime agreement",
+      "evidence": [
+        { "path": "src/tests/receipt-core.test.ts", "marker": "standalone core verifies every public example and identifies the falsified bytes" },
+        { "path": "scripts/run-schema-conformance.mjs", "marker": "schema-unknown-major" }
+      ]
+    },
+    {
+      "id": "canonical-signature",
+      "title": "Canonical bytes, hashes, signatures, and migration",
+      "evidence": [
+        { "path": "packages/decision-receipt/src/canonical.ts", "marker": "canonicalizeReceiptForSigning" },
+        { "path": "src/tests/interop.test.ts", "marker": "operator signature is optional, verifiable, and clearly scoped" },
+        { "path": "conformance/cases.json", "marker": "signature-mismatch" }
+      ]
+    },
+    {
+      "id": "archive-paths",
+      "title": "Archive limits, traversal, symlinks, and relative paths",
+      "evidence": [
+        { "path": "src/tests/web-verifier.test.ts", "marker": "actual browser bundle streams a rooted ZIP and rejects path traversal" },
+        { "path": "packages/decision-receipt/src/verify.ts", "marker": "manifest_path_unsafe" },
+        { "path": "src/tests/mcp.test.ts", "marker": "escapes DECISION_RECEIPT_ROOT" }
+      ]
+    },
+    {
+      "id": "url-import",
+      "title": "Unsafe URLs and provider-neutral imports",
+      "evidence": [
+        { "path": "src/tests/source-policy.test.ts", "marker": "source policy allows public HTTPS and rejects unsafe URL targets" },
+        { "path": "src/tests/interop.test.ts", "marker": "adapter contract rejects provider-private fields and unlabeled inference" },
+        { "path": "scripts/run-schema-conformance.mjs", "marker": "schema-credential-url" }
+      ]
+    },
+    {
+      "id": "html-rendering",
+      "title": "HTML escaping and untrusted browser rendering",
+      "evidence": [
+        { "path": "src/tests/demo.test.ts", "marker": "receipt HTML escapes untrusted fixture fields and refuses unsafe source protocols" },
+        { "path": "src/tests/web-verifier.test.ts", "marker": "local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe report controls" }
+      ]
+    },
+    {
+      "id": "local-boundary",
+      "title": "Secrets, no-network verification, no telemetry, and local-only behavior",
+      "evidence": [
+        { "path": "src/tests/publication-secret-audit.test.ts", "marker": "publication secret audit passes without exposing sensitive values" },
+        { "path": "src/tests/mcp.test.ts", "marker": "unexpected MCP network access" },
+        { "path": "src/tests/reviewer-study-web.test.ts", "marker": "reviewer study browser code has no submission, telemetry, or persistence sink" },
+        { "path": "src/tests/web-verifier.test.ts", "marker": "default verification report code omits receipt text and source data" }
+      ]
+    }
+  ]
+}

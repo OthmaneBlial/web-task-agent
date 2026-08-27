@@ -1,0 +1,69 @@
+name: Independent security review status
+description: Publish a bounded review attestation after privately reporting any sensitive finding.
+title: "security review attestation: "
+labels: [security-review]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form records review scope and status only. **Do not disclose a suspected vulnerability, exploit, payload, private target, secret, or reproduction here.** Report sensitive findings through the [private security advisory flow](https://github.com/OthmaneBlial/web-task-agent/security/advisories/new) first.
+
+        A no-findings result means only that no issue was found within the stated scope, methods, and time. It does not mean the project is secure.
+  - type: input
+    id: commit
+    attributes:
+      label: Exact reviewed commit
+      placeholder: 40-character commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Reviewer environment and time boundary
+      placeholder: Ubuntu 24.04, Node 24, Chrome 140; four hours on 2026-08-27
+    validations:
+      required: true
+  - type: dropdown
+    id: breadth
+    attributes:
+      label: Review breadth
+      options:
+        - One bounded surface
+        - Several named surfaces
+        - All six baseline surfaces
+    validations:
+      required: true
+  - type: textarea
+    id: surfaces
+    attributes:
+      label: Surfaces, methods, and commands covered
+      description: Name the exact surfaces and safe methods. Include the result of `npm run security:review` when used.
+    validations:
+      required: true
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Public outcome
+      options:
+        - No issue found in this bounded scope and effort
+        - Sensitive finding reported privately; public details deferred
+        - Review incomplete or blocked; no conclusion
+    validations:
+      required: true
+  - type: textarea
+    id: limits
+    attributes:
+      label: Unresolved areas, limitations, and suggested regression cases
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Safe public attestation
+      options:
+        - label: I performed this review independently of the maintainer-produced baseline and recorded the exact commit.
+          required: true
+        - label: Any sensitive finding was sent privately; this issue contains no exploit or vulnerability detail.
+          required: true
+        - label: I will not describe this bounded result as proof that the project is secure.
+          required: true

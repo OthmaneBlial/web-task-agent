@@ -21,11 +21,17 @@ The local research runner, configured model providers, arbitrary authenticated b
 
 ```bash
 npm ci
-npm test
-npm run audit:secrets
-npm run audit:prod
-npm run release:check
+npm run security:review
 ```
+
+`security:review` builds the candidate, validates [`security/review-baseline.json`](security/review-baseline.json), runs the focused regression files for all six surfaces, runs both conformance suites, scans publishable files for secrets, and audits production dependencies. The baseline command prints the exact Git commit plus every evidence anchor and fails if a path, test marker, or scope entry drifts:
+
+```bash
+npm run security:baseline
+npm run security:baseline -- --json
+```
+
+This is a reproducibility aid, not an automated security verdict. Reviewers must still inspect the relevant implementation, exercise adversarial variants beyond the named regressions, and record methods and time boundaries.
 
 Reviewers should also open the local verifier with network recording enabled, load the valid/tampered/changed fixtures, block the server after initial load, and inspect browser storage and console output. Record browser/OS versions and the reviewed commit.
 
@@ -54,3 +60,5 @@ These are maintainer-produced checks, not an independent assessment, penetration
 ## Expected public result
 
 After coordinated handling of sensitive findings, publish the reviewed commit, reviewer identity or stated anonymity, methods, surfaces covered, findings by severity, fixes and regression tests, unresolved limits, and date. A clean review means only “no issue found in this scope and effort,” never “secure” without qualification.
+
+Use the [independent security review status form](https://github.com/OthmaneBlial/web-task-agent/issues/new?template=security_review_attestation.yml) only for the safe public attestation. It accepts scope/status, never a suspected vulnerability or exploit. Sensitive findings must enter the private advisory flow first.
