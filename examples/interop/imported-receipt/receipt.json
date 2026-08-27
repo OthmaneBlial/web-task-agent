@@ -11,12 +11,16 @@
     "workflowId": null,
     "policyVersion": "external-provider-policy-2026-01",
     "promptVersion": null,
-    "model": "provider-redacted",
-    "fixture": false
+    "model": null,
+    "fixture": true
   },
   "decision": {
     "title": "Should we add an offline export mode?",
-    "summary": "The available evidence supports validating an offline export before committing to a broader hosted workflow."
+    "summary": "The available evidence supports validating an offline export before committing to a broader hosted workflow.",
+    "adapterOrigin": {
+      "kind": "operator-attested",
+      "note": "Synthetic contract fixture authored for conformance; it is not a live Browser Use run."
+    }
   },
   "claims": [
     {
@@ -25,12 +29,20 @@
       "status": "supported",
       "evidence": [
         {
-          "id": "evidence-1-1",
+          "id": "evidence-offline-export",
           "sourceId": "local-first-principles",
           "excerpt": "Local-first software gives users ownership of their data and offline capability.",
-          "relation": "supports"
+          "relation": "supports",
+          "adapterOrigin": {
+            "kind": "operator-attested",
+            "note": "Synthetic evidence link authored for adapter conformance."
+          }
         }
-      ]
+      ],
+      "adapterOrigin": {
+        "kind": "operator-attested",
+        "note": "Synthetic claim authored for adapter conformance."
+      }
     }
   ],
   "sources": [
@@ -41,9 +53,13 @@
       "publisher": "Browser Use",
       "role": "provider documentation",
       "collectedAt": "2026-08-25T12:00:00.000Z",
-      "captureType": "live",
+      "captureType": "imported-excerpt",
       "snapshotPath": "evidence/snapshots/01-browser-use-docs.md",
-      "snapshotSha256": "7e4c55018a67a336e696865ebc9b0f25fbc012f1d804e986cd073d36bc78ff5d"
+      "snapshotSha256": "7e4c55018a67a336e696865ebc9b0f25fbc012f1d804e986cd073d36bc78ff5d",
+      "adapterOrigin": {
+        "kind": "operator-attested",
+        "note": "Synthetic excerpt retained only as a safe adapter-contract fixture."
+      }
     },
     {
       "id": "local-first-principles",
@@ -52,16 +68,21 @@
       "publisher": "Ink & Switch",
       "role": "independent context",
       "collectedAt": "2026-08-25T12:05:00.000Z",
-      "captureType": "live",
+      "captureType": "imported-excerpt",
       "snapshotPath": "evidence/snapshots/02-local-first-principles.md",
-      "snapshotSha256": "407275470dc9b91ca99e30570fd7925ba30340b38c934ae428828c66c1d86b33"
+      "snapshotSha256": "407275470dc9b91ca99e30570fd7925ba30340b38c934ae428828c66c1d86b33",
+      "adapterOrigin": {
+        "kind": "operator-attested",
+        "note": "Synthetic excerpt retained only as a safe adapter-contract fixture."
+      }
     }
   ],
   "contradictions": [],
   "nextValidation": "Export one representative decision package offline and ask a reviewer to verify it on a clean machine.",
   "limitations": [
     "Imported evidence preserves the provider result but does not prove that its sources are true, complete, authorized, or fresh.",
-    "This provider result was imported without its browser session or raw network trace.",
+    "Adapter browser-use-contract-fixture@1.0.0 imported Browser Use@unversioned-format-example; engine run id: not provided.",
+    "This is a synthetic contract fixture, not an authentic Browser Use execution.",
     "The sources were not re-fetched by Web Task Agent."
   ],
   "integrity": {

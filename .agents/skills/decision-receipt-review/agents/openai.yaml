@@ -1,0 +1,4 @@
+interface:
+  display_name: "Decision Receipt Review"
+  short_description: "Verify and compare local Decision Receipts"
+  default_prompt: "Verify the local Decision Receipt, explain integrity failures, and keep integrity separate from truth."

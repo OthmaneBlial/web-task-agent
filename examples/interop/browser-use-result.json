@@ -1,9 +1,23 @@
 {
-  "title": "Should we add an offline export mode?",
-  "summary": "The available evidence supports validating an offline export before committing to a broader hosted workflow.",
-  "generatedAt": "2026-08-26T00:00:00.000Z",
-  "policyVersion": "external-provider-policy-2026-01",
-  "model": "provider-redacted",
+  "adapterContractVersion": "1.0.0",
+  "producer": {
+    "adapterId": "browser-use-contract-fixture",
+    "adapterVersion": "1.0.0",
+    "engine": "Browser Use",
+    "engineVersion": "unversioned-format-example",
+    "runId": null,
+    "exportedAt": "2026-08-26T00:00:00.000Z",
+    "fixture": true
+  },
+  "decision": {
+    "title": "Should we add an offline export mode?",
+    "summary": "The available evidence supports validating an offline export before committing to a broader hosted workflow.",
+    "nextValidation": "Export one representative decision package offline and ask a reviewer to verify it on a clean machine.",
+    "origin": {
+      "kind": "operator-attested",
+      "note": "Synthetic contract fixture authored for conformance; it is not a live Browser Use run."
+    }
+  },
   "sources": [
     {
       "id": "browser-use-docs",
@@ -12,7 +26,11 @@
       "publisher": "Browser Use",
       "role": "provider documentation",
       "collectedAt": "2026-08-25T12:00:00.000Z",
-      "excerpt": "Browser Use provides browser automation infrastructure for agents."
+      "excerpt": "Browser Use provides browser automation infrastructure for agents.",
+      "origin": {
+        "kind": "operator-attested",
+        "note": "Synthetic excerpt retained only as a safe adapter-contract fixture."
+      }
     },
     {
       "id": "local-first-principles",
@@ -21,7 +39,11 @@
       "publisher": "Ink & Switch",
       "role": "independent context",
       "collectedAt": "2026-08-25T12:05:00.000Z",
-      "excerpt": "Local-first software gives users ownership of their data and offline capability."
+      "excerpt": "Local-first software gives users ownership of their data and offline capability.",
+      "origin": {
+        "kind": "operator-attested",
+        "note": "Synthetic excerpt retained only as a safe adapter-contract fixture."
+      }
     }
   ],
   "claims": [
@@ -29,18 +51,29 @@
       "id": "offline-export-validation",
       "text": "An offline export is a concrete next validation for the proposed workflow.",
       "status": "supported",
+      "origin": {
+        "kind": "operator-attested",
+        "note": "Synthetic claim authored for adapter conformance."
+      },
       "evidence": [
         {
-          "sourceIndex": 1,
+          "id": "evidence-offline-export",
+          "sourceId": "local-first-principles",
           "excerpt": "Local-first software gives users ownership of their data and offline capability.",
-          "relation": "supports"
+          "relation": "supports",
+          "origin": {
+            "kind": "operator-attested",
+            "note": "Synthetic evidence link authored for adapter conformance."
+          }
         }
       ]
     }
   ],
+  "contradictions": [],
   "limitations": [
-    "This provider result was imported without its browser session or raw network trace.",
+    "This is a synthetic contract fixture, not an authentic Browser Use execution.",
     "The sources were not re-fetched by Web Task Agent."
   ],
-  "nextValidation": "Export one representative decision package offline and ask a reviewer to verify it on a clean machine."
+  "policyVersion": "external-provider-policy-2026-01",
+  "model": null
 }

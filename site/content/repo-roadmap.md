@@ -227,10 +227,12 @@ Créer un dépôt étroit `OthmaneBlial/decision-receipt-action`, car GitHub Mar
 
 ### 1. Contrat d'adapter
 
-- [ ] Définir une entrée fournisseur-neutre minimale : claims, sources, extraits, limites, date, modèle/policy connus et prochaine validation.
-- [ ] Séparer strictement `imported`, `captured`, `inferred` et `operator-attested`.
-- [ ] Refuser cookies, sessions, prompts fournisseurs, URLs avec identifiants et instructions exécutables.
-- [ ] Fournir un générateur d'adapter et des tests contractuels.
+- [x] Définir une entrée fournisseur-neutre minimale : claims, sources, extraits, limites, date, modèle/policy connus et prochaine validation.
+- [x] Séparer strictement `imported`, `captured`, `inferred` et `operator-attested`.
+- [x] Refuser cookies, sessions, prompts fournisseurs, URLs avec identifiants et instructions exécutables.
+- [x] Fournir un générateur d'adapter et des tests contractuels.
+
+**État :** contrat `1.0.0` livré avec validation runtime et JSON Schema indépendant. Le générateur produit un adapter exécutable, une fixture explicitement synthétique et une recette de revue ; ses sorties passent le même validateur que l'importeur. Les champs inconnus et les données privées fournisseur échouent fermés, et toute inférence ou attestation opérateur exige une note.
 
 ### 2. Prouver deux imports authentiques
 
@@ -241,10 +243,12 @@ Créer un dépôt étroit `OthmaneBlial/decision-receipt-action`, car GitHub Mar
 
 ### 3. Exposer les opérations via MCP local
 
-- [ ] Serveur STDIO local limité à `verify_receipt`, `compare_receipts`, `import_result` et `render_receipt`.
-- [ ] Aucun outil de navigation, shell, cookie, authentification ou écriture externe.
+- [x] Serveur STDIO local limité à `verify_receipt`, `compare_receipts`, `import_result` et `render_receipt`.
+- [x] Aucun outil de navigation, shell, cookie, authentification ou écriture externe.
 - [ ] Publier le package npm avant les métadonnées du registre MCP officiel.
-- [ ] Ajouter une Skill/recette d'installation qui apprend aux agents à produire ou vérifier un receipt sans contourner le consentement utilisateur.
+- [x] Ajouter une Skill/recette d'installation qui apprend aux agents à produire ou vérifier un receipt sans contourner le consentement utilisateur.
+
+**État intermédiaire :** le serveur négocie MCP `2025-11-25`, borne requêtes et réponses à 2 Mo, confine tous les chemins à `DECISION_RECEIPT_ROOT` et refuse les liens symboliques. Un test avec primitives réseau bloquées couvre les quatre outils ; un second test passe par le client TypeScript MCP officiel pour le handshake, la découverte et la vérification. La publication npm et les métadonnées du registre restent liées à la porte propriétaire de P3.
 
 **Preuve d'acceptation :** deux sorties authentiques de moteurs externes passent le corpus de conformité et conservent leurs limites. Un client MCP peut vérifier et comparer hors ligne ; aucune session fournisseur ni donnée privée n'entre dans le package.
 

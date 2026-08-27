@@ -38,6 +38,8 @@ import { formatStoredJobRuntimeSummary } from "./lib/runtime-summary";
 import { maintainPromptTraceRetention } from "./lib/prompt-trace";
 import { logStructured } from "./lib/local-logging";
 import { assessStorageHealth } from "./lib/storage-validation";
+import { validateDecisionReceiptAdapterResult } from "./lib/adapter-contract";
+import { createAdapterScaffold } from "./lib/adapter-scaffold";
 import {
   compareDecisionReceipts,
   importExternalDecisionResult,
@@ -217,6 +219,49 @@ Use "web-task-agent <command> --help" for the full option list.
   const receipt = program
     .command("receipt")
     .description("Inspect and verify a portable decision receipt");
+
+  const receiptAdapter = receipt
+    .command("adapter")
+    .description("Create and validate provider-neutral Decision Receipt adapters");
+
+  receiptAdapter
+    .command("validate <inputPath>")
+    .description("Validate a provider result against the strict adapter v1 contract")
+    .action((inputPath) => {
+      const sourcePath = path.resolve(String(inputPath));
+      if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) throw new Error(`adapter result file does not exist: ${sourcePath}`);
+      if (fs.statSync(sourcePath).size > 2 * 1024 * 1024) throw new Error("adapter result exceeds the 2 MB limit");
+      const parsed = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
+      const validation = validateDecisionReceiptAdapterResult(parsed);
+      if (!validation.valid) throw new Error(`adapter contract is invalid: ${validation.errors.join("; ")}`);
+      console.log("Adapter contract: valid");
+      console.log("Contract version: 1.0.0");
+      console.log("Provider-private and executable fields: absent");
+    });
+
+  receiptAdapter
+    .command("create <id>")
+    .description("Create a strict pass-through adapter scaffold with a synthetic contract fixture")
+    .requiredOption("--engine <name>", "External engine name")
+    .requiredOption("--engine-version <version>", "Tested external engine version")
+    .option("--output <path>", "Destination directory")
+    .option("--force", "Replace files in an existing destination")
+    .action((id, options) => {
+      const destination = options.output
+        ? path.resolve(String(options.output))
+        : path.resolve("adapters", String(id));
+      const written = createAdapterScaffold({
+        id: String(id),
+        engine: String(options.engine),
+        engineVersion: String(options.engineVersion),
+        outputDir: destination,
+        force: Boolean(options.force)
+      });
+      console.log("Adapter scaffold created.");
+      console.log(`Directory: ${written.outputDir}`);
+      console.log(`Adapter: ${written.adapterPath}`);
+      console.log(`Synthetic fixture: ${written.fixturePath}`);
+    });
 
   receipt
     .command("verify <directory>")

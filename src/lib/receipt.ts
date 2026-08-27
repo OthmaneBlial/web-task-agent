@@ -10,6 +10,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ensureDir, writeJsonAtomic } from "./cache";
+import {
+  requireDecisionReceiptAdapterResult,
+  type AdapterOrigin,
+  type DecisionReceiptAdapterResult
+} from "./adapter-contract";
 import { evaluateSourceUrlPolicy } from "./source-policy";
 import type { AgentEvidenceBundle, AgentRunState } from "../types";
 import {
@@ -34,9 +39,10 @@ export interface DecisionReceiptSource {
   publisher: string;
   role: string;
   collectedAt: string | null;
-  captureType: "live" | "fixture-synthetic" | "metadata-only";
+  captureType: "live" | "fixture-synthetic" | "metadata-only" | "imported-excerpt";
   snapshotPath: string | null;
   snapshotSha256: string | null;
+  adapterOrigin?: AdapterOrigin;
 }
 
 export interface DecisionReceiptEvidenceRef {
@@ -44,6 +50,7 @@ export interface DecisionReceiptEvidenceRef {
   sourceId: string;
   excerpt: string;
   relation: "supports" | "contradicts" | "context";
+  adapterOrigin?: AdapterOrigin;
 }
 
 export interface DecisionReceiptClaim {
@@ -52,6 +59,7 @@ export interface DecisionReceiptClaim {
   status: ReceiptClaimStatus;
   evidence: DecisionReceiptEvidenceRef[];
   limitation?: string;
+  adapterOrigin?: AdapterOrigin;
 }
 
 export interface DecisionReceipt {
@@ -73,6 +81,7 @@ export interface DecisionReceipt {
   decision: {
     title: string;
     summary: string;
+    adapterOrigin?: AdapterOrigin;
   };
   claims: DecisionReceiptClaim[];
   sources: DecisionReceiptSource[];
@@ -199,18 +208,22 @@ export interface ExternalDecisionResult {
     role?: string;
     collectedAt?: string | null;
     excerpt?: string | null;
+    adapterOrigin?: AdapterOrigin;
   }>;
   claims?: Array<{
     id?: string;
     text: string;
     status?: ReceiptClaimStatus;
     evidence?: Array<{
+      id?: string;
       sourceId?: string;
       sourceIndex?: number;
       excerpt?: string;
       relation?: DecisionReceiptEvidenceRef["relation"];
+      adapterOrigin?: AdapterOrigin;
     }>;
     limitation?: string;
+    adapterOrigin?: AdapterOrigin;
   }>;
   contradictions?: DecisionReceipt["contradictions"];
   limitations?: string[];
@@ -218,12 +231,72 @@ export interface ExternalDecisionResult {
   generatedAt?: string;
   policyVersion?: string | null;
   model?: string | null;
+  fixture?: boolean;
+  decisionOrigin?: AdapterOrigin;
+  adapter?: {
+    id: string;
+    version: string;
+    engine: string;
+    engineVersion: string;
+    runId: string | null;
+  };
 }
 
 export interface ImportedReceiptPaths {
   receiptPath: string;
   integrityManifestPath: string;
   snapshotPaths: string[];
+}
+
+function normalizeExternalResult(result: ExternalDecisionResult | DecisionReceiptAdapterResult): ExternalDecisionResult {
+  if (!result || typeof result !== "object" || !("adapterContractVersion" in result)) return result as ExternalDecisionResult;
+  const contract = requireDecisionReceiptAdapterResult(result);
+  return {
+    title: contract.decision.title,
+    summary: contract.decision.summary,
+    generatedAt: contract.producer.exportedAt,
+    policyVersion: contract.policyVersion,
+    model: contract.model,
+    fixture: contract.producer.fixture,
+    decisionOrigin: contract.decision.origin,
+    adapter: {
+      id: contract.producer.adapterId,
+      version: contract.producer.adapterVersion,
+      engine: contract.producer.engine,
+      engineVersion: contract.producer.engineVersion,
+      runId: contract.producer.runId
+    },
+    sources: contract.sources.map((source) => ({
+      id: source.id,
+      title: source.title,
+      url: source.url,
+      publisher: source.publisher,
+      role: source.role,
+      collectedAt: source.collectedAt,
+      excerpt: source.excerpt,
+      adapterOrigin: source.origin
+    })),
+    claims: contract.claims.map((claim) => ({
+      id: claim.id,
+      text: claim.text,
+      status: claim.status,
+      limitation: claim.limitation,
+      adapterOrigin: claim.origin,
+      evidence: claim.evidence.map((evidence) => ({
+        id: evidence.id,
+        sourceId: evidence.sourceId,
+        excerpt: evidence.excerpt,
+        relation: evidence.relation,
+        adapterOrigin: evidence.origin
+      }))
+    })),
+    contradictions: contract.contradictions,
+    limitations: [
+      `Adapter ${contract.producer.adapterId}@${contract.producer.adapterVersion} imported ${contract.producer.engine}@${contract.producer.engineVersion}; engine run id: ${contract.producer.runId ?? "not provided"}.`,
+      ...contract.limitations
+    ],
+    nextValidation: contract.decision.nextValidation
+  };
 }
 
 function importSlug(value: string, fallback: string): string {
@@ -237,7 +310,7 @@ function importSlug(value: string, fallback: string): string {
  * but never runs a browser, calls a hosted provider, or grants new capability.
  */
 export function importExternalDecisionResult(input: {
-  result: ExternalDecisionResult;
+  result: ExternalDecisionResult | DecisionReceiptAdapterResult;
   outputDir: string;
   force?: boolean;
 }): ImportedReceiptPaths {
@@ -246,7 +319,7 @@ export function importExternalDecisionResult(input: {
     throw new Error(`refusing to overwrite non-empty import directory: ${outputDir}; pass --force to replace it.`);
   }
   ensureDir(outputDir);
-  const result = input.result;
+  const result = normalizeExternalResult(input.result);
   if (!result || typeof result.title !== "string" || !result.title.trim()) {
     throw new Error("external result title is required");
   }
@@ -284,9 +357,10 @@ export function importExternalDecisionResult(input: {
       publisher: source.publisher?.trim() || new URL(source.url).hostname,
       role: source.role?.trim() || "external research result",
       collectedAt: source.collectedAt ?? null,
-      captureType: excerpt ? "live" : "metadata-only",
+      captureType: excerpt ? "imported-excerpt" : "metadata-only",
       snapshotPath: snapshotPath ? safeRelativePath(outputDir, snapshotPath) : null,
-      snapshotSha256: snapshotPath ? fileSha256(snapshotPath) : null
+      snapshotSha256: snapshotPath ? fileSha256(snapshotPath) : null,
+      adapterOrigin: source.adapterOrigin
     };
   });
 
@@ -300,10 +374,11 @@ export function importExternalDecisionResult(input: {
       const snapshotText = source.snapshotPath ? fs.readFileSync(path.join(outputDir, source.snapshotPath), "utf8") : "";
       const excerpt = (reference.excerpt || snapshotText.split("\n\n").slice(1).join("\n\n").trim() || claim.text).trim();
       return {
-        id: `evidence-${claimIndex + 1}-${evidenceIndex + 1}`,
+        id: reference.id || `evidence-${claimIndex + 1}-${evidenceIndex + 1}`,
         sourceId,
         excerpt,
-        relation: reference.relation ?? "supports"
+        relation: reference.relation ?? "supports",
+        adapterOrigin: reference.adapterOrigin
       } satisfies DecisionReceiptEvidenceRef;
     });
     const fallbackSource = sources[0];
@@ -318,7 +393,8 @@ export function importExternalDecisionResult(input: {
       text: claim.text.trim(),
       status: claim.status ?? (evidence.length > 0 ? "supported" : "insufficient"),
       evidence: normalizedEvidence,
-      limitation: claim.limitation || (evidence.length > 0 ? undefined : "The external result did not attach a direct evidence reference.")
+      limitation: claim.limitation || (evidence.length > 0 ? undefined : "The external result did not attach a direct evidence reference."),
+      adapterOrigin: claim.adapterOrigin
     };
   });
 
@@ -336,9 +412,9 @@ export function importExternalDecisionResult(input: {
       policyVersion: result.policyVersion ?? "source-policy-v1",
       promptVersion: null,
       model: result.model ?? null,
-      fixture: false
+      fixture: result.fixture ?? false
     },
-    decision: { title: result.title.trim(), summary: result.summary.trim() },
+    decision: { title: result.title.trim(), summary: result.summary.trim(), adapterOrigin: result.decisionOrigin },
     claims,
     sources,
     contradictions: result.contradictions ?? [],

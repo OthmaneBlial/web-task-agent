@@ -19,6 +19,7 @@ test("published CLI entrypoint and required modules are present in the npm tarba
 
   for (const requiredPath of [
     "dist/cli.js",
+    "dist/mcp/server.js",
     "dist/demos/index.js",
     "dist/packs/index.js",
     "dist/server/management-server.js",
@@ -28,6 +29,7 @@ test("published CLI entrypoint and required modules are present in the npm tarba
     "packages/decision-receipt/dist/index.d.ts",
     "packages/decision-receipt/dist/cli.js",
     "schema/decision-receipt.v1.schema.json",
+    "schema/decision-receipt-adapter.v1.schema.json",
     "conformance/cases.json",
     ".env.example"
   ]) {

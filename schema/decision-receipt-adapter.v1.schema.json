@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://othmaneblial.github.io/web-task-agent/schema/decision-receipt-adapter.v1.schema.json",
+  "title": "Decision Receipt adapter result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "adapterContractVersion",
+    "producer",
+    "decision",
+    "sources",
+    "claims",
+    "contradictions",
+    "limitations",
+    "policyVersion",
+    "model"
+  ],
+  "properties": {
+    "adapterContractVersion": { "const": "1.0.0" },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapterId", "adapterVersion", "engine", "engineVersion", "runId", "exportedAt", "fixture"],
+      "properties": {
+        "adapterId": { "$ref": "#/$defs/nonEmptyString" },
+        "adapterVersion": { "$ref": "#/$defs/nonEmptyString" },
+        "engine": { "$ref": "#/$defs/nonEmptyString" },
+        "engineVersion": { "$ref": "#/$defs/nonEmptyString" },
+        "runId": { "anyOf": [{ "$ref": "#/$defs/nonEmptyString" }, { "type": "null" }] },
+        "exportedAt": { "type": "string", "format": "date-time" },
+        "fixture": { "type": "boolean" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "summary", "nextValidation", "origin"],
+      "properties": {
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "nextValidation": { "$ref": "#/$defs/nonEmptyString" },
+        "origin": { "$ref": "#/$defs/origin" }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "url", "publisher", "role", "collectedAt", "excerpt", "origin"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonEmptyString" },
+          "title": { "$ref": "#/$defs/nonEmptyString" },
+          "url": { "type": "string", "format": "uri", "pattern": "^https?://" },
+          "publisher": { "$ref": "#/$defs/nonEmptyString" },
+          "role": { "$ref": "#/$defs/nonEmptyString" },
+          "collectedAt": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+          "excerpt": { "$ref": "#/$defs/nonEmptyString" },
+          "origin": { "$ref": "#/$defs/origin" }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 250,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text", "status", "evidence", "origin"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonEmptyString" },
+          "text": { "$ref": "#/$defs/nonEmptyString" },
+          "status": { "enum": ["supported", "contradicted", "insufficient"] },
+          "limitation": { "$ref": "#/$defs/nonEmptyString" },
+          "origin": { "$ref": "#/$defs/origin" },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "sourceId", "excerpt", "relation", "origin"],
+              "properties": {
+                "id": { "$ref": "#/$defs/nonEmptyString" },
+                "sourceId": { "$ref": "#/$defs/nonEmptyString" },
+                "excerpt": { "$ref": "#/$defs/nonEmptyString" },
+                "relation": { "enum": ["supports", "contradicts", "context"] },
+                "origin": { "$ref": "#/$defs/origin" }
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "const": "insufficient" } }, "required": ["status"] },
+            "then": { "properties": { "limitation": { "$ref": "#/$defs/nonEmptyString" } }, "required": ["limitation"] }
+          }
+        ]
+      }
+    },
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "topic", "evidenceIds", "note"],
+        "properties": {
+          "id": { "$ref": "#/$defs/nonEmptyString" },
+          "topic": { "$ref": "#/$defs/nonEmptyString" },
+          "evidenceIds": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true },
+          "note": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "limitations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/nonEmptyString" } },
+    "policyVersion": { "anyOf": [{ "$ref": "#/$defs/nonEmptyString" }, { "type": "null" }] },
+    "model": { "anyOf": [{ "$ref": "#/$defs/nonEmptyString" }, { "type": "null" }] }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1, "pattern": "\\S" },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "note"],
+      "properties": {
+        "kind": { "enum": ["imported", "captured", "inferred", "operator-attested"] },
+        "note": { "anyOf": [{ "$ref": "#/$defs/nonEmptyString" }, { "type": "null" }] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "enum": ["inferred", "operator-attested"] } }, "required": ["kind"] },
+          "then": { "properties": { "note": { "$ref": "#/$defs/nonEmptyString" } } }
+        }
+      ]
+    }
+  }
+}
