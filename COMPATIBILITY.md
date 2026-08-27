@@ -7,7 +7,7 @@
 | JSON Schema | v1 | `1.x` shape | — | implemented |
 | Web Task Agent CLI | `0.5.1` + unreleased | `1.x` | `1.0.0` | implemented |
 | `@othmaneblial/decision-receipt` | `0.1.x` | `1.x` | helpers target `1.0.0` | implemented, publication pending P3 |
-| Local web verifier | — | — | — | planned in P2 |
+| Local web verifier | unreleased static build | `1.x` | verification report `1.0.0` | implemented, publication pending P3 |
 | GitHub Action | — | — | — | planned in P3 |
 | Provider/MCP adapters | experimental import boundary | `1.0.0` | `1.0.0` | broader adapters planned in P4 |
 

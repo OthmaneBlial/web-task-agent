@@ -12,7 +12,7 @@
 
 Browser agents and deep-research tools produce answers. Web Task Agent preserves the review contract after the run: claims, source excerpts, contradictions, freshness, integrity, recovery state, and the smallest next validation. The result is a handoff that survives a browser closing, a challenged recommendation, or an interrupted run.
 
-**Proof before setup:** [open the featured deterministic decision receipt](https://othmaneblial.github.io/web-task-agent/receipt.html). It is a standalone fixture with no key, browser session, scripts, analytics, or live request.
+**Proof before setup:** [verify a Decision Receipt locally](https://othmaneblial.github.io/web-task-agent/verify.html), or [open the featured deterministic receipt](https://othmaneblial.github.io/web-task-agent/receipt.html). The verifier has no upload path, backend, account, cookie, analytics, telemetry, or persistent storage.
 
 ```text
 Your question

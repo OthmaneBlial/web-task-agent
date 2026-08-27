@@ -156,20 +156,22 @@ Nom de package proposé : `@othmaneblial/decision-receipt`, à confirmer au mome
 
 ### Vérificateur web 100 % local
 
-- [ ] Ajouter au site une zone de dépôt pour un dossier ou une archive de receipt.
-- [ ] Lire les fichiers avec les API du navigateur ; aucun upload, backend, cookie, compte ou analytics nécessaire.
-- [ ] Afficher l'état d'intégrité, la version du schéma, les claims soutenus/contradictoires/insuffisants, les sources périmées et les limites.
-- [ ] Permettre la navigation claim → extrait → snapshot → hash.
-- [ ] Comparer deux receipts et expliquer séparément les changements de sources, politique, modèle, synthèse et décision.
-- [ ] Générer un `verification-report.json` local partageable, sans inclure les sources privées par défaut.
-- [ ] Proposer trois fixtures sûres : valide, falsifiée, décision modifiée.
-- [ ] Concevoir le résultat pour clavier, lecteur d'écran, mobile, contraste élevé et `prefers-reduced-motion`.
+- [x] Ajouter au site une zone de dépôt pour un dossier ou une archive de receipt.
+- [x] Lire les fichiers avec les API du navigateur ; aucun upload, backend, cookie, compte ou analytics nécessaire.
+- [x] Afficher l'état d'intégrité, la version du schéma, les claims soutenus/contradictoires/insuffisants, les sources périmées et les limites.
+- [x] Permettre la navigation claim → extrait → snapshot → hash.
+- [x] Comparer deux receipts et expliquer séparément les changements de sources, politique, modèle, synthèse et décision.
+- [x] Générer un `verification-report.json` local partageable, sans inclure les sources privées par défaut.
+- [x] Proposer trois fixtures sûres : valide, falsifiée, décision modifiée.
+- [x] Concevoir le résultat pour clavier, lecteur d'écran, mobile, contraste élevé et `prefers-reduced-motion`.
 
 ### Garde-fou de vérité
 
 Le badge doit dire **integrity verified**, jamais **decision is true**. Un hash prouve l'intégrité d'octets ; une signature prouve le contrôle d'une clé ; ni l'un ni l'autre ne prouve qu'une source est vraie, complète, autorisée ou fraîche.
 
 **Preuve d'acceptation :** avec le réseau bloqué après chargement, le site valide une archive correcte, identifie le fichier exact d'une archive falsifiée et compare deux décisions. Aucun contenu du receipt n'apparaît dans une requête réseau, un log distant ou un stockage persistant sans consentement.
+
+**État :** livré et vérifié dans Chrome sur desktop et mobile. Après arrêt complet du serveur local, les fixtures préchargées continuent de valider puis de nommer `evidence/source.md` comme fichier falsifié. Le diff sépare les cinq signaux attendus. Aucun appel réseau, stockage persistant ou erreur console n'est présent ; le DOM n'a ni identifiant dupliqué ni input sans label, et le viewport mobile ne déborde pas.
 
 ---
 

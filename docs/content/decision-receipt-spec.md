@@ -55,3 +55,4 @@ The experimental schema-v1 format from Web Task Agent 0.5.1 lacked `specVersion`
 - [Core SDK](../../packages/decision-receipt/README.md)
 - [Compatibility and migration](../../COMPATIBILITY.md)
 - [Complete examples](../../examples/receipt-spec/README.md)
+- [Local browser verifier](../verify.html)

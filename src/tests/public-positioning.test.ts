@@ -14,7 +14,8 @@ test("public positioning leads with Decision Receipt verification", () => {
   assert.match(readme, /The verification layer for AI research/);
   assert.match(readme, /verify, challenge, and compare offline/);
   assert.match(homepage, /Verify the decision, not just the answer/);
-  assert.match(homepage, /Inspect a verified receipt/);
+  assert.match(homepage, /Verify your receipt locally/);
+  assert.match(homepage, /href="verify\.html"/);
   assert.match(homepage, /Integrity checked/);
   assert.match(homepage, /Contradictions explicit/);
   assert.doesNotMatch(homepage, /<strong>243<\/strong>/);
