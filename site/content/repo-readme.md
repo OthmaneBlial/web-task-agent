@@ -1,16 +1,16 @@
 # Web Task Agent
 
-> ## Make a web-research decision your team can audit — before they have to trust it.
+> ## The verification layer for AI research.
 >
-> Web Task Agent turns a messy question into a local decision package with the sources, contradictions, recovery state, and next validation still attached.
+> Turn any agent run into a local Decision Receipt your team can verify, challenge, and compare offline.
 
 [![CI](https://github.com/OthmaneBlial/web-task-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/OthmaneBlial/web-task-agent/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![243 executable workflows](https://img.shields.io/badge/workflows-243%20executable-0f766e)](examples/workflows/CATALOG.md)
+[![Decision Receipt v1](https://img.shields.io/badge/Decision%20Receipt-v1-0f766e)](examples/receipts/)
 [![Local-first](https://img.shields.io/badge/privacy-local--first-164e63)](PRIVACY.md)
 [![Project site](https://img.shields.io/badge/site-live-0f766e)](https://othmaneblial.github.io/web-task-agent/)
 
-Most research tools stop at an answer. Web Task Agent preserves the path to it: source snapshots, evidence clusters, contradictions, recovery state, and the smallest next validation. The result is a handoff that survives a browser closing, a challenged recommendation, or an interrupted run.
+Browser agents and deep-research tools produce answers. Web Task Agent preserves the review contract after the run: claims, source excerpts, contradictions, freshness, integrity, recovery state, and the smallest next validation. The result is a handoff that survives a browser closing, a challenged recommendation, or an interrupted run.
 
 **Proof before setup:** [open the featured deterministic decision receipt](https://othmaneblial.github.io/web-task-agent/receipt.html). It is a standalone fixture with no key, browser session, scripts, analytics, or live request.
 

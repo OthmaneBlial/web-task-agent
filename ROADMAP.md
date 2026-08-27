@@ -101,15 +101,17 @@ Cette boucle est défendable parce que chaque nouveau receipt peut améliorer le
 
 **But :** qu'un visiteur comprenne en quinze secondes ce qui est unique, puis touche une preuve sans cloner le dépôt.
 
-- [ ] Marquer clairement l'ancienne roadmap P0–P4 comme livrée par `v0.5.1` dans le changelog et les notes de release.
-- [ ] Mettre `LAUNCH.md`, README, site, exemples et liens de release sur la même version et le même message.
-- [ ] Remplacer le « Quick Start » du hero par un chemin public. Tant que npm n'est pas publié, utiliser le tarball signé/checksummé ; après P3, basculer sur une commande `npx`.
-- [ ] Faire du CTA principal **Verify a receipt locally** ; conserver « Run live research » comme parcours secondaire.
-- [ ] Ajouter une animation courte et accessible : import → vérification → claim contredit → diff. Fournir une image statique et un transcript, sans autoplay agressif.
-- [ ] Montrer au-dessus de la ligne de flottaison les trois états qui différencient le produit : `verified`, `contradicted`, `changed`.
-- [ ] Remplacer les métriques de volume en hero (`243 workflows`) par une preuve de résultat. Le catalogue reste dans la documentation.
+- [x] Marquer clairement l'ancienne roadmap P0–P4 comme livrée par `v0.5.1` dans le changelog et les notes de release.
+- [x] Mettre `LAUNCH.md`, README, site, exemples et liens de release sur la même version et le même message.
+- [x] Remplacer le « Quick Start » du hero par un chemin public. Tant que npm n'est pas publié, utiliser le tarball signé/checksummé ; après P3, basculer sur une commande `npx`.
+- [x] Faire du CTA principal **Inspect a verified receipt** ; après P2, le remplacer par **Verify your receipt locally**. Conserver « Run live research » comme parcours secondaire.
+- [x] Ajouter une animation courte et accessible : import → vérification → claim contredit → diff. Fournir une image statique et un transcript, sans autoplay agressif.
+- [x] Montrer au-dessus de la ligne de flottaison les trois états qui différencient le produit : `verified`, `contradicted`, `changed`.
+- [x] Remplacer les métriques de volume en hero (`243 workflows`) par une preuve de résultat. Le catalogue reste dans la documentation.
 
 **Preuve d'acceptation :** cinq personnes qui ne connaissent pas le dépôt peuvent répondre, sans aide, à « qu'est-ce que c'est ? », « pourquoi pas un autre browser agent ? » et « où est la preuve ? ». Le premier écran propose une action qui ne demande ni clone, ni clé, ni compte.
+
+**État :** implémentation technique et QA desktop/mobile terminées ; les cinq tests de compréhension externes restent un gate humain suivi en P5.
 
 ---
 
