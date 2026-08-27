@@ -1,0 +1,34 @@
+name: Schema RFC
+description: Propose a Decision Receipt contract change before implementation.
+title: "RFC: "
+labels: ["schema-rfc", "needs-evidence"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Breaking schema, canonicalization, signature, archive, path, or status-semantic changes require an RFC before implementation. Read docs/rfcs/README.md and keep vulnerability details private.
+  - type: textarea
+    id: decision
+    attributes:
+      label: Exact contract decision
+    validations:
+      required: true
+  - type: textarea
+    id: bytes
+    attributes:
+      label: Byte-level and semantic impact
+      description: Cover JSON fields, canonical bytes, hashes, signatures, paths, unknown fields, and errors.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility, migration, rollback, and conformance
+    validations:
+      required: true
+  - type: textarea
+    id: objection
+    attributes:
+      label: Strongest objection or alternative
+    validations:
+      required: true

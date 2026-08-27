@@ -1,0 +1,39 @@
+name: Good first adapter
+description: Implement one bounded provider-neutral adapter with a redistributable fixture and contract tests.
+title: "adapter: "
+labels: ["good first issue", "good first adapter", "needs-evidence"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start with the adapter contract and a public, redistributable fixture. Never include credentials, cookies, sessions, prompt traces, private reasoning, or authenticated URLs.
+  - type: input
+    id: engine
+    attributes:
+      label: Engine and exact version
+      placeholder: Engine Name 1.2.3
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Redistributable output and consent boundary
+      description: Link the public output or explain how it can be generated without private data.
+    validations:
+      required: true
+  - type: textarea
+    id: mapping
+    attributes:
+      label: Origin mapping
+      description: Map imported, captured, inferred, and operator-attested values; name missing data that stays insufficient.
+    validations:
+      required: true
+  - type: checkboxes
+    id: acceptance
+    attributes:
+      label: Acceptance contract
+      options:
+        - label: The adapter refuses provider-private fields and preserves limitations.
+          required: true
+        - label: The fixture, runtime validator, independent schema, imported receipt, and integrity verification will be tested.
+          required: true

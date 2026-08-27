@@ -1,0 +1,32 @@
+name: Public receipt gallery
+description: Request opt-in review of a licensed, redacted public receipt before a pull request.
+title: "gallery: "
+labels: ["gallery", "needs-evidence"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Submission is voluntary and manual. The gallery has no crawler or auto-enrolment. Do not include personal, confidential, provider-private, authenticated, or unlicensed content.
+  - type: textarea
+    id: artifact
+    attributes:
+      label: Public artifact and reproduction
+    validations:
+      required: true
+  - type: input
+    id: license
+    attributes:
+      label: Artifact license or redistribution permission
+    validations:
+      required: true
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Consent and redaction
+      options:
+        - label: I am authorized to share every submitted byte and opt in to public Git history.
+          required: true
+        - label: I reviewed the artifact for credentials, sessions, private URLs, personal data, prompt traces, and licensing restrictions.
+          required: true
+        - label: I understand receipt integrity does not prove source or decision truth.
+          required: true

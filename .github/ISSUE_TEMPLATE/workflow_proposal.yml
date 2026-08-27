@@ -25,7 +25,7 @@ body:
     id: sources
     attributes:
       label: Preferred and excluded sources
-      placeholder: Preferred: official docs, reviews, forums. Excluded: login-only pages, thin SEO lists.
+      placeholder: "Preferred: official docs, reviews, forums. Excluded: login-only pages, thin SEO lists."
     validations:
       required: true
   - type: textarea

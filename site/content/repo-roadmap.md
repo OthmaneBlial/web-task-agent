@@ -18,7 +18,7 @@ La viralité ne se programme pas et aucune roadmap ne peut promettre des étoile
 - ✅ Huit receipts déterministes, trois golden paths, scorecard et fixtures adversariales.
 - ✅ Trust model, guides de contribution, templates d'issues, Discussions et site GitHub Pages.
 - ✅ Release `v0.5.1` avec tarball, checksum et provenance ; CI actuelle verte.
-- ✅ Vérification locale de cette roadmap : **139 tests unitaires, 4 intégrations, 0 échec**, artefacts générés synchronisés et 368 liens Markdown locaux validés.
+- ✅ Vérification locale de cette roadmap : **156 tests unitaires, 4 intégrations, 0 échec**, artefacts générés synchronisés et 408 liens Markdown locaux validés.
 
 ### Ce que les signaux publics disent vraiment
 
@@ -29,7 +29,7 @@ La viralité ne se programme pas et aucune roadmap ne peut promettre des étoile
 | Discussions | 5 | Elles ont toutes été amorcées par le mainteneur, sans réponse choisie. |
 | Téléchargements des deux assets `v0.5.1` | 1 chacun | Cela prouve la vérification de release, pas l'adoption. |
 | Package public npm | absent | Le chemin sans authentification reste le tarball GitHub. |
-| Interopérabilité authentique | non démontrée | Une fixture générique existe, mais aucun run tiers réel n'est encore publié. |
+| Interopérabilité authentique | 2 moteurs | Browser Use et GPT Researcher sont réels mais volontairement bornés ; ils prouvent l'import, pas la vérité ni une compatibilité générale. |
 
 Le goulot n'est donc plus la crédibilité technique. Il est situé entre **voir**, **essayer**, **intégrer**, **réutiliser** et **recommander**.
 
@@ -285,7 +285,9 @@ Publier protocole, petits dénominateurs, données anonymisées consenties et li
 
 - [ ] Demander une revue externe du schéma, de la canonicalisation, des chemins d'archive, des signatures, du rendu HTML et de la frontière local-only.
 - [ ] Convertir chaque faille en test de non-régression et advisory si nécessaire.
-- [ ] Publier ce qui a été testé et ce qui ne l'a pas été.
+- [x] Publier ce qui a été testé et ce qui ne l'a pas été.
+
+**Préparation livrée, adoption non simulée :** `EXTERNAL_VALIDATION.md` fixe trois tracks, le protocole reviewer, le consentement granulaire et une baseline externe à zéro. `SECURITY_REVIEW.md` publie le commit pinning, les six surfaces prioritaires, les commandes, les preuves mainteneur et les zones non auditées. Aucun participant ni reviewer indépendant n'est compté avant une trace réelle.
 
 **Preuve d'acceptation :** au moins cinq receipts ont été vérifiés par des non-mainteneurs, trois utilisateurs ont produit un second receipt ou un diff, et une revue indépendante a laissé une trace publique exploitable.
 
@@ -318,9 +320,11 @@ Chaque publication doit pointer directement vers l'artefact essayable, pas seule
 - [ ] `good first adapter` avec fixture et contrat.
 - [ ] `good first policy case` avec charge adversariale.
 - [ ] `receipt review` avec preuve de reproduction.
-- [ ] RFC obligatoire pour toute rupture de schéma.
-- [ ] `MAINTAINERS.md`, politique de compatibilité et règles de release v1.
-- [ ] Galerie opt-in de receipts publics, licenciés et expurgés ; aucune collecte automatique.
+- [x] RFC obligatoire pour toute rupture de schéma.
+- [x] `MAINTAINERS.md`, politique de compatibilité et règles de release v1.
+- [x] Galerie opt-in de receipts publics, licenciés et expurgés ; aucune collecte automatique.
+
+**État intermédiaire :** les contrats de contribution existent comme issue forms testées. Le RFC définit les surfaces byte-level et la migration obligatoires ; la gouvernance nomme honnêtement un seul mainteneur ; la galerie exige licence, consentement et redaction, ne collecte rien et reste vide jusqu'à une vraie soumission. Les trois cases d'issues ne seront cochées qu'après publication d'issues publiques avec une acceptance reproductible.
 
 **Preuve d'acceptation :** deux PRs externes fusionnées, trois dépôts publics utilisant l'Action et au moins un cas communautaire devenu fixture, adapter ou décision de spec. Les posts manuels, partenariats et retours humains restent des tâches externes ; ils ne peuvent pas être simulés par le code.
 
@@ -330,14 +334,16 @@ Chaque publication doit pointer directement vers l'artefact essayable, pas seule
 
 Ne pas publier `v1.0` parce que la liste de features est longue. La publier seulement quand ces contrats sont vrais :
 
-- [ ] Schéma v1 public, versionné, documenté et couvert par un corpus de conformité.
-- [ ] CLI, SDK, web verifier et Action utilisent le même noyau.
+- [x] Schéma v1 public, versionné, documenté et couvert par un corpus de conformité.
+- [x] CLI, SDK, web verifier et Action utilisent le même noyau.
 - [ ] Installation npm publique, provenance, tarball et checksum vérifiés depuis des environnements propres.
-- [ ] Compatibilité N-1 testée et migration documentée.
+- [x] Compatibilité N-1 testée et migration documentée.
 - [ ] Deux imports tiers authentiques et trois usages répétés externes.
 - [ ] Menaces liées aux archives, HTML, URL, secrets, signature et canonicalisation revues.
-- [ ] Accessibilité, mobile, no-network et no-telemetry vérifiés sur le web verifier.
-- [ ] Aucun claim marketing important sans source, dénominateur et limite.
+- [x] Accessibilité, mobile, no-network et no-telemetry vérifiés sur le web verifier.
+- [x] Aucun claim marketing important sans source, dénominateur et limite.
+
+**Lecture du gate :** cinq contrats techniques v1 sont démontrés par le corpus, la migration, les builds partagés, la QA du verifier et les tests de positionnement. Ils n'autorisent pas une release v1 : npm public, trois usages externes répétés et la revue de menaces indépendante restent bloquants.
 
 ## Métriques de décision
 

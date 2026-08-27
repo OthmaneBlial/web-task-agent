@@ -8,6 +8,8 @@ This file is intentionally lightweight.
 - Extracted the dependency-free Decision Receipt core, v1 JSON Schema, migration, compatibility matrix, examples, and conformance runners from the CLI monolith.
 - Added a 100% local browser verifier for folders and bounded ZIPs, exact tamper diagnosis, source freshness, claim-to-snapshot inspection, five-signal decision diffs, offline fixtures, and privacy-minimized JSON reports.
 - Added the dependency-free `decision-receipt` executable, clean-install Node 20/22/24 matrices, and tokenless npm OIDC publishing workflow with exact-tarball verification.
+- Added two authentic, privacy-bounded Browser Use and GPT Researcher imports, strict adapters, a four-tool local MCP server, and verified receipts that retain engine limits.
+- Added mandatory breaking-schema RFCs, maintainer/release rules, an independent-security-review brief, a consented external-validation protocol, and an empty-by-design opt-in receipt gallery.
 
 ## 0.5.1 — 2026-08-26
 

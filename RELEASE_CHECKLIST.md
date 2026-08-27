@@ -17,6 +17,7 @@ Expected result: tests, generated-content checks, Markdown-link checks, publicat
 ## 2. Review what would become public
 
 - Read `README.md`, `PRIVACY.md`, `SECURITY.md`, `SUPPORT.md`, `LICENSE`, and `CHANGELOG.md` as a first-time user.
+- Confirm [MAINTAINERS.md](MAINTAINERS.md) and [COMPATIBILITY.md](COMPATIBILITY.md) match the candidate. A breaking receipt contract requires an accepted [RFC](docs/rfcs/README.md), migration, and new conformance cases before release.
 - Run `npm run audit:secrets` again immediately before a visibility change or release. A clean audit is not a substitute for rotating a credential that was ever committed in prior Git history.
 - Inspect the eight deterministic receipts in `examples/receipts/`; they are fixtures, not current research claims.
 - Confirm the npm tarball file list from `npm pack --dry-run` only includes the intended CLI, runtime modules, installer, and public policies.

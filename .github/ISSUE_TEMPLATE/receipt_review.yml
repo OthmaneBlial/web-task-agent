@@ -1,0 +1,35 @@
+name: Receipt review
+description: Reproduce a public receipt and leave evidence-backed review feedback.
+title: "receipt review: "
+labels: ["receipt-review", "needs-evidence"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Review public or redacted data only. Never include keys, cookies, private reports, proprietary source text, or authenticated URLs.
+  - type: input
+    id: target
+    attributes:
+      label: Receipt path or public URL
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Reviewed commit/version and environment
+      placeholder: 40-character SHA, Node 22, macOS/Linux/Windows
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction proof
+      description: Include redacted commands, verification status, checked file count, and any differing hash or claim ID.
+    validations:
+      required: true
+  - type: textarea
+    id: critique
+    attributes:
+      label: Strongest critique and smallest next validation
+    validations:
+      required: true

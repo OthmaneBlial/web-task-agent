@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://othmaneblial.github.io/web-task-agent/gallery/gallery-entry.schema.json",
+  "title": "Decision Receipt public gallery entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "entryVersion",
+    "slug",
+    "title",
+    "receiptSpecVersion",
+    "receiptPath",
+    "artifactLicense",
+    "consent",
+    "redactions",
+    "reviewedCommit",
+    "limitations"
+  ],
+  "properties": {
+    "entryVersion": { "const": "1.0.0" },
+    "slug": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 80 },
+    "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "receiptSpecVersion": { "type": "string", "pattern": "^1\\.[0-9]+\\.[0-9]+$" },
+    "receiptPath": { "const": "receipt/receipt.json" },
+    "artifactLicense": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["optIn", "identityAttribution", "recordedAt"],
+      "properties": {
+        "optIn": { "const": true },
+        "identityAttribution": { "type": "boolean" },
+        "recordedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "redactions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewed", "notes"],
+      "properties": {
+        "reviewed": { "const": true },
+        "notes": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      }
+    },
+    "reviewedCommit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
+    }
+  }
+}

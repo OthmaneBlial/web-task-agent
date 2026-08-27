@@ -1,0 +1,37 @@
+name: Good first policy case
+description: Add one minimal adversarial payload and a deterministic policy regression.
+title: "policy case: "
+labels: ["good first issue", "policy-case", "needs-evidence"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use inert, synthetic payloads. Do not publish a live exploit, credential, private target, or instructions for bypassing access controls.
+  - type: dropdown
+    id: boundary
+    attributes:
+      label: Boundary exercised
+      options:
+        - Unsafe or credential-bearing URL
+        - Private/reserved DNS target
+        - Redirect quarantine
+        - Prompt-injection indicator
+        - Archive/path expansion
+        - HTML rendering
+        - Provider-private adapter field
+    validations:
+      required: true
+  - type: textarea
+    id: payload
+    attributes:
+      label: Minimal inert payload
+      description: Show the smallest synthetic input and the expected deny, quarantine, flag, or limitation.
+    validations:
+      required: true
+  - type: textarea
+    id: regression
+    attributes:
+      label: Regression proof
+      description: Name the fixture, test, expected error code, and documentation that will change.
+    validations:
+      required: true

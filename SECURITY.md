@@ -18,6 +18,8 @@ If private reporting is unavailable, contact the repository owner through their 
 
 We aim to acknowledge a report within seven days and will coordinate a fix before public disclosure whenever practical.
 
+The bounded public scope, maintainer-produced evidence, and explicitly untested surfaces are listed in [SECURITY_REVIEW.md](SECURITY_REVIEW.md). That document invites independent review but is not itself an independent assessment.
+
 ## Security boundaries
 
 Web Task Agent executes browser research on the operator's machine and can send selected prompt/source content to a configured LLM endpoint. Treat every source and prompt as untrusted input. Never configure the app with credentials that are broader than the task requires.
