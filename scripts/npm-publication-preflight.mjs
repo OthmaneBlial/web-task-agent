@@ -68,6 +68,7 @@ check("registry-url", matches(/registry-url:\s*https:\/\/registry\.npmjs\.org/),
 check("oidc", matches(/permissions:\s*\n\s+contents:\s*read\s*\n\s+id-token:\s*write/), "id-token: write is required");
 check("npm-cli", matches(/npm install --global npm@11/), "the runner must select npm 11");
 check("npm-minimum", matches(/major < 11 \|\| \(major === 11 && minor < 5\)/), "npm 11.5.1+ guard is missing");
+check("artifact-node24", matches(/actions\/upload-artifact@v7/), "artifact upload must use the Node 24 action runtime");
 check("tokenless", !/NPM_TOKEN|NODE_AUTH_TOKEN|secrets\.[A-Za-z0-9_]*NPM/i.test(workflow), "long-lived npm credentials are forbidden");
 check("public-publish", matches(/run:\s*npm publish --access public/), "public npm publish command is missing");
 check(
