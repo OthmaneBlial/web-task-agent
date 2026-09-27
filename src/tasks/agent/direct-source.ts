@@ -43,10 +43,10 @@ function looksLikeAndroidAppId(value: string | null | undefined): value is strin
 export function parsePlayStoreAppId(rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl);
-    if (!parsed.hostname.includes("play.google.com")) {
+    if (parsed.protocol !== "https:" || parsed.hostname !== "play.google.com") {
       return null;
     }
-    if (!parsed.pathname.includes("/store/apps/details")) {
+    if (parsed.pathname !== "/store/apps/details") {
       return null;
     }
     const appId = parsed.searchParams.get("id")?.trim();
@@ -59,7 +59,10 @@ export function parsePlayStoreAppId(rawUrl: string): string | null {
 export function parseAppBrainAppId(rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl);
-    if (!parsed.hostname.includes("appbrain.com")) {
+    if (
+      parsed.protocol !== "https:" ||
+      (parsed.hostname !== "appbrain.com" && parsed.hostname !== "www.appbrain.com")
+    ) {
       return null;
     }
 
