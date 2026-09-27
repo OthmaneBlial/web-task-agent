@@ -54,6 +54,45 @@ test("bundled demos provide eight source-linked packages across the public decis
   }
 });
 
+test("demo writer rejects dangling output symlinks and replaces forced symlinks safely", (context) => {
+  if (process.platform === "win32") {
+    context.skip("file symlink creation may require elevated privileges on Windows");
+    return;
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-demo-links-"));
+  const guardedDir = path.join(tempDir, "guarded");
+  const missingTargetPath = path.join(tempDir, "missing-target.md");
+  const victimPath = path.join(tempDir, "protected.md");
+  const forcedDir = path.join(tempDir, "forced");
+
+  try {
+    fs.mkdirSync(guardedDir);
+    const danglingLink = path.join(guardedDir, "report.md");
+    fs.symlinkSync(missingTargetPath, danglingLink);
+    assert.throws(
+      () => writeDemoPackage({ id: "browser-agent-landscape", outputDir: guardedDir }),
+      /refusing to overwrite/
+    );
+    assert.equal(fs.existsSync(missingTargetPath), false);
+
+    fs.writeFileSync(victimPath, "keep this file", "utf8");
+    fs.mkdirSync(forcedDir);
+    const linkedReport = path.join(forcedDir, "report.md");
+    fs.symlinkSync(victimPath, linkedReport);
+    const written = writeDemoPackage({
+      id: "browser-agent-landscape",
+      outputDir: forcedDir,
+      force: true
+    });
+
+    assert.equal(fs.readFileSync(victimPath, "utf8"), "keep this file");
+    assert.equal(fs.lstatSync(written.reportPath).isSymbolicLink(), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("receipt HTML escapes untrusted fixture fields and refuses unsafe source protocols", () => {
   const receipt = renderDemoReceiptHtml({
     id: "unsafe-fixture",

@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { writeTextAtomic } from "../lib/cache";
+
 import {
   buildFixtureDecisionReceipt,
   writeReceiptIntegrityManifest
@@ -307,11 +309,19 @@ function findDemo(id: string): DemoFixture {
 }
 
 function writeFile(destination: string, content: string, force: boolean): void {
-  if (fs.existsSync(destination) && !force) {
+  let destinationExists = false;
+  try {
+    fs.lstatSync(destination);
+    destinationExists = true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+  if (destinationExists && !force) {
     throw new Error(`refusing to overwrite ${destination}; pass --force to replace this demo package.`);
   }
-  fs.mkdirSync(path.dirname(destination), { recursive: true });
-  fs.writeFileSync(destination, content, "utf8");
+  writeTextAtomic(destination, content);
 }
 
 function escapeHtml(value: string): string {
