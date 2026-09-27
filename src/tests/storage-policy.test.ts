@@ -15,6 +15,39 @@ import {
 } from "../lib/job-store";
 import type { AgentResearchResult } from "../types";
 
+test("job store closes its database when schema initialization fails", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-schema-failure-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const originalExec = DatabaseSync.prototype.exec;
+  const originalClose = DatabaseSync.prototype.close;
+  let failSchemaInitialization = true;
+  let closeCount = 0;
+
+  DatabaseSync.prototype.exec = function failSchemaOnce(sql: string) {
+    if (failSchemaInitialization) {
+      failSchemaInitialization = false;
+      throw new Error("injected schema initialization failure");
+    }
+    return originalExec.call(this, sql);
+  };
+  DatabaseSync.prototype.close = function trackClose() {
+    closeCount += 1;
+    originalClose.call(this);
+  };
+
+  try {
+    assert.throws(() => getJobStoreSchemaVersion({ databasePath }), /injected schema initialization failure/);
+    assert.equal(closeCount, 1);
+    DatabaseSync.prototype.exec = originalExec;
+    assert.equal(getJobStoreSchemaVersion({ databasePath }), 2);
+  } finally {
+    DatabaseSync.prototype.exec = originalExec;
+    DatabaseSync.prototype.close = originalClose;
+    closeSharedJobDatabase(databasePath);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("job store maintenance tracks schema version, canonical urls, and artifact metadata", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-storage-policy-"));
   const databasePath = path.join(tempDir, "jobs.sqlite");

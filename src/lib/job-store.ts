@@ -1511,14 +1511,24 @@ function initializeSchema(database: DatabaseSync): void {
 function getDatabase(customPath?: string): { db: DatabaseSync; databasePath: string } {
   const databasePath = resolveJobDatabasePath(customPath);
 
-  if (sharedDatabase && sharedDatabasePath && sharedDatabasePath !== databasePath) {
-    closeSharedJobDatabase(sharedDatabasePath);
+  if (sharedDatabase && sharedDatabasePath !== databasePath) {
+    closeSharedJobDatabase(sharedDatabasePath ?? undefined);
   }
 
-  if (!sharedDatabase || sharedDatabasePath !== databasePath) {
+  if (!sharedDatabase) {
     ensureParentDir(databasePath);
-    sharedDatabase = new DatabaseSync(databasePath);
-    initializeSchema(sharedDatabase);
+    const database = new DatabaseSync(databasePath);
+    try {
+      initializeSchema(database);
+    } catch (error) {
+      try {
+        database.close();
+      } catch {
+        // Preserve the schema initialization error.
+      }
+      throw error;
+    }
+    sharedDatabase = database;
     sharedDatabasePath = databasePath;
   }
 
