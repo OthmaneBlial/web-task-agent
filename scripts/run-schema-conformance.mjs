@@ -18,6 +18,8 @@ const cases = [
   { id: "schema-valid-leap-second", receipt: (() => { const value = clone(baseline); value.generatedAt = "2016-12-31T23:59:60Z"; return value; })(), expected: true },
   { id: "schema-additive-field", receipt: { ...clone(baseline), producerExtension: { reviewId: "example" } }, expected: true },
   { id: "schema-invalid-date-only-generated-at", receipt: (() => { const value = clone(baseline); value.generatedAt = "2026-08-27"; return value; })(), expected: false },
+  { id: "schema-invalid-whitespace-title", receipt: (() => { const value = clone(baseline); value.decision.title = " \t\n"; return value; })(), expected: false },
+  { id: "schema-invalid-whitespace-source-path", receipt: (() => { const value = clone(baseline); value.sources[0].snapshotPath = " \t\n"; return value; })(), expected: false },
   { id: "schema-invalid-human-date", receipt: (() => { const value = clone(baseline); value.generatedAt = "January 1, 2025"; return value; })(), expected: false },
   { id: "schema-invalid-impossible-generated-at", receipt: (() => { const value = clone(baseline); value.generatedAt = "2025-02-30T00:00:00Z"; return value; })(), expected: false },
   { id: "schema-invalid-impossible-collected-at", receipt: (() => { const value = clone(baseline); value.sources[0].collectedAt = "2025-02-30"; return value; })(), expected: false },
