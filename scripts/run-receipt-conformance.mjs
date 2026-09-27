@@ -96,6 +96,10 @@ function makeManifest(files) {
 async function bundleFor(mutation) {
   const snapshot = "# Conformance source\n\nInspectable evidence excerpt.\n";
   const receipt = baseReceipt(hash(snapshot));
+  if (mutation === "collected-at-date-only") receipt.sources[0].collectedAt = "2026-08-27";
+  if (mutation === "invalid-generated-at-human-date") receipt.generatedAt = "January 1, 2025";
+  if (mutation === "invalid-generated-at-calendar-date") receipt.generatedAt = "2025-02-30T00:00:00Z";
+  if (mutation === "invalid-collected-at-calendar-date") receipt.sources[0].collectedAt = "2025-02-30";
   if (mutation === "remove-decision") delete receipt.decision;
   if (mutation === "duplicate-source") receipt.sources.push({ ...receipt.sources[0] });
   if (mutation === "unsafe-snapshot-path") receipt.sources[0].snapshotPath = "../private.md";
@@ -112,7 +116,7 @@ async function bundleFor(mutation) {
   const manifest = makeManifest(manifestFiles);
   if (mutation === "invalid-manifest-algorithm") manifest.algorithm = "md5";
   if (mutation === "invalid-manifest-receipt-path") manifest.receiptPath = "other.json";
-  if (mutation === "invalid-manifest-timestamp") manifest.generatedAt = "not-a-date";
+  if (mutation === "invalid-manifest-timestamp") manifest.generatedAt = "2025-02-30T00:00:00Z";
   if (mutation === "duplicate-manifest-file") manifest.files.push({ ...manifest.files[0] });
   const bundle = {
     ...files,

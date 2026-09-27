@@ -9,6 +9,29 @@
       "expectedValid": true
     },
     {
+      "id": "valid-date-only-collected-at",
+      "mutation": "collected-at-date-only",
+      "expectedValid": true
+    },
+    {
+      "id": "invalid-generated-at-human-date",
+      "mutation": "invalid-generated-at-human-date",
+      "expectedValid": false,
+      "expectedCode": "generated_at_invalid"
+    },
+    {
+      "id": "invalid-generated-at-calendar-date",
+      "mutation": "invalid-generated-at-calendar-date",
+      "expectedValid": false,
+      "expectedCode": "generated_at_invalid"
+    },
+    {
+      "id": "invalid-collected-at-calendar-date",
+      "mutation": "invalid-collected-at-calendar-date",
+      "expectedValid": false,
+      "expectedCode": "source_date_invalid"
+    },
+    {
       "id": "invalid-shape",
       "mutation": "remove-decision",
       "expectedValid": false,

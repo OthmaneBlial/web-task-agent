@@ -93,6 +93,20 @@ test("adapter contract agrees with independent JSON Schema validation", () => {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   addFormats(ajv);
   assert.equal(ajv.validate(schema, input), true, ajv.errorsText(ajv.errors));
+
+  const cases = [
+    { id: "valid-lowercase-date-time", expected: true, change: (value: typeof input) => { value.producer.exportedAt = "2026-08-27t00:00:00.000z"; } },
+    { id: "invalid-human-date", expected: false, change: (value: typeof input) => { value.producer.exportedAt = "January 1, 2025"; } },
+    { id: "invalid-calendar-date", expected: false, change: (value: typeof input) => { value.sources[0].collectedAt = "2025-02-30T00:00:00Z"; } }
+  ];
+  for (const testCase of cases) {
+    const candidate = structuredClone(input);
+    testCase.change(candidate);
+    const runtime = validateDecisionReceiptAdapterResult(candidate);
+    const independent = ajv.validate(schema, candidate);
+    assert.equal(runtime.valid, testCase.expected, `${testCase.id}: ${runtime.errors.join("; ")}`);
+    assert.equal(independent, testCase.expected, `${testCase.id}: ${ajv.errorsText(ajv.errors)}`);
+  }
 });
 
 test("adapter contract rejects provider-private fields and unlabeled inference", () => {

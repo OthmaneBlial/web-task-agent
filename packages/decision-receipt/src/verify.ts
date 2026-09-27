@@ -9,7 +9,7 @@ import {
   type ReceiptIntegrityManifest,
   type ReceiptValidationIssue
 } from "./types";
-import { isSafeRelativeReceiptPath, isSupportedDecisionReceiptSpecVersion, validateDecisionReceipt } from "./validate";
+import { isIsoDateTime, isSafeRelativeReceiptPath, isSupportedDecisionReceiptSpecVersion, validateDecisionReceipt } from "./validate";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -113,8 +113,7 @@ export async function verifyReceiptBundle(input: ReceiptBundle): Promise<Receipt
         !isSupportedDecisionReceiptSpecVersion(parsed.specVersion) ||
         parsed.algorithm !== "sha256" ||
         parsed.receiptPath !== "receipt.json" ||
-        typeof parsed.generatedAt !== "string" ||
-        !Number.isFinite(Date.parse(parsed.generatedAt)) ||
+        !isIsoDateTime(parsed.generatedAt) ||
         !Array.isArray(parsed.files)
       ) {
         issue(issues, "/integrity-manifest.json", "manifest_contract_invalid", "Integrity manifest has an unsupported contract.");

@@ -21,6 +21,7 @@ import {
   DECISION_RECEIPT_SPEC_VERSION,
   canonicalizeReceiptForSigning,
   compareDecisionReceipts as compareCoreDecisionReceipts,
+  isIsoDateTime,
   isSafeRelativeReceiptPath,
   isSupportedDecisionReceiptSpecVersion,
   renderDecisionReceiptComparison as renderCoreDecisionReceiptComparison,
@@ -669,7 +670,7 @@ export function signReceiptDirectory(input: {
   const files = [receiptPath, ...existingFiles, ...receipt.sources.flatMap((source) => source.snapshotPath ? [path.join(rootDir, source.snapshotPath)] : [])];
   integrityFiles(rootDir, files);
   const generatedAt = existingManifest?.generatedAt || receipt.generatedAt;
-  if (typeof generatedAt !== "string" || !Number.isFinite(Date.parse(generatedAt))) {
+  if (!isIsoDateTime(generatedAt)) {
     throw new Error("integrity manifest generatedAt must be a valid timestamp");
   }
 
@@ -759,7 +760,7 @@ export function writeReceiptIntegrityManifest(input: {
   const rootDir = path.resolve(input.rootDir);
   const manifestPath = path.join(rootDir, "integrity-manifest.json");
   const generatedAt = input.generatedAt ?? new Date().toISOString();
-  if (typeof generatedAt !== "string" || !Number.isFinite(Date.parse(generatedAt))) {
+  if (!isIsoDateTime(generatedAt)) {
     throw new Error("integrity manifest generatedAt must be a valid timestamp");
   }
   ensureDir(rootDir);
@@ -962,8 +963,7 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
         !isSupportedDecisionReceiptSpecVersion(manifest.specVersion) ||
         manifest.algorithm !== RECEIPT_HASH_ALGORITHM ||
         manifest.receiptPath !== "receipt.json" ||
-        typeof manifest.generatedAt !== "string" ||
-        !Number.isFinite(Date.parse(manifest.generatedAt))
+        !isIsoDateTime(manifest.generatedAt)
       ) {
         errors.push("integrity manifest has an unsupported shape");
       }

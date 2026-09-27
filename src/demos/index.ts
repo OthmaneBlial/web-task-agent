@@ -34,6 +34,7 @@ export interface WrittenDemoPackage {
 }
 
 const FIXTURE_DATE = "2026-08-26";
+const FIXTURE_TIMESTAMP = "2026-08-26T00:00:00.000Z";
 
 const DEMOS: DemoFixture[] = [
   {
@@ -516,7 +517,7 @@ export function writeDemoPackage(input: {
       scenario: demo.scenario,
       report: demo.report,
       sources: demo.sources,
-      generatedAt: FIXTURE_DATE
+      generatedAt: FIXTURE_TIMESTAMP
     },
     {
       receiptPath: receiptJsonPath,
@@ -533,7 +534,7 @@ export function writeDemoPackage(input: {
   writeReceiptIntegrityManifest({
     rootDir: outputDir,
     files: [reportPath, workflowBriefPath, sourcesPath, manifestPath, readmePath, receiptPath, receiptJsonPath, ...snapshotPaths],
-    generatedAt: FIXTURE_DATE
+    generatedAt: FIXTURE_TIMESTAMP
   });
 
   return {

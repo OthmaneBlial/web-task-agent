@@ -3,7 +3,7 @@
   "specVersion": "1.0.0",
   "profile": "full",
   "type": "decision-receipt",
-  "generatedAt": "2026-08-26",
+  "generatedAt": "2026-08-26T00:00:00.000Z",
   "provenance": {
     "kind": "deterministic-demo",
     "runId": null,

@@ -30,8 +30,40 @@ function nonEmpty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function isIsoDate(value: unknown): boolean {
-  return nonEmpty(value) && Number.isFinite(Date.parse(value));
+function isIsoDate(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth[month - 1]!;
+}
+
+export function isIsoDateTime(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const parts = value.split(/t|\s/i);
+  if (parts.length !== 2 || !isIsoDate(parts[0])) return false;
+  const time = /^(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)(z|([+-])(\d{2})(?::?(\d{2}))?)?$/i.exec(parts[1]!);
+  if (!time) return false;
+  const hour = Number(time[1]);
+  const minute = Number(time[2]);
+  const second = Number(time[3]);
+  const zone = time[4];
+  const zoneSign = time[5] === "-" ? -1 : 1;
+  const zoneHour = Number(time[6] || 0);
+  const zoneMinute = Number(time[7] || 0);
+  if (!zone || zoneHour > 23 || zoneMinute > 59) return false;
+  if (hour <= 23 && minute <= 59 && second < 60) return true;
+  const utcMinute = minute - zoneMinute * zoneSign;
+  const utcHour = hour - zoneHour * zoneSign - (utcMinute < 0 ? 1 : 0);
+  return (utcHour === 23 || utcHour === -1) && (utcMinute === 59 || utcMinute === -1) && second < 61;
+}
+
+function isIsoDateOrDateTime(value: unknown): value is string {
+  return isIsoDate(value) || isIsoDateTime(value);
 }
 
 export function isSafeRelativeReceiptPath(value: unknown): value is string {
@@ -76,8 +108,8 @@ function validateSource(
     if (!nonEmpty(value[key])) issue(issues, `${base}/${key}`, "source_field_missing", `${key} is required.`);
   }
   if (!isSafePublicSourceUrl(value.url)) issue(issues, `${base}/url`, "source_url_unsafe", "Source URL must be public HTTP(S) without credentials.");
-  if (value.collectedAt !== null && !isIsoDate(value.collectedAt)) {
-    issue(issues, `${base}/collectedAt`, "source_date_invalid", "collectedAt must be an ISO date-time or null.");
+  if (value.collectedAt !== null && !isIsoDateOrDateTime(value.collectedAt)) {
+    issue(issues, `${base}/collectedAt`, "source_date_invalid", "collectedAt must be an ISO date or date-time or null.");
   }
   if (!CAPTURE_TYPES.has(String(value.captureType))) {
     issue(issues, `${base}/captureType`, "source_capture_type_invalid", "Unsupported captureType.");
@@ -166,7 +198,7 @@ export function validateDecisionReceipt(value: unknown): ReceiptValidationResult
     issue(issues, "/profile", "profile_unsupported", "Profile must be minimal or full.");
   }
   if (value.type !== "decision-receipt") issue(issues, "/type", "receipt_type_invalid", "type must be decision-receipt.");
-  if (!isIsoDate(value.generatedAt)) issue(issues, "/generatedAt", "generated_at_invalid", "generatedAt must be an ISO date-time.");
+  if (!isIsoDateTime(value.generatedAt)) issue(issues, "/generatedAt", "generated_at_invalid", "generatedAt must be an ISO date-time.");
 
   if (!isRecord(value.provenance)) issue(issues, "/provenance", "provenance_missing", "Provenance is required.");
   else {

@@ -1,4 +1,5 @@
 import { evaluateSourceUrlPolicy } from "./source-policy";
+import { isIsoDateTime } from "../../packages/decision-receipt/dist";
 
 export const DECISION_RECEIPT_ADAPTER_CONTRACT_VERSION = "1.0.0" as const;
 
@@ -80,10 +81,6 @@ function nonEmpty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function dateTime(value: unknown): value is string {
-  return nonEmpty(value) && Number.isFinite(Date.parse(value));
-}
-
 function inspectForbiddenKeys(value: unknown, currentPath: string, errors: string[]): void {
   if (Array.isArray(value)) {
     value.forEach((item, index) => inspectForbiddenKeys(item, `${currentPath}/${index}`, errors));
@@ -131,7 +128,7 @@ export function validateDecisionReceiptAdapterResult(value: unknown): AdapterCon
     requireAllowedKeys(producer, ["adapterId", "adapterVersion", "engine", "engineVersion", "runId", "exportedAt", "fixture"], "/producer", errors);
     for (const key of ["adapterId", "adapterVersion", "engine", "engineVersion"] as const) if (!nonEmpty(producer[key])) errors.push(`/producer/${key}: required string`);
     if (producer.runId !== null && !nonEmpty(producer.runId)) errors.push("/producer/runId: use a non-empty string or null");
-    if (!dateTime(producer.exportedAt)) errors.push("/producer/exportedAt: required ISO date-time");
+    if (!isIsoDateTime(producer.exportedAt)) errors.push("/producer/exportedAt: required ISO date-time");
     if (typeof producer.fixture !== "boolean") errors.push("/producer/fixture: required boolean");
   }
 
@@ -162,7 +159,7 @@ export function validateDecisionReceiptAdapterResult(value: unknown): AdapterCon
       const policy = evaluateSourceUrlPolicy(source.url);
       if (policy.action === "deny") errors.push(`${currentPath}/url: ${policy.reason}`);
     }
-    if (source.collectedAt !== null && !dateTime(source.collectedAt)) errors.push(`${currentPath}/collectedAt: use an ISO date-time or null`);
+    if (source.collectedAt !== null && !isIsoDateTime(source.collectedAt)) errors.push(`${currentPath}/collectedAt: use an ISO date-time or null`);
     validateOrigin(source.origin, `${currentPath}/origin`, errors);
   });
 

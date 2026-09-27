@@ -4,7 +4,7 @@
   "type": "receipt-integrity-manifest",
   "algorithm": "sha256",
   "receiptPath": "receipt.json",
-  "generatedAt": "2026-08-26",
+  "generatedAt": "2026-08-26T00:00:00.000Z",
   "files": [
     {
       "path": "evidence/snapshots/source-1.md",
@@ -48,8 +48,8 @@
     },
     {
       "path": "receipt.json",
-      "sha256": "eca94d53b3205da5d0feaa1f71275e0e96ece4867ac38713d7ba1a1adbea1cc1",
-      "bytes": 3319
+      "sha256": "7ccc16dd583deebd02b170f40737ef601a5354680d6ea224732868c42fe3a446",
+      "bytes": 3333
     },
     {
       "path": "report.md",

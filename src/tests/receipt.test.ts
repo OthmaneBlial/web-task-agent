@@ -48,6 +48,15 @@ test("manifest writer refuses missing package artifacts without replacing a vali
     assert.throws(
       () => writeReceiptIntegrityManifest({
         rootDir: root,
+        files,
+        generatedAt: "2025-02-30T00:00:00Z"
+      }),
+      /integrity manifest generatedAt must be a valid timestamp/
+    );
+    assert.deepEqual(fs.readFileSync(manifestPath), originalManifest);
+    assert.throws(
+      () => writeReceiptIntegrityManifest({
+        rootDir: root,
         files: [...files, path.join(root, "handoff", "missing.md")],
         generatedAt: manifest.generatedAt
       }),
@@ -165,7 +174,7 @@ test("receipt directory verification rejects malformed manifest metadata", () =>
   const invalidValues = {
     algorithm: "md5",
     receiptPath: "other.json",
-    generatedAt: "not-a-date"
+    generatedAt: "2025-02-30T00:00:00Z"
   };
   try {
     for (const [index, key] of Object.keys(invalidValues).entries()) {
