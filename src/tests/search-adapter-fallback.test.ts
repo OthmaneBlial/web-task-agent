@@ -44,6 +44,28 @@ test("Bing RSS search applies a request deadline", async () => {
   assert.equal(requestSignal.aborted, false);
 });
 
+test("Bing RSS search cancels and rejects oversized responses", async () => {
+  let canceled = false;
+  let closeTimer: NodeJS.Timeout;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(2 * 1024 * 1024 + 1));
+      closeTimer = setTimeout(() => controller.close(), 50);
+    },
+    cancel() {
+      canceled = true;
+      clearTimeout(closeTimer);
+    }
+  });
+  const adapter = new BingRssSearchAdapter(
+    () => undefined,
+    async () => new Response(body, { status: 200 })
+  );
+
+  await assert.rejects(adapter.search("large response", 5), /exceeded 2097152 bytes/);
+  assert.equal(canceled, true);
+});
+
 test("ResilientSearchAdapter falls back when the primary provider fails", async () => {
   const events: string[] = [];
   const primary: AgentSearchAdapter = {

@@ -4,6 +4,31 @@ import type { AgentSearchAdapter, AgentSearchStageResult } from "../search-adapt
 
 type FetchLike = typeof fetch;
 
+const MAX_BING_RSS_BYTES = 2 * 1024 * 1024;
+
+async function readBingRss(response: Response): Promise<string> {
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let xml = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return xml + decoder.decode();
+      bytesRead += value.byteLength;
+      if (bytesRead > MAX_BING_RSS_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error("bing rss response exceeded " + MAX_BING_RSS_BYTES + " bytes");
+      }
+      xml += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 function decodeXmlText(value: string): string {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -87,7 +112,7 @@ export class BingRssSearchAdapter implements AgentSearchAdapter {
       throw new Error(`bing rss search failed with status ${response.status}`);
     }
 
-    const xml = await response.text();
+    const xml = await readBingRss(response);
     const results = parseBingRssResults(xml, maxResultsPerQuery);
 
     return {
