@@ -281,6 +281,38 @@ test("core diff detects a changed source snapshot path", () => {
   assert.match(renderDecisionReceiptComparison(comparison), /snapshotPath/);
 });
 
+test("core source diff order does not depend on receipt source order", () => {
+  const earlier = exampleReceipt("full");
+  const later = structuredClone(earlier);
+  const template = earlier.sources[0]!;
+  for (const id of ["removed-z", "removed-a", "changed-z", "changed-a"]) {
+    earlier.sources.push({ ...template, id, url: `https://${id}.example/source` });
+  }
+  for (const id of ["added-z", "added-a", "changed-z", "changed-a"]) {
+    later.sources.push({
+      ...template,
+      id,
+      url: `https://${id}.example/source`,
+      ...(id.startsWith("changed-") ? { title: `Updated ${id}` } : {})
+    });
+  }
+
+  const comparison = compareDecisionReceipts(earlier, later);
+  const reorderedEarlier = structuredClone(earlier);
+  const reorderedLater = structuredClone(later);
+  reorderedEarlier.sources.reverse();
+  reorderedLater.sources.reverse();
+  const reorderedComparison = compareDecisionReceipts(reorderedEarlier, reorderedLater);
+
+  assert.deepEqual(reorderedComparison, comparison);
+  assert.deepEqual(comparison.newSources.map((source) => source.id), ["added-a", "added-z"]);
+  assert.deepEqual(comparison.disappearedSources.map((source) => source.id), ["removed-a", "removed-z"]);
+  assert.deepEqual(comparison.changedSources.map((source) => source.url), [
+    "https://changed-a.example/source",
+    "https://changed-z.example/source"
+  ]);
+});
+
 test("a clean TypeScript project installs only the core tarball and renders a diff", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-consumer-"));
   try {

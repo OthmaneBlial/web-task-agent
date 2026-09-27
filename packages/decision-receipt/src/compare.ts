@@ -31,6 +31,8 @@ export function compareDecisionReceipts(
     const keys = (items: DecisionReceiptSource[]) => items.map(sourceKey).sort();
     return JSON.stringify(keys(left)) === JSON.stringify(keys(right));
   };
+  const sortSources = (sources: DecisionReceiptSource[]) => [...sources].sort((left, right) =>
+    left.url < right.url ? -1 : left.url > right.url ? 1 : left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
   const earlierSources = groupSources(earlier.sources);
   const laterSources = groupSources(later.sources);
   const evidenceKey = (evidence: DecisionReceipt["claims"][number]["evidence"][number]) =>
@@ -72,16 +74,18 @@ export function compareDecisionReceipts(
   const nextValidationChange = earlier.nextValidation === later.nextValidation
     ? null
     : { earlier: earlier.nextValidation, later: later.nextValidation };
-  const newSources = [...laterSources.entries()]
+  const newSources = sortSources([...laterSources.entries()]
     .filter(([url]) => !earlierSources.has(url))
-    .flatMap(([, sources]) => sources);
-  const disappearedSources = [...earlierSources.entries()]
+    .flatMap(([, sources]) => sources));
+  const disappearedSources = sortSources([...earlierSources.entries()]
     .filter(([url]) => !laterSources.has(url))
-    .flatMap(([, sources]) => sources);
+    .flatMap(([, sources]) => sources));
   const changedSources = [...earlierSources.entries()].flatMap(([url, previous]) => {
     const current = laterSources.get(url);
-    return current && !sameSources(previous, current) ? [{ url, earlier: previous, later: current }] : [];
-  });
+    return current && !sameSources(previous, current)
+      ? [{ url, earlier: sortSources(previous), later: sortSources(current) }]
+      : [];
+  }).sort((left, right) => left.url < right.url ? -1 : left.url > right.url ? 1 : 0);
   const decisionChanged = earlier.decision.title !== later.decision.title
     || earlier.decision.summary !== later.decision.summary;
   const changes = {
