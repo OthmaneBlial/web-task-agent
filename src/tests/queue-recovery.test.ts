@@ -193,6 +193,59 @@ test("queue recovery only restores truly stale running jobs", () => {
   }
 });
 
+test("stale queue recovery does not exceed the attempt limit", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-recovery-limit-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  let db: DatabaseSync | null = null;
+
+  try {
+    const queued = enqueueQueuedAgentJob({
+      databasePath,
+      maxAttempts: 1,
+      payload: {
+        taskType: "agent",
+        mode: "agent",
+        label: "Attempt limit recovery test",
+        options: { instruction: "must not run twice", resume: false }
+      }
+    });
+    assert.ok(claimNextQueuedJob({
+      databasePath,
+      workerId: "worker-final-attempt",
+      leaseTtlSeconds: 60
+    }));
+
+    db = new DatabaseSync(databasePath);
+    const originalPayload = db.prepare(`
+      SELECT payload_json
+      FROM queued_jobs
+      WHERE id = ?
+    `).get(queued.queueId) as Record<string, unknown> | undefined;
+    db.prepare(`
+      UPDATE queued_jobs
+      SET lease_expires_at = ?
+      WHERE id = ?
+    `).run("2000-01-01T00:00:00.000Z", queued.queueId);
+
+    assert.equal(recoverStaleQueuedJobs({ databasePath }), 0);
+
+    const row = db.prepare(`
+      SELECT status, attempts, max_attempts, payload_json, last_error, completed_at
+      FROM queued_jobs
+      WHERE id = ?
+    `).get(queued.queueId) as Record<string, unknown> | undefined;
+    assert.equal(row?.status, "failed");
+    assert.equal(row?.attempts, 1);
+    assert.equal(row?.max_attempts, 1);
+    assert.equal(row?.payload_json, originalPayload?.payload_json);
+    assert.match(String(row?.last_error), /attempt/i);
+    assert.ok(row?.completed_at);
+  } finally {
+    db?.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("queue recovery fails malformed payloads without overwriting them", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-recovery-invalid-"));
   const databasePath = path.join(tempDir, "jobs.sqlite");

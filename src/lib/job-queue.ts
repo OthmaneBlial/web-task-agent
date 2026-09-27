@@ -141,10 +141,11 @@ function parseStoredQueuedPayload(
   return parseQueuedPayload(payload, options);
 }
 
-function failInvalidStoredPayload(
+function failQueuedJobWithoutPayloadChange(
   db: DatabaseSync,
   row: Record<string, unknown>,
   timestamp: string,
+  errorMessage: string,
   staleBefore?: string
 ): number {
   const staleCondition = staleBefore
@@ -154,7 +155,7 @@ function failInvalidStoredPayload(
     UPDATE queued_jobs
     SET
       status = 'failed',
-      last_error = 'Stored payload is malformed; original payload preserved.',
+      last_error = ?,
       control_action = NULL,
       control_requested_at = NULL,
       leased_by = NULL,
@@ -167,6 +168,7 @@ function failInvalidStoredPayload(
       AND payload_json = ?
       ${staleCondition}
   `).run(
+    errorMessage,
     timestamp,
     timestamp,
     String(row.id ?? ""),
@@ -447,7 +449,7 @@ export function recoverStaleQueuedJobs(options?: {
   const { db } = getQueueDatabase(options?.databasePath);
   const timestamp = nowIso();
   const staleRows = db.prepare(`
-    SELECT id, payload_json
+    SELECT id, payload_json, attempts, max_attempts
     FROM queued_jobs
     WHERE status = 'running'
       AND lease_expires_at IS NOT NULL
@@ -474,6 +476,9 @@ export function recoverStaleQueuedJobs(options?: {
       AND status = 'running'
       AND lease_expires_at IS NOT NULL
       AND lease_expires_at <= ?
+      AND attempts = ?
+      AND max_attempts = ?
+      AND payload_json = ?
   `);
 
   let recoveredCount = 0;
@@ -482,7 +487,26 @@ export function recoverStaleQueuedJobs(options?: {
       forceResume: true
     });
     if (!payload) {
-      failInvalidStoredPayload(db, { ...row, status: "running" }, timestamp, timestamp);
+      failQueuedJobWithoutPayloadChange(
+        db,
+        { ...row, status: "running" },
+        timestamp,
+        "Stored payload is malformed; original payload preserved.",
+        timestamp
+      );
+      continue;
+    }
+
+    const attempts = Number(row.attempts ?? 0);
+    const maxAttempts = Number(row.max_attempts ?? 3);
+    if (attempts >= maxAttempts) {
+      failQueuedJobWithoutPayloadChange(
+        db,
+        { ...row, status: "running" },
+        timestamp,
+        "Lease expired after the maximum attempts; original payload preserved.",
+        timestamp
+      );
       continue;
     }
 
@@ -491,7 +515,10 @@ export function recoverStaleQueuedJobs(options?: {
       timestamp,
       timestamp,
       String(row.id ?? ""),
-      timestamp
+      timestamp,
+      attempts,
+      maxAttempts,
+      String(row.payload_json ?? "")
     );
     recoveredCount += Number(result.changes ?? 0);
   }
@@ -521,7 +548,12 @@ export function controlQueuedJob(input: {
     (input.action === "resume" && job.status === "paused") ||
     (input.action === "retry" && (job.status === "failed" || job.status === "cancelled"));
   if (shouldRequeue && !parseStoredQueuedPayload(row.payload_json)) {
-    failInvalidStoredPayload(db, row, timestamp);
+    failQueuedJobWithoutPayloadChange(
+      db,
+      row,
+      timestamp,
+      "Stored payload is malformed; original payload preserved."
+    );
     return getQueuedJob({ databasePath: input.databasePath, queueId: input.queueId });
   }
 
@@ -654,7 +686,12 @@ export function claimNextQueuedJob(input: {
       return null;
     }
     if (!parseStoredQueuedPayload(row.payload_json)) {
-      failInvalidStoredPayload(db, row, timestamp);
+      failQueuedJobWithoutPayloadChange(
+        db,
+        row,
+        timestamp,
+        "Stored payload is malformed; original payload preserved."
+      );
       continue;
     }
 
