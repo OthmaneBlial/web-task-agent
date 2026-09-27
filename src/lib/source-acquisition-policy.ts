@@ -6,6 +6,7 @@ export interface RobotsFetchResponse {
   ok: boolean;
   status: number;
   headers?: { get(name: string): string | null };
+  body?: ReadableStream<Uint8Array> | null;
   text(): Promise<string>;
 }
 
@@ -43,6 +44,35 @@ interface RobotsRule {
 interface RobotsGroup {
   agents: string[];
   rules: RobotsRule[];
+}
+
+const MAX_ROBOTS_BYTES = 512 * 1024;
+
+async function readRobotsText(response: RobotsFetchResponse): Promise<string> {
+  if (!response.body) {
+    return Buffer.from(await response.text(), "utf8").subarray(0, MAX_ROBOTS_BYTES).toString("utf8");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let text = "";
+  try {
+    while (bytesRead < MAX_ROBOTS_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value.subarray(0, MAX_ROBOTS_BYTES - bytesRead);
+      bytesRead += chunk.byteLength;
+      text += decoder.decode(chunk, { stream: true });
+      if (chunk.byteLength < value.byteLength || bytesRead === MAX_ROBOTS_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        break;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return text + decoder.decode();
 }
 
 function configuredDelay(): number {
@@ -290,7 +320,7 @@ export class SourceAcquisitionPolicy {
         }
         if (response.status >= 200 && response.status < 300 && response.ok) {
           try {
-            return { text: await response.text(), unavailable: false };
+            return { text: await readRobotsText(response), unavailable: false };
           } catch {
             return deny("source acquisition denied source because robots.txt could not be read", ["robots_unreachable", "human_review_required"]);
           }

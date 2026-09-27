@@ -238,6 +238,31 @@ test("robots server errors, access denial, and network failures deny source acqu
   assert.ok(offlineDecision.signals.includes("robots_unreachable"));
 });
 
+test("robots response parsing stops at 512 KiB and cancels the remaining body", async () => {
+  const bytes = Buffer.alloc(512 * 1024 + 1, 0x20);
+  bytes.write("User-agent: *\nDisallow: /private\n", 0, "utf8");
+  let canceled = false;
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: resolvePublicHostname,
+    fetchRobots: async () => ({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) { controller.enqueue(bytes); },
+        cancel() { canceled = true; }
+      }),
+      text: async () => { throw new Error("stream body should be used"); }
+    })
+  });
+
+  const decision = await policy.prepare("https://docs.example.com/private/report");
+
+  assert.equal(decision.action, "deny");
+  assert.ok(decision.signals.includes("robots_disallow"));
+  assert.equal(canceled, true);
+});
+
 test("source acquisition enforces a per-domain budget and leaves sensitive domains for human review", async () => {
   let robotsCalls = 0;
   const policy = new SourceAcquisitionPolicy({
