@@ -39,6 +39,14 @@ function buildSearchUrl(query: string): string {
   return `https://play.google.com/store/search?q=${encoded}&c=apps&hl=en&gl=us`;
 }
 
+export function buildPlayStoreDetailUrl(appId: string | null): string {
+  const url = new URL("https://play.google.com/store/apps/details");
+  url.searchParams.set("id", appId ?? "");
+  url.searchParams.set("hl", "en");
+  url.searchParams.set("gl", "us");
+  return url.toString();
+}
+
 function defaultReportPath(runId: string): string {
   return path.join(process.cwd(), "reports", `playstore-report-${runId}.md`);
 }
@@ -176,7 +184,7 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
   }
 
   private buildDetailUrl(summary: PlayStoreAppSummary): string {
-    return `https://play.google.com/store/apps/details?id=${summary.appId}&hl=en&gl=us`;
+    return buildPlayStoreDetailUrl(summary.appId);
   }
 
   private async scrapeSearchResults(client: CDPClient): Promise<PlayStoreAppSummary[]> {
