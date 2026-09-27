@@ -111,6 +111,56 @@ function parseRobots(content: string): RobotsGroup[] {
   return groups;
 }
 
+function normalizeRobotsPath(value: string, pattern: boolean): string {
+  return value.replace(/%[0-9a-f]{2}|[^\x00-\x7f]|\*|\$/giu, (character) => {
+    if (character.startsWith("%")) {
+      const hex = character.slice(1).toUpperCase();
+      const decoded = String.fromCharCode(Number.parseInt(hex, 16));
+      return /^[A-Za-z0-9._~-]$/.test(decoded) ? decoded : `%${hex}`;
+    }
+    if (character === "*" || character === "$") {
+      return pattern ? character : `%${character.charCodeAt(0).toString(16).toUpperCase()}`;
+    }
+    return encodeURIComponent(character).replace(/%[0-9a-f]{2}/gi, (encoded) => encoded.toUpperCase());
+  });
+}
+
+function robotsPatternMatches(rulePath: string, requestPath: string): boolean {
+  const pattern = normalizeRobotsPath(rulePath, true);
+  const path = normalizeRobotsPath(requestPath, false);
+  const endAnchored = pattern.endsWith("$");
+  const body = endAnchored ? pattern.slice(0, -1) : pattern;
+  const segments = body.split("*").filter(Boolean);
+  const startsWithWildcard = body.startsWith("*");
+  const endsWithWildcard = body.endsWith("*");
+  let cursor = 0;
+
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!;
+    const first = index === 0 && !startsWithWildcard;
+    const last = index === segments.length - 1;
+    if (last && endAnchored && !endsWithWildcard) {
+      const offset = path.length - segment.length;
+      if (offset < cursor || !path.endsWith(segment) || (first && offset !== 0)) return false;
+      continue;
+    }
+
+    const offset = first
+      ? path.startsWith(segment) ? 0 : -1
+      : path.indexOf(segment, cursor);
+    if (offset < cursor) return false;
+    cursor = offset + segment.length;
+  }
+
+  return true;
+}
+
+function robotsPatternSpecificity(rulePath: string): number {
+  const pattern = normalizeRobotsPath(rulePath, true);
+  const body = pattern.endsWith("$") ? pattern.slice(0, -1) : pattern;
+  return Buffer.byteLength(body.replace(/\*/g, ""));
+}
+
 export function evaluateRobotsText(input: {
   robotsText: string;
   userAgent: string;
@@ -123,12 +173,12 @@ export function evaluateRobotsText(input: {
     ? specificGroups
     : groups.filter((group) => group.agents.includes("*"));
   const rules = matchingGroups.flatMap((group) => group.rules)
-    .filter((rule) => rule.value.length > 0 && input.pathname.startsWith(rule.value));
+    .filter((rule) => rule.value.length > 0 && robotsPatternMatches(rule.value, input.pathname));
 
   if (rules.length === 0) {
     return { allowed: true, reason: "robots.txt permits this path" };
   }
-  rules.sort((left, right) => right.value.length - left.value.length || (left.kind === "allow" ? -1 : 1));
+  rules.sort((left, right) => robotsPatternSpecificity(right.value) - robotsPatternSpecificity(left.value) || (left.kind === "allow" ? -1 : 1));
   const matched = rules[0]!;
   return matched.kind === "allow"
     ? { allowed: true, reason: `robots.txt explicitly allows ${matched.value}` }

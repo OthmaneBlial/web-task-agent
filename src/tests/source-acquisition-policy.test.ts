@@ -48,6 +48,22 @@ test("robots blank lines do not end a group before its access rules", () => {
   );
 });
 
+test("robots matching supports wildcard, end-anchor, and encoded paths", () => {
+  const robotsText = [
+    "User-agent: *",
+    "Disallow: /*.pdf$",
+    "Disallow: /foo/bar",
+    "Disallow: /café",
+    "Allow: /public/*.pdf$"
+  ].join("\n");
+
+  assert.equal(evaluateRobotsText({ robotsText, userAgent: "web-task-agent", pathname: "/reports/q1.pdf" }).allowed, false);
+  assert.equal(evaluateRobotsText({ robotsText, userAgent: "web-task-agent", pathname: "/reports/q1.pdf/notes" }).allowed, true);
+  assert.equal(evaluateRobotsText({ robotsText, userAgent: "web-task-agent", pathname: "/foo/%62ar" }).allowed, false);
+  assert.equal(evaluateRobotsText({ robotsText, userAgent: "web-task-agent", pathname: "/caf%C3%A9/guide" }).allowed, false);
+  assert.equal(evaluateRobotsText({ robotsText, userAgent: "web-task-agent", pathname: "/public/q1.pdf" }).allowed, true);
+});
+
 test("source acquisition caches robots decisions and paces repeated domains", async () => {
   let now = 1_000;
   let robotsCalls = 0;
