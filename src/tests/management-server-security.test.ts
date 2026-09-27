@@ -155,6 +155,19 @@ test("management server bounds control payloads and reports malformed JSON as a 
   }
 });
 
+test("management server reports malformed path encoding as a client error", async () => {
+  const server = createManagementServer();
+  const bound = await listen(server);
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${bound.port}/api/jobs/%E0%A4%A/events`);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json() as { error: string }).error, "invalid_path_encoding");
+  } finally {
+    await bound.close();
+  }
+});
+
 test("management server only permits loopback bindings", () => {
   assert.equal(requireLoopbackManagementHost("127.0.0.1"), "127.0.0.1");
   assert.equal(requireLoopbackManagementHost("[::1]"), "::1");

@@ -90,6 +90,14 @@ function sendApiError(
   sendJson(res, statusCode, createApiError(error, message, details));
 }
 
+function decodePathSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new ManagementRequestError(400, "invalid_path_encoding", "Path contains malformed URI encoding");
+  }
+}
+
 function sendHtml(res: ServerResponse, html: string): void {
   res.writeHead(200, {
     "Content-Type": "text/html; charset=utf-8",
@@ -1019,7 +1027,7 @@ export function createManagementServer(options?: ManagementServerOptions): http.
       }
 
       if (method === "GET" && parsedUrl.pathname.startsWith("/api/jobs/") && parsedUrl.pathname.endsWith("/events/stream")) {
-        const jobId = decodeURIComponent(
+        const jobId = decodePathSegment(
           parsedUrl.pathname.replace("/api/jobs/", "").replace("/events/stream", "")
         );
         sendSseHeaders(res);
@@ -1062,7 +1070,7 @@ export function createManagementServer(options?: ManagementServerOptions): http.
       }
 
       if (method === "GET" && parsedUrl.pathname.startsWith("/api/jobs/") && parsedUrl.pathname.endsWith("/events")) {
-        const jobId = decodeURIComponent(
+        const jobId = decodePathSegment(
           parsedUrl.pathname.replace("/api/jobs/", "").replace("/events", "")
         );
         sendJson(res, 200, listJobRunEvents({
@@ -1077,7 +1085,7 @@ export function createManagementServer(options?: ManagementServerOptions): http.
       }
 
       if (method === "GET" && parsedUrl.pathname.startsWith("/api/jobs/")) {
-        const jobId = decodeURIComponent(parsedUrl.pathname.replace("/api/jobs/", ""));
+        const jobId = decodePathSegment(parsedUrl.pathname.replace("/api/jobs/", ""));
         const detail = getStoredJobDetail({
           databasePath: options?.databasePath,
           jobId
@@ -1091,7 +1099,7 @@ export function createManagementServer(options?: ManagementServerOptions): http.
       }
 
       if (method === "POST" && parsedUrl.pathname.startsWith("/api/jobs/") && parsedUrl.pathname.endsWith("/control")) {
-        const jobId = decodeURIComponent(
+        const jobId = decodePathSegment(
           parsedUrl.pathname.replace("/api/jobs/", "").replace("/control", "")
         );
         const body = await readJsonBody(req);
@@ -1188,7 +1196,7 @@ export function createManagementServer(options?: ManagementServerOptions): http.
       }
 
       if (method === "POST" && parsedUrl.pathname.startsWith("/api/queue/") && parsedUrl.pathname.endsWith("/control")) {
-        const queueId = decodeURIComponent(
+        const queueId = decodePathSegment(
           parsedUrl.pathname.replace("/api/queue/", "").replace("/control", "")
         );
         const before = getQueuedJob({
