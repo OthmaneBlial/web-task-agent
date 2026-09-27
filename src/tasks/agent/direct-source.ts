@@ -2,6 +2,7 @@ import type { AgentPageDigest, AgentResearchResult, AgentSearchResult } from "..
 import { readBoundedResponseText } from "../../lib/read-bounded-response-text";
 
 const MAX_PLAY_STORE_RESPONSE_BYTES = 4 * 1024 * 1024;
+const MAX_PLAY_STORE_REDIRECTS = 5;
 
 function uniqueStrings(values: string[], limit?: number): string[] {
   const seen = new Set<string>();
@@ -228,6 +229,42 @@ function normalizePlayStoreUrl(rawUrl: string): string {
 
 function buildPlayStoreSearchUrl(query: string): string {
   return `https://play.google.com/store/search?q=${encodeURIComponent(query)}&c=apps&hl=en&gl=us`;
+}
+
+function safePlayStoreUrl(rawUrl: string, baseUrl?: string): string | null {
+  try {
+    const parsed = baseUrl ? new URL(rawUrl, baseUrl) : new URL(rawUrl);
+    return parsed.protocol === "https:" &&
+      parsed.hostname === "play.google.com" &&
+      !parsed.username &&
+      !parsed.password &&
+      !parsed.port
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPlayStorePage(url: string, init: RequestInit): Promise<Response> {
+  const initialUrl = safePlayStoreUrl(url);
+  if (!initialUrl) throw new Error("play store request target is not permitted");
+  let targetUrl: string = initialUrl;
+
+  for (let redirects = 0; redirects <= MAX_PLAY_STORE_REDIRECTS; redirects += 1) {
+    const response = await fetch(targetUrl, { ...init, redirect: "manual" });
+    if (response.status < 300 || response.status >= 400) return response;
+
+    const location = response.headers.get("location");
+    const nextUrl = location ? safePlayStoreUrl(location, targetUrl) : null;
+    await response.body?.cancel().catch(() => undefined);
+    if (!nextUrl || redirects === MAX_PLAY_STORE_REDIRECTS) {
+      throw new Error("play store redirect was unsafe, invalid, or exceeded five redirects");
+    }
+    targetUrl = nextUrl;
+  }
+
+  throw new Error("play store redirect limit was reached");
 }
 
 function extractFirstMatch(html: string, patterns: RegExp[]): string {
@@ -581,13 +618,12 @@ async function fetchPlayStoreAppMetadata(url: string): Promise<DirectAppMetadata
   }
 
   try {
-    const response = await fetch(normalizedUrl, {
+    const response = await fetchPlayStorePage(normalizedUrl, {
       headers: {
         "user-agent":
           "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "accept-language": "en-US,en;q=0.9"
       },
-      redirect: "follow",
       signal: AbortSignal.timeout(15_000)
     });
 
@@ -640,13 +676,12 @@ async function fetchPlayStoreAppMetadata(url: string): Promise<DirectAppMetadata
 
 async function fetchPlayStoreSearchAppIds(query: string, limit: number = 24): Promise<string[]> {
   try {
-    const response = await fetch(buildPlayStoreSearchUrl(query), {
+    const response = await fetchPlayStorePage(buildPlayStoreSearchUrl(query), {
       headers: {
         "user-agent":
           "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "accept-language": "en-US,en;q=0.9"
       },
-      redirect: "follow",
       signal: AbortSignal.timeout(15_000)
     });
     if (!response.ok) {

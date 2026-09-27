@@ -89,3 +89,80 @@ test("oversized Play Store responses do not become read evidence", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Play Store metadata never follows a redirect outside the official HTTPS host", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; redirect?: RequestRedirect }> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), redirect: init?.redirect });
+    return new Response(null, {
+      status: 302,
+      headers: { location: "http://127.0.0.1/admin" }
+    });
+  };
+
+  try {
+    const result = await enrichProvidedSourceSeedResult(
+      buildProvidedSourceSeedResult("https://play.google.com/store/apps/details?id=com.example.app")
+    );
+
+    assert.notEqual(result.reviewStatus, "read");
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.redirect, "manual");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Play Store metadata follows safe same-host redirects", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; redirect?: RequestRedirect }> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), redirect: init?.redirect });
+    if (requests.length === 1) {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "/store/apps/details?id=com.example.app&hl=en&gl=us" }
+      });
+    }
+    return new Response("<html><title>Example App</title><h1>Example App</h1></html>", { status: 200 });
+  };
+
+  try {
+    const result = await enrichProvidedSourceSeedResult(
+      buildProvidedSourceSeedResult("https://play.google.com/store/apps/details?id=com.example.app")
+    );
+
+    assert.equal(result.reviewStatus, "read");
+    assert.ok(result.title.length > 0);
+    assert.equal(requests.length, 2);
+    assert.ok(requests.every(({ url, redirect }) =>
+      new URL(url).hostname === "play.google.com" && redirect === "manual"
+    ));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Play Store metadata stops after five same-host redirects", async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response(null, {
+      status: 302,
+      headers: { location: "/store/apps/details?id=com.example.app&hl=en&gl=us" }
+    });
+  };
+
+  try {
+    const result = await enrichProvidedSourceSeedResult(
+      buildProvidedSourceSeedResult("https://play.google.com/store/apps/details?id=com.example.app")
+    );
+
+    assert.notEqual(result.reviewStatus, "read");
+    assert.equal(requests, 6);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
