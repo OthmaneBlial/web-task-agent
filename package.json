@@ -60,7 +60,7 @@
     "registry": "https://registry.npmjs.org"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "build:receipt-core": "tsc -p packages/decision-receipt/tsconfig.json",

@@ -10,7 +10,7 @@ npm run start -- demo export browser-agent-landscape
 
 The bundled demos use checked-in fixtures. They do not call an LLM, open a browser, or request a source. Open `reports/demos/browser-agent-landscape/receipt.html` first for a visual decision handoff, then inspect `receipt.json`, the source snapshots, and `integrity-manifest.json`. Verify it with `web-task-agent receipt verify reports/demos/browser-agent-landscape`. The receipt is standalone: it has no scripts, analytics, or live requests.
 
-For a source installation, use Node.js 22 or later. The `install.sh` helper can also create a local launcher; add `--skip-llm-setup` if you only want demos and local commands.
+For a source installation, use Node.js 22.12 or later. The `install.sh` helper can also create a local launcher; add `--skip-llm-setup` if you only want demos and local commands.
 
 ## 2. Configure Environment For Live Research
 
@@ -196,4 +196,4 @@ The canonical public install is the versioned GitHub Release tarball plus its `S
 npm run first-success
 ```
 
-This builds the package, installs the tarball into a fresh temporary directory, exports the deterministic browser-agent demo, and verifies its receipt offline. The exact gate and limits are recorded in [first-success evidence](../first-success.md). The release workflow runs the same check on Node 22 before attaching the tarball and checksum to the release.
+This builds the package, installs the tarball into a fresh temporary directory, exports the deterministic browser-agent demo, and verifies its receipt offline. The exact gate and limits are recorded in [first-success evidence](../first-success.md). The release workflow runs the same check on Node 22.12 or later before attaching the tarball and checksum to the release.

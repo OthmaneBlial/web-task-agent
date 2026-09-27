@@ -34,7 +34,7 @@ Options:
   --launcher-name <name>   Name for the launcher command (default: web-task-agent)
   --non-interactive        Do not prompt for config values
   --skip-llm-setup         Install demos and local commands without configuring an LLM key
-  --force-system-node      Require a system Node.js installation instead of bundling Node 22
+  --force-system-node      Require a system Node.js installation (22.12 or newer)
   --help                   Show this help
 
 Environment overrides:
@@ -65,19 +65,21 @@ have_command() {
   command -v "$1" >/dev/null 2>&1
 }
 
-system_node_major() {
+system_node_version() {
   if ! have_command node; then
     return 1
   fi
-  node -p 'process.versions.node.split(".")[0]' 2>/dev/null
+  node -p 'process.versions.node' 2>/dev/null
 }
 
 supports_system_node() {
-  local major
-  if ! major="$(system_node_major)"; then
+  local version major minor
+  if ! version="$(system_node_version)"; then
     return 1
   fi
-  [[ "${major}" =~ ^[0-9]+$ ]] && (( major >= 22 ))
+  IFS=. read -r major minor _ <<< "${version}"
+  [[ "${major}" =~ ^[0-9]+$ && "${minor}" =~ ^[0-9]+$ ]] || return 1
+  (( major > 22 || (major == 22 && minor >= 12) ))
 }
 
 platform_triplet() {
@@ -128,7 +130,7 @@ resolve_node_archive_name() {
 
 ensure_node_runtime() {
   if [[ "${FORCE_SYSTEM_NODE}" == "1" ]]; then
-    supports_system_node || die "Node.js 22 or newer is required. Install Node 22 or unset WEB_TASK_AGENT_FORCE_SYSTEM_NODE."
+    supports_system_node || die "Node.js 22.12 or newer is required. Install Node 22.12 or unset WEB_TASK_AGENT_FORCE_SYSTEM_NODE."
     NODE_CMD="$(command -v node)"
     NPM_CMD="$(command -v npm)"
     return 0

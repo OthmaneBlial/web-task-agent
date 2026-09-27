@@ -2,9 +2,13 @@
 import "dotenv/config";
 
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
+import type { Command as CommanderCommand } from "commander" with { "resolution-mode": "import" };
 
-import { Command } from "commander";
+const { Command } = createRequire(__filename)("commander") as {
+  Command: new () => CommanderCommand;
+};
 
 import { requestAgentJobControl, resumeAgentJob, rerunAgentJob } from "./lib/job-operations";
 import {
