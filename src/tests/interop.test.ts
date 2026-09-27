@@ -15,6 +15,7 @@ import {
   importExternalDecisionResult,
   signReceiptDirectory,
   verifyReceiptDirectory,
+  type ExternalDecisionResult,
 } from "../lib/receipt";
 
 test("external provider result imports into a verified receipt without provider coupling", () => {
@@ -32,6 +33,41 @@ test("external provider result imports into a verified receipt without provider 
     assert.equal(verification.receipt?.sources[0]?.adapterOrigin?.kind, "operator-attested");
     assert.equal(verification.receipt?.claims[0]?.evidence[0]?.id, "evidence-offline-export");
     assert.ok(verification.receipt?.limitations.some((item) => item.includes("Imported evidence")));
+  } finally {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("invalid forced imports preserve the existing verified receipt package", () => {
+  const input = JSON.parse(fs.readFileSync(path.join(process.cwd(), "examples", "interop", "browser-use-result.json"), "utf8")) as DecisionReceiptAdapterResult;
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-interop-preserve-"));
+  try {
+    const written = importExternalDecisionResult({ result: input, outputDir });
+    const packagePaths = [written.receiptPath, written.integrityManifestPath, ...written.snapshotPaths];
+    const originalFiles = packagePaths.map((filePath) => fs.readFileSync(filePath));
+    const source = input.sources[0]!;
+    const invalidResult: ExternalDecisionResult = {
+      title: "Invalid replacement",
+      summary: "This must fail without changing the existing package.",
+      sources: [{
+        id: source.id,
+        title: source.title,
+        url: source.url,
+        excerpt: "This changed excerpt would corrupt the old manifest."
+      }],
+      claims: [{
+        id: "claim-invalid-source",
+        text: "This claim must be rejected.",
+        evidence: [{ sourceId: "missing-source" }]
+      }]
+    };
+
+    assert.throws(
+      () => importExternalDecisionResult({ result: invalidResult, outputDir, force: true }),
+      /references an unknown source/
+    );
+    assert.deepEqual(packagePaths.map((filePath) => fs.readFileSync(filePath)), originalFiles);
+    assert.equal(verifyReceiptDirectory(outputDir).valid, true);
   } finally {
     fs.rmSync(outputDir, { recursive: true, force: true });
   }

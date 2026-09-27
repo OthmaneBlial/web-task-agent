@@ -399,11 +399,6 @@ export function importExternalDecisionResult(input: {
       throw new Error(`refusing to overwrite non-empty import directory: ${outputDir}; pass --force to replace it.`);
     }
   }
-  ensureDir(outputDir);
-  const outputStats = fs.lstatSync(outputDir);
-  if (outputStats.isSymbolicLink() || !outputStats.isDirectory()) {
-    throw new Error(`refusing unsafe receipt import directory: ${outputDir}`);
-  }
   const result = normalizeExternalResult(input.result);
   if (!result || typeof result.title !== "string" || !result.title.trim()) {
     throw new Error("external result title is required");
@@ -413,7 +408,8 @@ export function importExternalDecisionResult(input: {
   }
 
   const sourceIds = new Set<string>();
-  const snapshotPaths: string[] = [];
+  const pendingSnapshots: Array<{ relativePath: string; content: string }> = [];
+  const snapshotContentBySourceId = new Map<string, string>();
   const sources: DecisionReceiptSource[] = result.sources.map((source, index) => {
     if (!source || typeof source.url !== "string" || !source.url.trim()) {
       throw new Error(`external source ${index + 1} is missing a URL`);
@@ -431,8 +427,10 @@ export function importExternalDecisionResult(input: {
     let snapshotPath: string | null = null;
     if (excerpt) {
       const relativeSnapshotPath = `evidence/snapshots/${String(index + 1).padStart(2, "0")}-${id}.md`;
-      snapshotPath = writeImportedSnapshot(outputDir, relativeSnapshotPath, `# ${source.title}\n\n${excerpt}\n`);
-      snapshotPaths.push(snapshotPath);
+      const content = `# ${source.title}\n\n${excerpt}\n`;
+      pendingSnapshots.push({ relativePath: relativeSnapshotPath, content });
+      snapshotContentBySourceId.set(id, content);
+      snapshotPath = relativeSnapshotPath;
     }
     return {
       id,
@@ -442,8 +440,8 @@ export function importExternalDecisionResult(input: {
       role: source.role?.trim() || "external research result",
       collectedAt: source.collectedAt ?? null,
       captureType: excerpt ? "imported-excerpt" : "metadata-only",
-      snapshotPath: snapshotPath ? safeRelativePath(outputDir, snapshotPath) : null,
-      snapshotSha256: snapshotPath ? fileSha256(snapshotPath) : null,
+      snapshotPath,
+      snapshotSha256: snapshotPath ? sha256(snapshotContentBySourceId.get(id)!) : null,
       adapterOrigin: source.adapterOrigin
     };
   });
@@ -455,7 +453,7 @@ export function importExternalDecisionResult(input: {
         throw new Error(`external claim ${claimIndex + 1} references an unknown source`);
       }
       const source = sources.find((item) => item.id === sourceId)!;
-      const snapshotText = source.snapshotPath ? fs.readFileSync(path.join(outputDir, source.snapshotPath), "utf8") : "";
+      const snapshotText = source.snapshotPath ? snapshotContentBySourceId.get(source.id) ?? "" : "";
       const excerpt = (reference.excerpt || snapshotText.split("\n\n").slice(1).join("\n\n").trim() || claim.text).trim();
       return {
         id: reference.id || `evidence-${claimIndex + 1}-${evidenceIndex + 1}`,
@@ -467,7 +465,7 @@ export function importExternalDecisionResult(input: {
     });
     const fallbackSource = sources[0];
     const fallbackExcerpt = fallbackSource?.snapshotPath
-      ? fs.readFileSync(path.join(outputDir, fallbackSource.snapshotPath), "utf8").split("\n\n").slice(1).join("\n\n").trim()
+      ? (snapshotContentBySourceId.get(fallbackSource.id) ?? "").split("\n\n").slice(1).join("\n\n").trim()
       : claim.text.trim();
     const normalizedEvidence = evidence.length > 0 || !fallbackSource
       ? evidence
@@ -513,6 +511,19 @@ export function importExternalDecisionResult(input: {
       note: "The manifest covers the imported receipt and snapshots; provider-specific provenance remains outside this contract."
     }
   };
+  const validation = validateDecisionReceipt(receipt);
+  if (!validation.valid || !validation.receipt) {
+    throw new Error(`cannot import an invalid decision receipt: ${validation.errors.join("; ")}`);
+  }
+
+  ensureDir(outputDir);
+  const outputStats = fs.lstatSync(outputDir);
+  if (outputStats.isSymbolicLink() || !outputStats.isDirectory()) {
+    throw new Error(`refusing unsafe receipt import directory: ${outputDir}`);
+  }
+  const snapshotPaths = pendingSnapshots.map(({ relativePath, content }) =>
+    writeImportedSnapshot(outputDir, relativePath, content)
+  );
   const receiptPath = path.join(outputDir, "receipt.json");
   writeJsonAtomic(receiptPath, receipt);
   const integrityManifestPath = writeReceiptIntegrityManifest({
