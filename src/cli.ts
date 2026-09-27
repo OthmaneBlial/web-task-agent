@@ -369,6 +369,7 @@ Use "web-task-agent <command> --help" for the full option list.
           `Changed contradictions: ${comparison.changedContradictions.length}`,
           `Limitations added/removed: ${comparison.addedLimitations.length}/${comparison.removedLimitations.length}`,
           `Next validation changed: ${comparison.changes.nextValidation ? "yes" : "no"}`,
+          `Run provenance changed: ${comparison.changes.provenance ? "yes" : "no"}`,
           `Decision changed: ${comparison.decisionChanged ? "yes" : "no"}`
         ]
       });

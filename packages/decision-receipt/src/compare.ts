@@ -74,6 +74,17 @@ export function compareDecisionReceipts(
   const nextValidationChange = earlier.nextValidation === later.nextValidation
     ? null
     : { earlier: earlier.nextValidation, later: later.nextValidation };
+  const provenanceSummary = (provenance: DecisionReceipt["provenance"]) => ({
+    kind: provenance.kind,
+    cliVersion: provenance.cliVersion,
+    workflowId: provenance.workflowId,
+    fixture: provenance.fixture
+  });
+  const earlierProvenance = provenanceSummary(earlier.provenance);
+  const laterProvenance = provenanceSummary(later.provenance);
+  const provenanceChange = JSON.stringify(earlierProvenance) === JSON.stringify(laterProvenance)
+    ? null
+    : { earlier: earlierProvenance, later: laterProvenance };
   const newSources = sortSources([...laterSources.entries()]
     .filter(([url]) => !earlierSources.has(url))
     .flatMap(([, sources]) => sources));
@@ -94,6 +105,7 @@ export function compareDecisionReceipts(
     contradictions: changedContradictions.length > 0,
     limitations: addedLimitations.length > 0 || removedLimitations.length > 0,
     nextValidation: nextValidationChange !== null,
+    provenance: provenanceChange !== null,
     policy: earlier.provenance.policyVersion !== later.provenance.policyVersion,
     model: earlier.provenance.model !== later.provenance.model,
     prompt: earlier.provenance.promptVersion !== later.provenance.promptVersion,
@@ -111,11 +123,12 @@ export function compareDecisionReceipts(
   if (addedLimitations.length > 0) changedBecause.push(`${addedLimitations.length} limitation(s) added`);
   if (removedLimitations.length > 0) changedBecause.push(`${removedLimitations.length} limitation(s) removed`);
   if (nextValidationChange) changedBecause.push("the next validation changed");
+  if (provenanceChange) changedBecause.push("the run provenance changed");
   if (changes.policy) changedBecause.push("the source or acquisition policy changed");
   if (changes.model) changedBecause.push("the declared model changed");
   if (changes.prompt) changedBecause.push("the prompt or synthesis contract changed");
   if (decisionChanged) changedBecause.push("the decision title or summary changed");
-  if (changedBecause.length === 0) changedBecause.push("no source, claim, contradiction, limitation, next validation, policy, model, prompt, or decision change was detected");
+  if (changedBecause.length === 0) changedBecause.push("no source, claim, contradiction, limitation, next validation, run provenance, policy, model, prompt, or decision change was detected");
   return {
     earlierTitle: earlier.decision.title,
     laterTitle: later.decision.title,
@@ -125,6 +138,7 @@ export function compareDecisionReceipts(
     newSources,
     disappearedSources,
     changedSources,
+    provenanceChange,
     changedClaims,
     changedContradictions,
     addedLimitations,
@@ -163,6 +177,12 @@ export function renderDecisionReceiptComparison(
         : [`  - ${field}: ${inlineCode(JSON.stringify(previous))} → ${inlineCode(JSON.stringify(current))}`];
     })
   ]);
+  const provenanceLines = comparison.provenanceChange
+    ? [
+        `- Earlier: ${inlineCode(JSON.stringify(comparison.provenanceChange.earlier))}`,
+        `- Later: ${inlineCode(JSON.stringify(comparison.provenanceChange.later))}`
+      ]
+    : [];
   const evidenceKey = (item: DecisionReceiptEvidenceRef | null) => item === null
     ? null
     : JSON.stringify([item.sourceId, item.relation, item.excerpt]);
@@ -207,6 +227,7 @@ export function renderDecisionReceiptComparison(
     `- Contradictions changed: ${comparison.changedContradictions.length}`,
     `- Limitations added/removed: ${comparison.addedLimitations.length}/${comparison.removedLimitations.length}`,
     `- Next validation changed: ${comparison.changes.nextValidation ? "yes" : "no"}`,
+    `- Run provenance changed: ${comparison.changes.provenance ? "yes" : "no"}`,
     `- Policy changed: ${comparison.changes.policy ? "yes" : "no"}`,
     `- Model changed: ${comparison.changes.model ? "yes" : "no"}`,
     `- Prompt contract changed: ${comparison.changes.prompt ? "yes" : "no"}`,
@@ -218,6 +239,7 @@ export function renderDecisionReceiptComparison(
     ...section("New sources", sourceLines(comparison.newSources)),
     ...section("Sources no longer present", sourceLines(comparison.disappearedSources)),
     ...section("Existing sources changed", changedSourceLines),
+    ...section("Run provenance changed", provenanceLines),
     ...section("Changed claims", claimLines),
     ...section("Changed contradictions", contradictionLines),
     ...section("Limitations added", comparison.addedLimitations.map((item) => `- ${inlineCode(JSON.stringify(item))}`)),

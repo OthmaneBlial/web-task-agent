@@ -162,6 +162,7 @@ test("core diff separates source, policy, model, prompt, claim, and decision cha
     contradictions: false,
     limitations: false,
     nextValidation: false,
+    provenance: false,
     policy: true,
     model: true,
     prompt: true,
@@ -172,6 +173,37 @@ test("core diff separates source, policy, model, prompt, claim, and decision cha
   assert.match(markdown, /Policy changed: yes/);
   assert.match(markdown, /Model changed: yes/);
   assert.match(markdown, /Prompt contract changed: yes/);
+});
+
+test("core diff reports run provenance changes without flagging a run ID alone", () => {
+  const earlier = exampleReceipt("full");
+  const sameRun = structuredClone(earlier);
+  sameRun.provenance.runId = "different-run-id";
+  assert.equal(compareDecisionReceipts(earlier, sameRun).changes.provenance, false);
+
+  const later = structuredClone(earlier);
+  later.provenance.kind = "imported";
+  later.provenance.cliVersion = "0.5.2";
+  later.provenance.workflowId = "external-import";
+  later.provenance.fixture = false;
+  const comparison = compareDecisionReceipts(earlier, later);
+  assert.equal(comparison.changes.provenance, true);
+  assert.deepEqual(comparison.provenanceChange, {
+    earlier: {
+      kind: earlier.provenance.kind,
+      cliVersion: earlier.provenance.cliVersion,
+      workflowId: earlier.provenance.workflowId,
+      fixture: earlier.provenance.fixture
+    },
+    later: {
+      kind: later.provenance.kind,
+      cliVersion: later.provenance.cliVersion,
+      workflowId: later.provenance.workflowId,
+      fixture: later.provenance.fixture
+    }
+  });
+  assert.match(comparison.changedBecause.join(" "), /run provenance changed/);
+  assert.match(renderDecisionReceiptComparison(comparison), /Run provenance changed/);
 });
 
 test("core diff reports contradictions, limitations, and next validation changes", () => {

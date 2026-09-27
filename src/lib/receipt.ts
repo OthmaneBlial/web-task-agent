@@ -25,6 +25,7 @@ import {
   isSafeRelativeReceiptPath,
   isSupportedDecisionReceiptSpecVersion,
   renderDecisionReceiptComparison as renderCoreDecisionReceiptComparison,
+  type ReceiptProvenanceKind,
   validateDecisionReceipt
 } from "../../packages/decision-receipt/dist";
 
@@ -71,7 +72,7 @@ export interface DecisionReceipt {
   type: "decision-receipt";
   generatedAt: string;
   provenance: {
-    kind: "live" | "deterministic-demo" | "imported";
+    kind: ReceiptProvenanceKind;
     runId: string | null;
     cliVersion: string | null;
     workflowId: string | null;
@@ -148,6 +149,10 @@ export interface DecisionReceiptComparison {
     earlier: DecisionReceiptSource[];
     later: DecisionReceiptSource[];
   }>;
+  provenanceChange: {
+    earlier: Pick<DecisionReceipt["provenance"], "kind" | "cliVersion" | "workflowId" | "fixture">;
+    later: Pick<DecisionReceipt["provenance"], "kind" | "cliVersion" | "workflowId" | "fixture">;
+  } | null;
   changedClaims: Array<{
     id: string;
     earlier: DecisionReceiptClaim | null;
@@ -167,6 +172,7 @@ export interface DecisionReceiptComparison {
     contradictions: boolean;
     limitations: boolean;
     nextValidation: boolean;
+    provenance: boolean;
     policy: boolean;
     model: boolean;
     prompt: boolean;

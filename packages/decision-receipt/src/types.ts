@@ -136,6 +136,10 @@ export interface DecisionReceiptComparison {
     earlier: DecisionReceiptSource[];
     later: DecisionReceiptSource[];
   }>;
+  provenanceChange: {
+    earlier: Pick<DecisionReceipt["provenance"], "kind" | "cliVersion" | "workflowId" | "fixture">;
+    later: Pick<DecisionReceipt["provenance"], "kind" | "cliVersion" | "workflowId" | "fixture">;
+  } | null;
   changedClaims: Array<{
     id: string;
     earlier: DecisionReceiptClaim | null;
@@ -155,6 +159,7 @@ export interface DecisionReceiptComparison {
     contradictions: boolean;
     limitations: boolean;
     nextValidation: boolean;
+    provenance: boolean;
     policy: boolean;
     model: boolean;
     prompt: boolean;

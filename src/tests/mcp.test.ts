@@ -237,6 +237,7 @@ test("local MCP exposes exactly four bounded offline receipt tools", async () =>
     }));
     assert.equal((compared.structuredContent as { decisionChanged: boolean }).decisionChanged, false);
     assert.equal((compared.structuredContent as { changedSources: number }).changedSources, 0);
+    assert.equal(((compared.structuredContent as { changes: { provenance: boolean } }).changes).provenance, false);
     assert.deepEqual((compared.structuredContent as { changedContradictionIds: string[] }).changedContradictionIds, []);
     assert.equal((compared.structuredContent as { addedLimitations: number }).addedLimitations, 0);
     assert.equal((compared.structuredContent as { removedLimitations: number }).removedLimitations, 0);

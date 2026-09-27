@@ -55,6 +55,8 @@ test("local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe 
   assert.match(css, /prefers-reduced-motion/);
   assert.match(app, /Synthesis \/ claims/);
   assert.match(app, /Next validation/);
+  assert.match(app, /Run provenance/);
+  assert.match(app, /comparison\.provenanceChange/);
   assert.match(app, /Show exact changes/);
   assert.match(app, /comparison\.changedSources\.forEach/);
   assert.match(app, /snapshotSha256/);
