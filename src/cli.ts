@@ -186,7 +186,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .command("serve")
     .description("Run the offline Decision Receipt MCP server over STDIO")
     .action(async () => {
-      await import("./mcp/server");
+      await import("./mcp/server.js");
     });
 
   const demo = program
