@@ -137,7 +137,7 @@ function writeLocalOutput(outputPath: string, content: string, force: boolean): 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   try {
     const stats = fs.lstatSync(outputPath);
-    if (stats.isSymbolicLink() || !stats.isFile()) {
+    if (stats.isSymbolicLink() || !stats.isFile() || stats.nlink > 1) {
       throw new Error(`refusing unsafe output file: ${outputPath}`);
     }
     if (!force) throw new Error(`refusing to overwrite ${outputPath}; pass --force to replace it.`);
@@ -161,7 +161,8 @@ function writeLocalOutput(outputPath: string, content: string, force: boolean): 
     throw error;
   }
   try {
-    if (!fs.fstatSync(descriptor).isFile()) throw new Error(`refusing unsafe output file: ${outputPath}`);
+    const stats = fs.fstatSync(descriptor);
+    if (!stats.isFile() || stats.nlink > 1) throw new Error(`refusing unsafe output file: ${outputPath}`);
     if (force) fs.ftruncateSync(descriptor, 0);
     fs.writeFileSync(descriptor, content, "utf8");
   } finally {

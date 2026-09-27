@@ -53,7 +53,7 @@ test("interop adapter preserves the source boundary", () => {
   }
 });
 
-test("receipt import never writes snapshots through package symlinks", () => {
+test("receipt import never writes snapshots through package symlinks or hard links", () => {
   if (process.platform === "win32") return;
   const input = JSON.parse(fs.readFileSync(path.join(process.cwd(), "examples", "interop", "browser-use-result.json"), "utf8")) as DecisionReceiptAdapterResult;
   const firstSource = input.sources[0]!;
@@ -90,6 +90,25 @@ test("receipt import never writes snapshots through package symlinks", () => {
       fs.rmSync(outputDir, { recursive: true, force: true });
       fs.rmSync(outsideDir, { recursive: true, force: true });
     }
+  }
+
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-interop-hardlink-"));
+  const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-interop-hardlink-outside-"));
+  try {
+    const link = path.join(outputDir, "evidence", "snapshots", snapshotName);
+    const victim = path.join(outsideDir, "victim.md");
+    fs.mkdirSync(path.dirname(link), { recursive: true });
+    fs.writeFileSync(victim, "keep this file unchanged", "utf8");
+    fs.linkSync(victim, link);
+
+    assert.throws(
+      () => importExternalDecisionResult({ result: input, outputDir, force: true }),
+      /unsafe receipt snapshot file/
+    );
+    assert.equal(fs.readFileSync(victim, "utf8"), "keep this file unchanged");
+  } finally {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
   }
 });
 

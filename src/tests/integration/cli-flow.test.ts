@@ -222,6 +222,13 @@ test("CLI file outputs preserve existing files unless force is explicit", () => 
       fs.symlinkSync(victimPath, linkPath, "file");
       assert.throws(() => runCli([...planArgs.slice(0, -1), linkPath, "--force"], env, tempDir));
       assert.equal(fs.readFileSync(victimPath, "utf8"), "do not change this file");
+
+      const hardLinkVictim = path.join(tempDir, "hardlink-victim.md");
+      const hardLinkOutput = path.join(tempDir, "hardlink-output.md");
+      fs.writeFileSync(hardLinkVictim, "do not change this hard-linked file", "utf8");
+      fs.linkSync(hardLinkVictim, hardLinkOutput);
+      assert.throws(() => runCli([...planArgs.slice(0, -1), hardLinkOutput, "--force"], env, tempDir));
+      assert.equal(fs.readFileSync(hardLinkVictim, "utf8"), "do not change this hard-linked file");
     }
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });

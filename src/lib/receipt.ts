@@ -222,7 +222,7 @@ function writeImportedSnapshot(rootDir: string, relativePath: string, content: s
   const filePath = path.join(directory, fileName);
   try {
     const stats = fs.lstatSync(filePath);
-    if (stats.isSymbolicLink() || !stats.isFile()) {
+    if (stats.isSymbolicLink() || !stats.isFile() || stats.nlink > 1) {
       throw new Error(`refusing unsafe receipt snapshot file: ${relativePath}`);
     }
   } catch (error) {
@@ -232,7 +232,8 @@ function writeImportedSnapshot(rootDir: string, relativePath: string, content: s
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
   const descriptor = fs.openSync(filePath, flags, 0o600);
   try {
-    if (!fs.fstatSync(descriptor).isFile()) {
+    const stats = fs.fstatSync(descriptor);
+    if (!stats.isFile() || stats.nlink > 1) {
       throw new Error(`refusing unsafe receipt snapshot file: ${relativePath}`);
     }
     fs.ftruncateSync(descriptor, 0);
