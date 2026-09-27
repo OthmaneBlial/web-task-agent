@@ -56,7 +56,7 @@ jobs:
           (cd release && sha256sum *.tgz > SHA256SUMS)
 
       - name: Attest the release tarball
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: "release/*.tgz"
 
