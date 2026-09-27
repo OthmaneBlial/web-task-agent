@@ -84,6 +84,12 @@ test("management server exposes controls and log endpoints", async () => {
     }
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
+    const dashboardResponse = await fetch(baseUrl);
+    assert.equal(dashboardResponse.status, 200);
+    const dashboardHtml = await dashboardResponse.text();
+    assert.match(dashboardHtml, /if \(refreshInFlight\) return;/);
+    assert.match(dashboardHtml, /setInterval\(refreshIfIdle, 5000\);/);
+
     const eventsResponse = await fetch(`${baseUrl}/api/jobs/job_server/events`);
     assert.equal(eventsResponse.status, 200);
     const events = await eventsResponse.json();

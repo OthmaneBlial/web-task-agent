@@ -965,8 +965,19 @@ function dashboardHtml(): string {
       }
     }
 
-    refresh();
-    setInterval(refresh, 5000);
+    let refreshInFlight = false;
+    async function refreshIfIdle() {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        await refresh();
+      } finally {
+        refreshInFlight = false;
+      }
+    }
+
+    refreshIfIdle();
+    setInterval(refreshIfIdle, 5000);
   </script>
 </body>
 </html>`;
