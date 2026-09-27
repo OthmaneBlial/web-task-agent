@@ -54,6 +54,7 @@ test("local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe 
   assert.match(css, /prefers-reduced-motion/);
   assert.match(app, /Synthesis \/ claims/);
   assert.match(app, /privateReceiptDataIncluded/);
+  assert.match(app, /const bundle = Object\.create\(null\)/);
   assert.doesNotMatch(app, /\b(?:fetch|XMLHttpRequest|sendBeacon|WebSocket|localStorage|sessionStorage)\b/);
   const scriptSources = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual(scriptSources, [
@@ -92,6 +93,19 @@ test("actual browser bundle streams a rooted ZIP and rejects path traversal", as
   assert.ok("integrity-manifest.json" in unpacked);
   const verification = await verifier.verifyReceiptBundle(unpacked);
   assert.equal(verification.valid, true, verification.errors.join("; "));
+
+  const magicPathArchive = zipSync({ "payload99": strToU8("preserved") });
+  const oldName = strToU8("payload99");
+  const magicName = strToU8("__proto__");
+  for (let offset = 0; offset <= magicPathArchive.length - oldName.length; offset += 1) {
+    if (oldName.every((byte, index) => magicPathArchive[offset + index] === byte)) {
+      magicPathArchive.set(magicName, offset);
+      offset += oldName.length - 1;
+    }
+  }
+  const magicFilename = await verifier.unpackReceiptZip(magicPathArchive);
+  assert.equal(Object.hasOwn(magicFilename, "__proto__"), true);
+  assert.equal(new TextDecoder().decode(magicFilename["__proto__"] as Uint8Array), "preserved");
 
   await assert.rejects(
     verifier.unpackReceiptZip(zipSync({ "../private.txt": strToU8("private") })),

@@ -38,7 +38,7 @@ export function unpackReceiptZip(input: ArrayBuffer | Uint8Array): Promise<Recor
   }
 
   return new Promise((resolve, reject) => {
-    const output: Record<string, Uint8Array> = {};
+    const output = Object.create(null) as Record<string, Uint8Array>;
     const active = new Set<UnzipFile>();
     let files = 0;
     let extracted = 0;
