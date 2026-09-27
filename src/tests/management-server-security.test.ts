@@ -95,6 +95,41 @@ test("management server sends browser hardening headers and rejects cross-origin
   }
 });
 
+test("management server rejects attacker-controlled Host headers even when Origin matches", async () => {
+  const server = createManagementServer();
+  const bound = await listen(server);
+
+  try {
+    const attackerOrigin = `http://attacker.example:${bound.port}`;
+    const response = await new Promise<{ statusCode: number | undefined; body: string }>((resolve, reject) => {
+      const request = http.get({
+        hostname: "127.0.0.1",
+        port: bound.port,
+        path: "/api/jobs",
+        headers: {
+          Host: `attacker.example:${bound.port}`,
+          Origin: attackerOrigin
+        }
+      }, (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk: string) => { body += chunk; });
+        res.on("end", () => resolve({ statusCode: res.statusCode, body }));
+      });
+      request.on("error", reject);
+    });
+
+    assert.equal(response.statusCode, 403);
+    assert.deepEqual(JSON.parse(response.body), {
+      ok: false,
+      error: "forbidden_host",
+      message: "Management requests must use a loopback host"
+    });
+  } finally {
+    await bound.close();
+  }
+});
+
 test("management server bounds control payloads and reports malformed JSON as a client error", async () => {
   const server = createManagementServer();
   const bound = await listen(server);

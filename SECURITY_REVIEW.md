@@ -13,7 +13,7 @@ Review a named commit of `OthmaneBlial/web-task-agent`; do not review a moving b
 3. ZIP expansion limits, root stripping, traversal/symlink assumptions, and receipt-relative paths;
 4. unsafe or credential-bearing source URLs and imported provider data;
 5. HTML escaping and untrusted text rendering in the CLI, management dashboard, and browser verifier;
-6. secret exclusion, no-network verification, no telemetry, and local-only browser behavior.
+6. secret exclusion, no-network verification, no telemetry, browser isolation, and loopback management-server host controls.
 
 The local research runner, configured model providers, arbitrary authenticated browsing, and factual correctness of sources are outside the Decision Receipt security claim unless a reviewer explicitly expands the scope.
 
@@ -44,6 +44,7 @@ Reviewers should also open the local verifier with network recording enabled, lo
 | Archive input | compressed, per-file, extracted-size, file-count, root, and traversal limits |
 | HTML and URL safety | receipt, management-dashboard, and verifier escaping tests plus public HTTPS credential-free URL policy |
 | Secrets | publication scan over Git-tracked/publishable files and ignored local-state guards |
+| Local management server | loopback binding, attacker-controlled Host rejection, and same-origin control checks |
 | Local verifier | folder/ZIP fixtures, diff, keyboard/mobile checks, no persistent storage, offline-after-load manual QA |
 | External engines | two privacy-safe, unauthenticated imports with explicit limitations |
 

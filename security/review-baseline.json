@@ -57,12 +57,13 @@
     },
     {
       "id": "local-boundary",
-      "title": "Secrets, no-network verification, no telemetry, and local-only behavior",
+      "title": "Secrets, local-only behavior, and management-server host controls",
       "evidence": [
         { "path": "src/tests/publication-secret-audit.test.ts", "marker": "publication secret audit passes without exposing sensitive values" },
         { "path": "src/tests/mcp.test.ts", "marker": "unexpected MCP network access" },
         { "path": "src/tests/reviewer-study-web.test.ts", "marker": "reviewer study browser code has no submission, telemetry, or persistence sink" },
-        { "path": "src/tests/web-verifier.test.ts", "marker": "default verification report code omits receipt text and source data" }
+        { "path": "src/tests/web-verifier.test.ts", "marker": "default verification report code omits receipt text and source data" },
+        { "path": "src/tests/management-server-security.test.ts", "marker": "management server rejects attacker-controlled Host headers even when Origin matches" }
       ]
     }
   ]

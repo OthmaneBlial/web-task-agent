@@ -46,6 +46,23 @@ export function requireLoopbackManagementHost(rawHost: string): "127.0.0.1" | ":
   );
 }
 
+function isLoopbackManagementHostHeader(rawHost: string | undefined): boolean {
+  if (!rawHost) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(`http://${rawHost}`);
+    if (parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+      return false;
+    }
+    requireLoopbackManagementHost(parsed.hostname);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function formatManagementServerUrl(host: "127.0.0.1" | "::1", port: number): string {
   return host === "::1" ? `http://[::1]:${port}` : `http://${host}:${port}`;
 }
@@ -958,6 +975,11 @@ function dashboardHtml(): string {
 export function createManagementServer(options?: ManagementServerOptions): http.Server {
   return http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
+      if (!isLoopbackManagementHostHeader(req.headers.host)) {
+        sendApiError(res, 403, "forbidden_host", "Management requests must use a loopback host");
+        return;
+      }
+
       const method = req.method ?? "GET";
       const parsedUrl = new URL(req.url ?? "/", "http://127.0.0.1");
 
