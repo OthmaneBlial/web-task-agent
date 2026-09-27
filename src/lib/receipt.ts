@@ -9,7 +9,7 @@ import {
 import fs from "node:fs";
 import path from "node:path";
 
-import { ensureDir, writeJsonAtomic } from "./cache";
+import { ensureDir, writeJsonAtomic, writeTextAtomic } from "./cache";
 import {
   requireDecisionReceiptAdapterResult,
   type AdapterOrigin,
@@ -229,18 +229,7 @@ function writeImportedSnapshot(rootDir: string, relativePath: string, content: s
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
 
-  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
-  const descriptor = fs.openSync(filePath, flags, 0o600);
-  try {
-    const stats = fs.fstatSync(descriptor);
-    if (!stats.isFile() || stats.nlink > 1) {
-      throw new Error(`refusing unsafe receipt snapshot file: ${relativePath}`);
-    }
-    fs.ftruncateSync(descriptor, 0);
-    fs.writeFileSync(descriptor, content, "utf8");
-  } finally {
-    fs.closeSync(descriptor);
-  }
+  writeTextAtomic(filePath, content, { mode: 0o600 });
   return filePath;
 }
 

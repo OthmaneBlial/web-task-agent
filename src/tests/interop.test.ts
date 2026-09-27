@@ -148,6 +148,22 @@ test("receipt import never writes snapshots through package symlinks or hard lin
   }
 });
 
+test("receipt imports store snapshots with private file permissions", () => {
+  if (process.platform === "win32") return;
+  const result = JSON.parse(fs.readFileSync(path.join(process.cwd(), "examples", "interop", "browser-use-result.json"), "utf8")) as DecisionReceiptAdapterResult;
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-interop-private-"));
+
+  try {
+    const imported = importExternalDecisionResult({ result, outputDir });
+    for (const snapshotPath of imported.snapshotPaths) {
+      assert.equal(fs.statSync(snapshotPath).mode & 0o777, 0o600);
+    }
+    assert.equal(verifyReceiptDirectory(outputDir).valid, true);
+  } finally {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  }
+});
+
 test("checked-in interop fixture remains verifiable", () => {
   const verification = verifyReceiptDirectory(path.join(process.cwd(), "examples", "interop", "imported-receipt"));
   assert.equal(verification.valid, true, verification.errors.join("; "));

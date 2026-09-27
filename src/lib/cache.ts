@@ -26,12 +26,12 @@ export function buildCachePath(task: string, runId: string, customDir?: string):
   return path.join(dir, `${task}_run_${runId}.json`);
 }
 
-export function writeTextAtomic(filePath: string, contents: string): void {
+export function writeTextAtomic(filePath: string, contents: string, options: { mode?: number } = {}): void {
   ensureDir(path.dirname(filePath));
   const tempPath = `${filePath}.${randomUUID()}.tmp`;
 
   try {
-    fs.writeFileSync(tempPath, contents, { encoding: "utf8", flag: "wx" });
+    fs.writeFileSync(tempPath, contents, { encoding: "utf8", flag: "wx", mode: options.mode });
     fs.renameSync(tempPath, filePath);
   } catch (error) {
     try {
