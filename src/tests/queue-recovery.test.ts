@@ -8,8 +8,10 @@ import { DatabaseSync } from "node:sqlite";
 import { createOrResumeState, saveTaskState } from "../lib/cache";
 import {
   claimNextQueuedJob,
+  completeQueuedJob,
   controlQueuedJob,
   enqueueQueuedAgentJob,
+  failQueuedJob,
   getQueuedJobSummary,
   recoverStaleQueuedJobs
 } from "../lib/job-queue";
@@ -384,6 +386,55 @@ test("worker skips and preserves queued jobs with malformed payloads", () => {
     assert.equal(malformedRow?.status, "failed");
     assert.equal(malformedRow?.payload_json, "{not json");
     assert.match(String(malformedRow?.last_error), /preserved/i);
+  } finally {
+    db?.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("successful manual retries clear the previous queue error", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-retry-success-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  let db: DatabaseSync | null = null;
+
+  try {
+    const queued = enqueueQueuedAgentJob({
+      databasePath,
+      maxAttempts: 1,
+      payload: {
+        taskType: "agent",
+        mode: "agent",
+        label: "Retry success test",
+        options: { instruction: "succeed on retry", resume: false }
+      }
+    });
+    assert.ok(claimNextQueuedJob({ databasePath, workerId: "worker-first", leaseTtlSeconds: 60 }));
+    failQueuedJob({
+      databasePath,
+      queueId: queued.queueId,
+      workerId: "worker-first",
+      errorMessage: "first attempt failed"
+    });
+    assert.equal(
+      controlQueuedJob({ databasePath, queueId: queued.queueId, action: "retry" })?.lastError,
+      "first attempt failed"
+    );
+
+    db = new DatabaseSync(databasePath);
+    db.prepare("UPDATE queued_jobs SET run_after = ? WHERE id = ?")
+      .run("2000-01-01T00:00:00.000Z", queued.queueId);
+    assert.ok(claimNextQueuedJob({ databasePath, workerId: "worker-retry", leaseTtlSeconds: 60 }));
+    completeQueuedJob({
+      databasePath,
+      queueId: queued.queueId,
+      workerId: "worker-retry",
+      result: { status: "completed" }
+    });
+
+    const row = db.prepare("SELECT status, last_error FROM queued_jobs WHERE id = ?")
+      .get(queued.queueId) as Record<string, unknown> | undefined;
+    assert.equal(row?.status, "completed");
+    assert.equal(row?.last_error, null);
   } finally {
     db?.close();
     fs.rmSync(tempDir, { recursive: true, force: true });

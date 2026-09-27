@@ -765,6 +765,7 @@ export function completeQueuedJob(input: {
     SET
       status = 'completed',
       result_json = ?,
+      last_error = NULL,
       control_action = NULL,
       control_requested_at = NULL,
       leased_by = NULL,
