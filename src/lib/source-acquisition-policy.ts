@@ -145,7 +145,7 @@ export class SourceAcquisitionPolicy {
   private readonly resolveHostname: (hostname: string) => Promise<Array<{ address: string; family: number }>>;
   private readonly now: () => number;
   private readonly sleep: (milliseconds: number) => Promise<void>;
-  private readonly robotsByOrigin = new Map<string, string | null>();
+  private readonly robotsByOrigin = new Map<string, Promise<{ text: string | null; unavailable: boolean }>>();
   private readonly nextRequestAt = new Map<string, number>();
   private readonly requestsByDomain = new Map<string, number>();
 
@@ -167,38 +167,35 @@ export class SourceAcquisitionPolicy {
     this.sleep = options.sleep ?? defaultSleep;
   }
 
-  private async getRobots(origin: string): Promise<{ text: string | null; unavailable: boolean }> {
-    if (this.robotsByOrigin.has(origin)) {
-      const cached = this.robotsByOrigin.get(origin) ?? null;
-      return { text: cached, unavailable: cached === null };
-    }
-    const robotsUrl = `${origin}/robots.txt`;
-    try {
-      const response = await this.fetchRobots(robotsUrl, {
-        headers: { "user-agent": this.userAgent, accept: "text/plain,*/*;q=0.1" },
-        redirect: "manual",
-        signal: AbortSignal.timeout(5_000)
-      });
-      if (!response.ok) {
-        this.robotsByOrigin.set(origin, null);
+  private getRobots(origin: string): Promise<{ text: string | null; unavailable: boolean }> {
+    const cached = this.robotsByOrigin.get(origin);
+    if (cached) return cached;
+
+    const robotsRequest = (async () => {
+      try {
+        const response = await this.fetchRobots(`${origin}/robots.txt`, {
+          headers: { "user-agent": this.userAgent, accept: "text/plain,*/*;q=0.1" },
+          redirect: "manual",
+          signal: AbortSignal.timeout(5_000)
+        });
+        if (!response.ok) return { text: null, unavailable: true };
+        return { text: await response.text(), unavailable: false };
+      } catch {
         return { text: null, unavailable: true };
       }
-      const text = await response.text();
-      this.robotsByOrigin.set(origin, text);
-      return { text, unavailable: false };
-    } catch {
-      this.robotsByOrigin.set(origin, null);
-      return { text: null, unavailable: true };
-    }
+    })();
+    this.robotsByOrigin.set(origin, robotsRequest);
+    return robotsRequest;
   }
 
   private async waitForDomainSlot(hostname: string): Promise<number> {
-    const scheduledAt = this.nextRequestAt.get(hostname) ?? 0;
-    const waitedMs = Math.max(0, scheduledAt - this.now());
+    const now = this.now();
+    const scheduledAt = Math.max(now, this.nextRequestAt.get(hostname) ?? now);
+    const waitedMs = scheduledAt - now;
+    this.nextRequestAt.set(hostname, scheduledAt + this.minDomainDelayMs);
     if (waitedMs > 0) {
       await this.sleep(waitedMs);
     }
-    this.nextRequestAt.set(hostname, this.now() + this.minDomainDelayMs);
     return waitedMs;
   }
 

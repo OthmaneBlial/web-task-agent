@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { evaluateRobotsText, SourceAcquisitionPolicy } from "../lib/source-acquisition-policy";
+import { evaluateRobotsText, SourceAcquisitionPolicy, type RobotsFetchResponse } from "../lib/source-acquisition-policy";
 
 const resolvePublicHostname = async () => [{ address: "93.184.216.34", family: 4 }];
 
@@ -56,6 +56,36 @@ test("source acquisition caches robots decisions and paces repeated domains", as
   assert.equal(robotsCalls, 1);
   assert.deepEqual(waits, [500]);
   assert.ok(second.signals.includes("domain_rate_limited"));
+});
+
+test("concurrent source acquisition coalesces robots requests and reserves paced domain slots", async () => {
+  let robotsCalls = 0;
+  const robotsResolvers: Array<(response: RobotsFetchResponse) => void> = [];
+  const waits: number[] = [];
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 500,
+    now: () => 1_000,
+    sleep: async (milliseconds) => { waits.push(milliseconds); },
+    fetchRobots: async () => {
+      robotsCalls += 1;
+      return new Promise<RobotsFetchResponse>((resolve) => robotsResolvers.push(resolve));
+    },
+    resolveHostname: resolvePublicHostname
+  });
+
+  const pending = ["one", "two", "three"].map((path) =>
+    policy.prepare(`https://docs.example.com/${path}`)
+  );
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  for (const resolveRobots of robotsResolvers) {
+    resolveRobots({ ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" });
+  }
+  const decisions = await Promise.all(pending);
+
+  assert.equal(robotsCalls, 1);
+  assert.deepEqual(waits.sort((left, right) => left - right), [500, 1_000]);
+  assert.deepEqual(decisions.map(({ waitedMs }) => waitedMs).sort((left, right) => left - right), [0, 500, 1_000]);
+  assert.ok(decisions.every(({ action }) => action === "allow"));
 });
 
 test("source acquisition denies known robots exclusions and records unavailable robots", async () => {

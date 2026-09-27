@@ -87,7 +87,7 @@
     "generate:reviewer-study": "npm run build:receipt-core && node scripts/generate-reviewer-study.mjs",
     "study:reviewer": "node scripts/reviewer-study.mjs",
     "security:baseline": "node scripts/security-review-baseline.mjs",
-    "security:review": "npm run build && npm run security:baseline && node --test dist/tests/receipt-core.test.js dist/tests/interop.test.js dist/tests/web-verifier.test.js dist/tests/demo.test.js dist/tests/source-policy.test.js dist/tests/direct-source.test.js dist/tests/publication-secret-audit.test.js dist/tests/mcp.test.js dist/tests/reviewer-study-web.test.js dist/tests/management-server-security.test.js && npm run test:conformance && npm run audit:secrets && npm run audit:prod",
+    "security:review": "npm run build && npm run security:baseline && node --test dist/tests/receipt-core.test.js dist/tests/interop.test.js dist/tests/web-verifier.test.js dist/tests/demo.test.js dist/tests/source-policy.test.js dist/tests/source-acquisition-policy.test.js dist/tests/direct-source.test.js dist/tests/publication-secret-audit.test.js dist/tests/mcp.test.js dist/tests/reviewer-study-web.test.js dist/tests/management-server-security.test.js && npm run test:conformance && npm run audit:secrets && npm run audit:prod",
     "test:conformance": "npm run build:receipt-core && node scripts/run-receipt-conformance.mjs && node scripts/run-schema-conformance.mjs",
     "generate:interop": "npm run build && node scripts/generate-interop-fixture.mjs && node scripts/generate-authentic-interop.mjs",
     "generate:docs": "node scripts/sync-docs.mjs",
