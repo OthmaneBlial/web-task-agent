@@ -1,4 +1,4 @@
-import { isIP } from "node:net";
+import { BlockList, isIP, SocketAddress } from "node:net";
 
 export interface SourcePolicyDecision {
   action: "allow" | "deny";
@@ -17,6 +17,41 @@ function normalizeDomain(value: string): string {
 
 function isDomainMatch(hostname: string, domain: string): boolean {
   return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
+const IPV6_GLOBAL_UNICAST = new BlockList();
+IPV6_GLOBAL_UNICAST.addSubnet("2000::", 3, "ipv6");
+
+const IPV4_MAPPED_IPV6 = new BlockList();
+IPV4_MAPPED_IPV6.addSubnet("::ffff:0:0", 96, "ipv6");
+
+const IPV6_NOT_GLOBALLY_REACHABLE = new BlockList();
+for (const [network, prefix] of [
+  ["100::", 64],
+  ["100:0:0:1::", 64],
+  ["2001::", 23],
+  ["2001:2::", 48],
+  ["2001:db8::", 32],
+  ["2002::", 16],
+  ["3fff::", 20],
+  ["5f00::", 16],
+  ["fc00::", 7],
+  ["fe80::", 10]
+] as const) {
+  IPV6_NOT_GLOBALLY_REACHABLE.addSubnet(network, prefix, "ipv6");
+}
+
+const IPV6_GLOBALLY_REACHABLE_SPECIAL = new BlockList();
+for (const [network, prefix] of [
+  ["2001:1::1", 128],
+  ["2001:1::2", 128],
+  ["2001:1::3", 128],
+  ["2001:3::", 32],
+  ["2001:4:112::", 48],
+  ["2001:20::", 28],
+  ["2001:30::", 28]
+] as const) {
+  IPV6_GLOBALLY_REACHABLE_SPECIAL.addSubnet(network, prefix, "ipv6");
 }
 
 function normalizeIpAddress(value: string): string {
@@ -47,6 +82,19 @@ function isPublicIpv4(address: string): boolean {
 }
 
 function isPublicIpv6(address: string): boolean {
+  if (IPV4_MAPPED_IPV6.check(address, "ipv6")) {
+    const normalizedAddress = new SocketAddress({ address, family: "ipv6" }).address.toLowerCase();
+    return normalizedAddress.startsWith("::ffff:") && isPublicIpv4(normalizedAddress.slice("::ffff:".length));
+  }
+
+  if (!IPV6_GLOBAL_UNICAST.check(address, "ipv6")) return false;
+  if (
+    IPV6_NOT_GLOBALLY_REACHABLE.check(address, "ipv6") &&
+    !IPV6_GLOBALLY_REACHABLE_SPECIAL.check(address, "ipv6")
+  ) {
+    return false;
+  }
+
   if (address === "::" || address === "::1") return false;
 
   const ipv4Tail = address.match(/(?:^|:)(\d+\.\d+\.\d+\.\d+)$/)?.[1];

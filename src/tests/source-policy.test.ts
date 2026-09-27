@@ -50,6 +50,30 @@ test("public-address classifier rejects private, reserved, and documentation ran
   assert.equal(isPublicInternetAddress("2606:2800:220:1:248:1893:25c8:1946"), true);
 });
 
+test("IPv6 range checks handle alternate notation and preserve globally reachable special allocations", () => {
+  for (const address of [
+    "2001::1",
+    "2001:0::1",
+    "2001:0000::1",
+    "2001:2::1",
+    "2001:0002::1",
+    "100::1",
+    "3fff::1",
+    "5f00::1",
+    "0:0:0:0:0:0:0:1"
+  ]) {
+    assert.equal(isPublicInternetAddress(address), false, address);
+    assert.equal(evaluateSourceUrlPolicy(`https://[${address}]/`).action, "deny", address);
+  }
+
+  for (const address of ["2001:1::1", "2001:1::2", "2001:1::3", "2001:3::1", "2001:4:112::1", "2001:20::1", "2001:30::1"]) {
+    assert.equal(isPublicInternetAddress(address), true, address);
+  }
+
+  assert.equal(isPublicInternetAddress("::ffff:93.184.216.34"), true);
+  assert.equal(isPublicInternetAddress("::ffff:c0a8:101"), false);
+});
+
 test("source policy supports explicit allow and block domain controls", () => {
   assert.equal(
     evaluateSourceUrlPolicy("https://evil.example.com", { blockedDomains: ["example.com"] }).action,
