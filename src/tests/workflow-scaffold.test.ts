@@ -28,6 +28,37 @@ test("workflow scaffold creates a reviewable definition, example, and test plan"
   }
 });
 
+test("forced workflow scaffold replaces an output symlink without following it", (context) => {
+  if (process.platform === "win32") {
+    context.skip("file symlink creation may require elevated privileges on Windows");
+    return;
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-scaffold-link-"));
+  const outputDir = path.join(tempDir, "output");
+  const proposalDir = path.join(outputDir, "developer-tool-review");
+  const victimPath = path.join(tempDir, "protected.json");
+
+  try {
+    fs.mkdirSync(proposalDir, { recursive: true });
+    fs.writeFileSync(victimPath, "keep this file", "utf8");
+    fs.symlinkSync(victimPath, path.join(proposalDir, "workflow.json"));
+
+    const written = writeWorkflowProposalScaffold({
+      id: "Developer Tool Review",
+      title: "Developer Tool Review",
+      category: "Validation",
+      outputDir,
+      force: true
+    });
+
+    assert.equal(fs.readFileSync(victimPath, "utf8"), "keep this file");
+    assert.equal(fs.lstatSync(written.definitionPath).isSymbolicLink(), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("workflow proposal validation requires a complete, reviewable source and risk contract", () => {
   const valid = validateWorkflowProposalDefinition({
     id: "developer-tool-review",
