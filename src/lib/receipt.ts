@@ -195,6 +195,54 @@ function readReceiptFile(rootDir: string, relativePath: string): Buffer | null {
   }
 }
 
+function ensureImportSnapshotDirectory(rootDir: string, directoryParts: string[]): string {
+  let current = rootDir;
+  for (const part of directoryParts) {
+    current = path.join(current, part);
+    try {
+      const stats = fs.lstatSync(current);
+      if (stats.isSymbolicLink() || !stats.isDirectory()) {
+        throw new Error(`refusing unsafe receipt import directory: ${current}`);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      fs.mkdirSync(current);
+    }
+  }
+  return current;
+}
+
+function writeImportedSnapshot(rootDir: string, relativePath: string, content: string): string {
+  if (!isSafeRelativeReceiptPath(relativePath)) {
+    throw new Error(`refusing unsafe receipt snapshot path: ${relativePath}`);
+  }
+  const parts = relativePath.split("/");
+  const fileName = parts.pop()!;
+  const directory = ensureImportSnapshotDirectory(rootDir, parts);
+  const filePath = path.join(directory, fileName);
+  try {
+    const stats = fs.lstatSync(filePath);
+    if (stats.isSymbolicLink() || !stats.isFile()) {
+      throw new Error(`refusing unsafe receipt snapshot file: ${relativePath}`);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
+  const descriptor = fs.openSync(filePath, flags, 0o600);
+  try {
+    if (!fs.fstatSync(descriptor).isFile()) {
+      throw new Error(`refusing unsafe receipt snapshot file: ${relativePath}`);
+    }
+    fs.ftruncateSync(descriptor, 0);
+    fs.writeFileSync(descriptor, content, "utf8");
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  return filePath;
+}
+
 export interface FixtureReceiptInput {
   id: string;
   title: string;
@@ -341,10 +389,20 @@ export function importExternalDecisionResult(input: {
   force?: boolean;
 }): ImportedReceiptPaths {
   const outputDir = path.resolve(input.outputDir);
-  if (fs.existsSync(outputDir) && !input.force && fs.readdirSync(outputDir).length > 0) {
-    throw new Error(`refusing to overwrite non-empty import directory: ${outputDir}; pass --force to replace it.`);
+  if (fs.existsSync(outputDir)) {
+    const stats = fs.lstatSync(outputDir);
+    if (stats.isSymbolicLink() || !stats.isDirectory()) {
+      throw new Error(`refusing unsafe receipt import directory: ${outputDir}`);
+    }
+    if (!input.force && fs.readdirSync(outputDir).length > 0) {
+      throw new Error(`refusing to overwrite non-empty import directory: ${outputDir}; pass --force to replace it.`);
+    }
   }
   ensureDir(outputDir);
+  const outputStats = fs.lstatSync(outputDir);
+  if (outputStats.isSymbolicLink() || !outputStats.isDirectory()) {
+    throw new Error(`refusing unsafe receipt import directory: ${outputDir}`);
+  }
   const result = normalizeExternalResult(input.result);
   if (!result || typeof result.title !== "string" || !result.title.trim()) {
     throw new Error("external result title is required");
@@ -371,9 +429,8 @@ export function importExternalDecisionResult(input: {
     const excerpt = typeof source.excerpt === "string" ? source.excerpt.trim() : "";
     let snapshotPath: string | null = null;
     if (excerpt) {
-      snapshotPath = path.join(outputDir, "evidence", "snapshots", `${String(index + 1).padStart(2, "0")}-${id}.md`);
-      ensureDir(path.dirname(snapshotPath));
-      fs.writeFileSync(snapshotPath, `# ${source.title}\n\n${excerpt}\n`, "utf8");
+      const relativeSnapshotPath = `evidence/snapshots/${String(index + 1).padStart(2, "0")}-${id}.md`;
+      snapshotPath = writeImportedSnapshot(outputDir, relativeSnapshotPath, `# ${source.title}\n\n${excerpt}\n`);
       snapshotPaths.push(snapshotPath);
     }
     return {

@@ -53,6 +53,46 @@ test("interop adapter preserves the source boundary", () => {
   }
 });
 
+test("receipt import never writes snapshots through package symlinks", () => {
+  if (process.platform === "win32") return;
+  const input = JSON.parse(fs.readFileSync(path.join(process.cwd(), "examples", "interop", "browser-use-result.json"), "utf8")) as DecisionReceiptAdapterResult;
+  const firstSource = input.sources[0]!;
+  const sourceId = (firstSource.id || firstSource.title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "source-1";
+  const snapshotName = `01-${sourceId}.md`;
+
+  for (const linkPath of ["evidence", "evidence/snapshots", `evidence/snapshots/${snapshotName}`]) {
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-interop-symlink-"));
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-interop-outside-"));
+    try {
+      const link = path.join(outputDir, linkPath);
+      fs.mkdirSync(path.dirname(link), { recursive: true });
+      if (linkPath.endsWith(".md")) {
+        const victim = path.join(outsideDir, "victim.md");
+        fs.writeFileSync(victim, "keep this file unchanged", "utf8");
+        fs.symlinkSync(victim, link, "file");
+      } else {
+        fs.symlinkSync(outsideDir, link, "dir");
+      }
+
+      assert.throws(
+        () => importExternalDecisionResult({ result: input, outputDir, force: true }),
+        /symbolic link|symlink|unsafe|regular file|receipt artifact/
+      );
+      if (linkPath.endsWith(".md")) {
+        assert.equal(fs.readFileSync(path.join(outsideDir, "victim.md"), "utf8"), "keep this file unchanged");
+      } else {
+        assert.deepEqual(fs.readdirSync(outsideDir), []);
+      }
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
+  }
+});
+
 test("checked-in interop fixture remains verifiable", () => {
   const verification = verifyReceiptDirectory(path.join(process.cwd(), "examples", "interop", "imported-receipt"));
   assert.equal(verification.valid, true, verification.errors.join("; "));
