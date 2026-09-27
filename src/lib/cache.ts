@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -27,9 +28,19 @@ export function buildCachePath(task: string, runId: string, customDir?: string):
 
 export function writeJsonAtomic(filePath: string, payload: unknown): void {
   ensureDir(path.dirname(filePath));
-  const tempPath = `${filePath}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), "utf8");
-  fs.renameSync(tempPath, filePath);
+  const tempPath = `${filePath}.${randomUUID()}.tmp`;
+
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), { encoding: "utf8", flag: "wx" });
+    fs.renameSync(tempPath, filePath);
+  } catch (error) {
+    try {
+      fs.unlinkSync(tempPath);
+    } catch {
+      // Keep the original write or rename error.
+    }
+    throw error;
+  }
 }
 
 export function saveTaskState<T extends { runId: string }>(
