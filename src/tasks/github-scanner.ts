@@ -68,6 +68,31 @@ function defaultReportPath(runId: string): string {
   return path.join(process.cwd(), "reports", `github-report-${runId}.md`);
 }
 
+export function normalizeGitHubSearchUrl(rawUrl: string, baseUrl?: string): string | null {
+  try {
+    const parsed = new URL(rawUrl, baseUrl);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.hostname !== "github.com" ||
+      parsed.port ||
+      parsed.username ||
+      parsed.password ||
+      !["/search", "/search/"].includes(parsed.pathname)
+    ) {
+      return null;
+    }
+
+    if (baseUrl) {
+      const base = new URL(baseUrl);
+      if (parsed.origin !== base.origin || parsed.pathname !== base.pathname) return null;
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 function buildInitialState(options: GitHubScannerOptions): GitHubScannerState {
   const runId = createRunId();
   return {
@@ -267,6 +292,13 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
       return false;
     }
 
+    const currentUrl = await getCurrentUrl(client);
+    const safeExpectedUrl = normalizeGitHubSearchUrl(expectedNextUrl, currentUrl);
+    if (!safeExpectedUrl) {
+      this.log("stopping pagination because the next URL left the current GitHub search");
+      return false;
+    }
+
     const queries = ["a[rel=\"next\"]", "a[aria-label*=\"Next\"]", "Next"];
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -277,7 +309,8 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
         for (const query of queries) {
           await scrollElementIntoView(client, query);
           const located = await locateElement(client, query);
-          if (located.status === "ok" && !located.disabled) {
+          const locatedUrl = located.href ? normalizeGitHubSearchUrl(located.href, currentUrl) : null;
+          if (located.status === "ok" && !located.disabled && locatedUrl === safeExpectedUrl) {
             selectedQuery = query;
             break;
           }
@@ -287,20 +320,22 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
           throw new Error("pagination next button was not found");
         }
 
-        const currentUrl = await getCurrentUrl(client);
         await humanClick(client, selectedQuery);
 
         try {
           await waitForLocationChange(client, currentUrl, 12_000);
         } catch {
           const current = await getCurrentUrl(client);
-          if (current !== expectedNextUrl && current === currentUrl) {
+          if (current !== safeExpectedUrl && current === currentUrl) {
             throw new Error("next button click did not change the URL");
           }
         }
 
         await waitForLoadEvent(client, 20_000);
         await waitForNetworkIdle(client, { timeoutMs: 20_000, idleTimeMs: 900 });
+        if (normalizeGitHubSearchUrl(await getCurrentUrl(client), currentUrl) !== safeExpectedUrl) {
+          throw new Error("next button navigated outside the validated GitHub search URL");
+        }
         return true;
       } catch (error) {
         const screenshotPath = `/tmp/github-next-failure-${Date.now()}-${attempt}.png`;
@@ -345,13 +380,24 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
   }
 
   async run(): Promise<GitHubTaskResult> {
+    const requestedSearchUrl = normalizeGitHubSearchUrl(this.options.url);
+    if (!requestedSearchUrl) {
+      throw new Error("GitHub scanner requires an HTTPS github.com/search URL");
+    }
+
     const { state, cachePath, resumed } = createOrResumeState<GitHubScannerState>({
       task: "github",
       resume: this.options.resume,
       cachePath: this.options.cachePath,
       cacheDir: this.options.cacheDir,
-      createInitialState: () => buildInitialState(this.options)
+      createInitialState: () => buildInitialState({ ...this.options, url: requestedSearchUrl })
     });
+
+    const initialSearchUrl = normalizeGitHubSearchUrl(state.input.url);
+    if (!initialSearchUrl) {
+      throw new Error("Saved GitHub run has an invalid search URL; start a new run with an HTTPS github.com/search URL");
+    }
+    state.input.url = initialSearchUrl;
 
     state.updatedAt = new Date().toISOString();
     saveTaskState("github", cachePath, state);
@@ -387,7 +433,13 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
         : `starting GitHub run for ${state.input.url}`
     );
 
-    const startUrl = state.completedPages > 0 ? state.nextPageUrl ?? state.lastPageUrl ?? state.input.url : state.input.url;
+    const startCandidate = state.completedPages > 0
+      ? state.nextPageUrl ?? state.lastPageUrl ?? state.input.url
+      : state.input.url;
+    const startUrl = normalizeGitHubSearchUrl(startCandidate, state.input.url);
+    if (!startUrl) {
+      throw new Error("Saved GitHub pagination URL left the original search page; start a new run");
+    }
     const client = await createPageSession(startUrl);
 
     try {
@@ -411,6 +463,17 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
             await this.waitForResults(client);
 
             const snapshot = await this.scrapeWithRetry(client, currentPage);
+            const safePageUrl = normalizeGitHubSearchUrl(snapshot.url, state.input.url);
+            if (!safePageUrl) {
+              throw new Error("GitHub navigation left the original search page");
+            }
+            snapshot.url = safePageUrl;
+            if (snapshot.nextPageUrl) {
+              snapshot.nextPageUrl = normalizeGitHubSearchUrl(snapshot.nextPageUrl, state.input.url);
+              if (!snapshot.nextPageUrl) {
+                this.log("stopping pagination because GitHub returned a URL outside the original search page");
+              }
+            }
             state.pages = [...state.pages.filter((page) => page.page !== snapshot.page), snapshot].sort(
               (left, right) => left.page - right.page
             );

@@ -425,7 +425,7 @@ Use "web-task-agent <command> --help" for the full option list.
   program
     .command("github")
     .description("Research GitHub repositories with the general-purpose browser scanner")
-    .requiredOption("--url <url>", "GitHub search URL to scan")
+    .requiredOption("--url <url>", "HTTPS github.com/search URL to scan")
     .option("--pages <number>", "Maximum number of pages to scrape", (value) => parsePositiveInteger(value, "pages"), 10)
     .requiredOption("--criteria <text>", "Claude evaluation criteria")
     .option("--resume", "Resume the latest cached GitHub run")
