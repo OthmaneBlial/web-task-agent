@@ -440,3 +440,24 @@ test("successful manual retries clear the previous queue error", () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test("queue summary closes its SQLite connection after every call", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-close-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const originalClose = DatabaseSync.prototype.close;
+  let closeCount = 0;
+  DatabaseSync.prototype.close = function trackClose() {
+    closeCount += 1;
+    originalClose.call(this);
+  };
+
+  try {
+    for (let index = 0; index < 20; index += 1) {
+      getQueuedJobSummary({ databasePath });
+    }
+    assert.equal(closeCount, 20);
+  } finally {
+    DatabaseSync.prototype.close = originalClose;
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
