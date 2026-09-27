@@ -66,7 +66,7 @@ test("browser fetcher blocks a redirect to a private address before connecting",
     },
     Fetch: {
       enable: async ({ patterns }: { patterns: Array<{ urlPattern: string; requestStage: string }> }) => {
-        assert.deepEqual(patterns.map(({ urlPattern }) => urlPattern), ["http://*/*", "https://*/*"]);
+        assert.deepEqual(patterns.map(({ urlPattern }) => urlPattern), ["*"]);
       },
       continueRequest: async ({ requestId }: { requestId: string }) => { continued.push(requestId); },
       failRequest: async ({ requestId, errorReason }: { requestId: string; errorReason: string }) => {

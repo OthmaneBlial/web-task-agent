@@ -117,10 +117,7 @@ async function installRequestPolicy(client: CDPClient, checkTarget: (url: string
   });
 
   await client.Fetch.enable({
-    patterns: [
-      { urlPattern: "http://*/*", requestStage: "Request" },
-      { urlPattern: "https://*/*", requestStage: "Request" }
-    ]
+    patterns: [{ urlPattern: "*", requestStage: "Request" }]
   });
 
   return { mainFrameDenial: () => denial, blockedMainFrame };
