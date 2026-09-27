@@ -104,6 +104,79 @@ function parseQueuedPayload(
   };
 }
 
+function parseStoredQueuedPayload(
+  value: unknown,
+  options?: { forceResume?: boolean }
+): QueuedAgentJobPayload | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(value);
+  } catch {
+    return null;
+  }
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const payloadOptions = record.options;
+  if (
+    record.taskType !== "agent" ||
+    (record.mode !== "agent" && record.mode !== "workflow") ||
+    typeof record.label !== "string" ||
+    !payloadOptions ||
+    typeof payloadOptions !== "object" ||
+    Array.isArray(payloadOptions) ||
+    typeof (payloadOptions as Record<string, unknown>).instruction !== "string" ||
+    typeof (payloadOptions as Record<string, unknown>).resume !== "boolean"
+  ) {
+    return null;
+  }
+
+  return parseQueuedPayload(payload, options);
+}
+
+function failInvalidStoredPayload(
+  db: DatabaseSync,
+  row: Record<string, unknown>,
+  timestamp: string,
+  staleBefore?: string
+): number {
+  const staleCondition = staleBefore
+    ? "AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?"
+    : "";
+  const result = db.prepare(`
+    UPDATE queued_jobs
+    SET
+      status = 'failed',
+      last_error = 'Stored payload is malformed; original payload preserved.',
+      control_action = NULL,
+      control_requested_at = NULL,
+      leased_by = NULL,
+      leased_at = NULL,
+      lease_expires_at = NULL,
+      updated_at = ?,
+      completed_at = ?
+    WHERE id = ?
+      AND status = ?
+      AND payload_json = ?
+      ${staleCondition}
+  `).run(
+    timestamp,
+    timestamp,
+    String(row.id ?? ""),
+    String(row.status ?? ""),
+    String(row.payload_json ?? ""),
+    ...(staleBefore ? [staleBefore] : [])
+  );
+  return Number(result.changes ?? 0);
+}
+
 function addSecondsToIso(input: string, seconds: number): string {
   return new Date(Date.parse(input) + seconds * 1000).toISOString();
 }
@@ -405,9 +478,14 @@ export function recoverStaleQueuedJobs(options?: {
 
   let recoveredCount = 0;
   for (const row of staleRows) {
-    const payload = parseQueuedPayload(row.payload_json, {
+    const payload = parseStoredQueuedPayload(row.payload_json, {
       forceResume: true
     });
+    if (!payload) {
+      failInvalidStoredPayload(db, { ...row, status: "running" }, timestamp, timestamp);
+      continue;
+    }
+
     const result = updateStatement.run(
       serializeJson(payload),
       timestamp,
@@ -439,6 +517,14 @@ export function controlQueuedJob(input: {
   }
 
   const job = mapQueuedJob(row);
+  const shouldRequeue =
+    (input.action === "resume" && job.status === "paused") ||
+    (input.action === "retry" && (job.status === "failed" || job.status === "cancelled"));
+  if (shouldRequeue && !parseStoredQueuedPayload(row.payload_json)) {
+    failInvalidStoredPayload(db, row, timestamp);
+    return getQueuedJob({ databasePath: input.databasePath, queueId: input.queueId });
+  }
+
   const payload = parseQueuedPayload(row.payload_json, {
     forceResume:
       input.action === "resume" ||
@@ -554,50 +640,56 @@ export function claimNextQueuedJob(input: {
 }): QueuedJobRecord | null {
   const { db } = getQueueDatabase(input.databasePath);
   const timestamp = nowIso();
-  const row = db.prepare(`
-    SELECT *
-    FROM queued_jobs
-    WHERE status = 'queued'
-      AND run_after <= ?
-    ORDER BY priority ASC, created_at ASC
-    LIMIT 1
-  `).get(timestamp) as Record<string, unknown> | undefined;
+  while (true) {
+    const row = db.prepare(`
+      SELECT *
+      FROM queued_jobs
+      WHERE status = 'queued'
+        AND run_after <= ?
+      ORDER BY priority ASC, created_at ASC
+      LIMIT 1
+    `).get(timestamp) as Record<string, unknown> | undefined;
 
-  if (!row) {
-    return null;
+    if (!row) {
+      return null;
+    }
+    if (!parseStoredQueuedPayload(row.payload_json)) {
+      failInvalidStoredPayload(db, row, timestamp);
+      continue;
+    }
+
+    const leaseExpiresAt = addSecondsToIso(timestamp, Math.max(60, input.leaseTtlSeconds));
+    const result = db.prepare(`
+      UPDATE queued_jobs
+      SET
+        status = 'running',
+        attempts = attempts + 1,
+        leased_by = ?,
+        leased_at = ?,
+        lease_expires_at = ?,
+        updated_at = ?
+      WHERE id = ?
+        AND status = 'queued'
+    `).run(
+      input.workerId,
+      timestamp,
+      leaseExpiresAt,
+      timestamp,
+      String(row.id)
+    );
+
+    if (Number(result.changes ?? 0) === 0) {
+      continue;
+    }
+
+    const claimed = db.prepare(`
+      SELECT *
+      FROM queued_jobs
+      WHERE id = ?
+    `).get(String(row.id)) as Record<string, unknown>;
+
+    return mapQueuedJob(claimed);
   }
-
-  const leaseExpiresAt = addSecondsToIso(timestamp, Math.max(60, input.leaseTtlSeconds));
-  const result = db.prepare(`
-    UPDATE queued_jobs
-    SET
-      status = 'running',
-      attempts = attempts + 1,
-      leased_by = ?,
-      leased_at = ?,
-      lease_expires_at = ?,
-      updated_at = ?
-    WHERE id = ?
-      AND status = 'queued'
-  `).run(
-    input.workerId,
-    timestamp,
-    leaseExpiresAt,
-    timestamp,
-    String(row.id)
-  );
-
-  if (Number(result.changes ?? 0) === 0) {
-    return null;
-  }
-
-  const claimed = db.prepare(`
-    SELECT *
-    FROM queued_jobs
-    WHERE id = ?
-  `).get(String(row.id)) as Record<string, unknown>;
-
-  return mapQueuedJob(claimed);
 }
 
 export function heartbeatQueuedJob(input: {

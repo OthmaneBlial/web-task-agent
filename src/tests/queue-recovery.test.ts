@@ -8,6 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createOrResumeState, saveTaskState } from "../lib/cache";
 import {
   claimNextQueuedJob,
+  controlQueuedJob,
   enqueueQueuedAgentJob,
   getQueuedJobSummary,
   recoverStaleQueuedJobs
@@ -186,6 +187,150 @@ test("queue recovery only restores truly stale running jobs", () => {
 
     assert.equal(staleRow?.status, "queued");
     assert.equal(activeRow?.status, "running");
+  } finally {
+    db?.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("queue recovery fails malformed payloads without overwriting them", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-recovery-invalid-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  let db: DatabaseSync | null = null;
+
+  try {
+    const queued = ["Valid recovery", "Malformed recovery"].map((label) =>
+      enqueueQueuedAgentJob({
+        databasePath,
+        payload: {
+          taskType: "agent",
+          mode: "agent",
+          label,
+          options: {
+            instruction: label,
+            resume: false
+          }
+        }
+      })
+    );
+    const claimed = [0, 1].map((index) =>
+      claimNextQueuedJob({
+        databasePath,
+        workerId: `worker-${index}`,
+        leaseTtlSeconds: 60
+      })
+    );
+    assert.ok(claimed[0]);
+    assert.ok(claimed[1]);
+
+    const malformedJob = claimed.find((job) => job?.payload.label === "Malformed recovery");
+    const validJob = claimed.find((job) => job?.payload.label === "Valid recovery");
+    assert.ok(malformedJob);
+    assert.ok(validJob);
+
+    db = new DatabaseSync(databasePath);
+    db.prepare(`
+      UPDATE queued_jobs
+      SET payload_json = '{not json', lease_expires_at = ?
+      WHERE id = ?
+    `).run("2000-01-01T00:00:00.000Z", malformedJob.queueId);
+    db.prepare(`
+      UPDATE queued_jobs
+      SET lease_expires_at = ?
+      WHERE id = ?
+    `).run("2000-01-01T00:00:00.000Z", validJob.queueId);
+
+    assert.equal(recoverStaleQueuedJobs({ databasePath }), 1);
+
+    const malformedRow = db.prepare(`
+      SELECT status, payload_json, last_error, lease_expires_at, completed_at
+      FROM queued_jobs
+      WHERE id = ?
+    `).get(malformedJob.queueId) as Record<string, unknown> | undefined;
+    assert.equal(malformedRow?.status, "failed");
+    assert.equal(malformedRow?.payload_json, "{not json");
+    assert.match(String(malformedRow?.last_error), /payload/i);
+    assert.equal(malformedRow?.lease_expires_at, null);
+    assert.ok(malformedRow?.completed_at);
+    assert.equal(
+      controlQueuedJob({ databasePath, queueId: malformedJob.queueId, action: "retry" })?.status,
+      "failed"
+    );
+    const payloadAfterRetry = db.prepare(`
+      SELECT payload_json
+      FROM queued_jobs
+      WHERE id = ?
+    `).get(malformedJob.queueId) as Record<string, unknown> | undefined;
+    assert.equal(payloadAfterRetry?.payload_json, "{not json");
+
+    const validRow = db.prepare(`
+      SELECT status
+      FROM queued_jobs
+      WHERE id = ?
+    `).get(validJob.queueId) as Record<string, unknown> | undefined;
+    assert.equal(validRow?.status, "queued");
+    const reclaimed = claimNextQueuedJob({
+      databasePath,
+      workerId: "worker-recovered",
+      leaseTtlSeconds: 60
+    });
+    assert.equal(reclaimed?.queueId, validJob.queueId);
+  } finally {
+    db?.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("worker skips and preserves queued jobs with malformed payloads", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-claim-invalid-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  let db: DatabaseSync | null = null;
+
+  try {
+    const malformed = enqueueQueuedAgentJob({
+      databasePath,
+      priority: 1,
+      payload: {
+        taskType: "agent",
+        mode: "agent",
+        label: "Malformed queued job",
+        options: { instruction: "must not run", resume: false }
+      }
+    });
+    const valid = enqueueQueuedAgentJob({
+      databasePath,
+      priority: 2,
+      payload: {
+        taskType: "agent",
+        mode: "agent",
+        label: "Valid queued job",
+        options: { instruction: "run this", resume: false }
+      }
+    });
+
+    db = new DatabaseSync(databasePath);
+    db.prepare(`
+      UPDATE queued_jobs
+      SET payload_json = '{not json'
+      WHERE id = ?
+    `).run(malformed.queueId);
+
+    const claimed = claimNextQueuedJob({
+      databasePath,
+      workerId: "worker-valid",
+      leaseTtlSeconds: 60
+    });
+    assert.equal(claimed?.queueId, valid.queueId);
+    assert.equal(claimed?.payload.options.instruction, "run this");
+
+    const malformedRow = db.prepare(`
+      SELECT status, payload_json, last_error
+      FROM queued_jobs
+      WHERE id = ?
+    `).get(malformed.queueId) as Record<string, unknown> | undefined;
+    assert.equal(malformedRow?.status, "failed");
+    assert.equal(malformedRow?.payload_json, "{not json");
+    assert.match(String(malformedRow?.last_error), /preserved/i);
   } finally {
     db?.close();
     fs.rmSync(tempDir, { recursive: true, force: true });
