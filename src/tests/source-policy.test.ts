@@ -52,6 +52,43 @@ test("public-address classifier rejects private, reserved, and documentation ran
   assert.equal(isPublicInternetAddress("2606:2800:220:1:248:1893:25c8:1946"), true);
 });
 
+test("IPv4 special-use CIDRs stay precise and keep globally reachable exceptions", () => {
+  for (const address of [
+    "192.0.0.1",
+    "192.0.0.170",
+    "192.0.2.255",
+    "192.88.99.2",
+    "198.18.0.1",
+    "198.19.255.255",
+    "198.51.100.0",
+    "198.51.100.255",
+    "203.0.113.0",
+    "203.0.113.255"
+  ]) {
+    assert.equal(isPublicInternetAddress(address), false, address);
+    assert.equal(evaluateSourceUrlPolicy(`https://${address}/`).action, "deny", address);
+  }
+
+  for (const address of [
+    "192.0.0.9",
+    "192.0.0.10",
+    "192.0.1.1",
+    "192.31.196.1",
+    "192.52.193.1",
+    "192.175.48.1",
+    "198.51.99.255",
+    "198.51.101.0",
+    "203.0.112.255",
+    "203.0.114.0"
+  ]) {
+    assert.equal(isPublicInternetAddress(address), true, address);
+    assert.equal(evaluateSourceUrlPolicy(`https://${address}/`).action, "allow", address);
+  }
+
+  assert.equal(isPublicInternetAddress("::ffff:192.0.0.9"), true);
+  assert.equal(isPublicInternetAddress("::ffff:c000:a"), true);
+});
+
 test("IPv6 range checks handle alternate notation and preserve globally reachable special allocations", () => {
   for (const address of [
     "2001::1",

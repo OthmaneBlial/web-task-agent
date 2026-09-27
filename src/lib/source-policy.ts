@@ -19,6 +19,34 @@ function isDomainMatch(hostname: string, domain: string): boolean {
   return hostname === domain || hostname.endsWith(`.${domain}`);
 }
 
+// IANA's IPv4 special-use prefixes, with its globally reachable 192.0.0.9 and
+// 192.0.0.10 exceptions below.
+const IPV4_NOT_GLOBALLY_REACHABLE = new BlockList();
+for (const [network, prefix] of [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.88.99.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4]
+] as const) {
+  IPV4_NOT_GLOBALLY_REACHABLE.addSubnet(network, prefix, "ipv4");
+}
+
+const IPV4_GLOBALLY_REACHABLE_SPECIAL = new BlockList();
+for (const address of ["192.0.0.9", "192.0.0.10"]) {
+  IPV4_GLOBALLY_REACHABLE_SPECIAL.addAddress(address, "ipv4");
+}
+
 const IPV6_GLOBAL_UNICAST = new BlockList();
 IPV6_GLOBAL_UNICAST.addSubnet("2000::", 3, "ipv6");
 
@@ -63,22 +91,8 @@ function isPublicIpv4(address: string): boolean {
   if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return false;
   const values = parts.map(Number);
   if (values.some((part) => part < 0 || part > 255)) return false;
-  const [first, second] = values;
-  if (
-    first === 0 ||
-    first === 10 ||
-    first === 127 ||
-    (first === 100 && second >= 64 && second <= 127) ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && (second === 0 || second === 168 || (second === 88 && values[2] === 99))) ||
-    (first === 198 && (second === 18 || second === 19 || second === 51)) ||
-    (first === 203 && second === 0) ||
-    first >= 224
-  ) {
-    return false;
-  }
-  return true;
+  return !IPV4_NOT_GLOBALLY_REACHABLE.check(address, "ipv4") ||
+    IPV4_GLOBALLY_REACHABLE_SPECIAL.check(address, "ipv4");
 }
 
 function isPublicIpv6(address: string): boolean {
