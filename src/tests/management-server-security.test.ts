@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 
 import {
   MAX_MANAGEMENT_REQUEST_BODY_BYTES,
@@ -47,6 +48,28 @@ test("management server sends browser hardening headers and rejects cross-origin
     assert.equal(rootResponse.headers.get("referrer-policy"), "no-referrer");
     assert.equal(rootResponse.headers.get("x-content-type-options"), "nosniff");
     assert.equal(rootResponse.headers.get("cross-origin-resource-policy"), "same-origin");
+
+    const html = await rootResponse.text();
+    const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+    assert.ok(script, "dashboard must include its inline renderer");
+    const pillStart = script.indexOf("function pill(text)");
+    const flashStart = script.indexOf("function flash(message", pillStart);
+    assert.ok(pillStart >= 0 && flashStart > pillStart, "dashboard HTML escaping helpers must be present");
+    const helpers = script.slice(pillStart, flashStart);
+    const hostileValue = `\"><svg onload='alert(1)'>`;
+    assert.equal(
+      runInNewContext(`${helpers}; pill(value)`, { value: hostileValue }),
+      "<span class=\"pill\">&quot;&gt;&lt;svg onload=&#39;alert(1)&#39;&gt;</span>"
+    );
+
+    const queueButtonsStart = script.indexOf("function queueActionButtons(item)");
+    const renderJobsStart = script.indexOf("function renderJobs()", queueButtonsStart);
+    assert.ok(queueButtonsStart >= 0 && renderJobsStart > queueButtonsStart);
+    const queueButtons = script.slice(queueButtonsStart, renderJobsStart);
+    assert.equal(
+      runInNewContext(`${helpers}; ${queueButtons}; queueActionButtons({ status: 'queued', queueId: value })`, { value: hostileValue }),
+      '<div class="action-stack"><button class="btn btn-warning" data-queue-action="pause" data-queue-id="&quot;&gt;&lt;svg onload=&#39;alert(1)&#39;&gt;">Pause</button><button class="btn btn-danger" data-queue-action="cancel" data-queue-id="&quot;&gt;&lt;svg onload=&#39;alert(1)&#39;&gt;">Cancel</button></div>'
+    );
 
     const forbiddenResponse = await fetch(`http://127.0.0.1:${bound.port}/api/health`, {
       method: "POST",

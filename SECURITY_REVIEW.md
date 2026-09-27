@@ -12,7 +12,7 @@ Review a named commit of `OthmaneBlial/web-task-agent`; do not review a moving b
 2. canonical JSON, integrity hashing, Ed25519 signing, and migration;
 3. ZIP expansion limits, root stripping, traversal/symlink assumptions, and receipt-relative paths;
 4. unsafe or credential-bearing source URLs and imported provider data;
-5. HTML escaping and untrusted text rendering in the CLI and browser verifier;
+5. HTML escaping and untrusted text rendering in the CLI, management dashboard, and browser verifier;
 6. secret exclusion, no-network verification, no telemetry, and local-only browser behavior.
 
 The local research runner, configured model providers, arbitrary authenticated browsing, and factual correctness of sources are outside the Decision Receipt security claim unless a reviewer explicitly expands the scope.
@@ -24,7 +24,7 @@ npm ci
 npm run security:review
 ```
 
-`security:review` builds the candidate, validates [`security/review-baseline.json`](security/review-baseline.json), runs the focused regression files for all six surfaces, runs both conformance suites, scans publishable files for secrets, and audits production dependencies. The baseline command prints the exact Git commit plus every evidence anchor and fails if a path, test marker, or scope entry drifts:
+`security:review` builds the candidate, validates [`security/review-baseline.json`](security/review-baseline.json), runs the focused regression files for all six surfaces (including the local management dashboard renderer), runs both conformance suites, scans publishable files for secrets, and audits production dependencies. The baseline command prints the exact Git commit plus every evidence anchor and fails if a path, test marker, or scope entry drifts:
 
 ```bash
 npm run security:baseline
@@ -42,7 +42,7 @@ Reviewers should also open the local verifier with network recording enabled, lo
 | Schema/runtime agreement | independent Ajv suite plus runtime conformance cases |
 | Tamper and signature failures | deterministic invalid hash and signature-mismatch cases |
 | Archive input | compressed, per-file, extracted-size, file-count, root, and traversal limits |
-| HTML and URL safety | escaping tests and public HTTPS credential-free URL policy |
+| HTML and URL safety | receipt, management-dashboard, and verifier escaping tests plus public HTTPS credential-free URL policy |
 | Secrets | publication scan over Git-tracked/publishable files and ignored local-state guards |
 | Local verifier | folder/ZIP fixtures, diff, keyboard/mobile checks, no persistent storage, offline-after-load manual QA |
 | External engines | two privacy-safe, unauthenticated imports with explicit limitations |

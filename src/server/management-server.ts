@@ -528,7 +528,7 @@ function dashboardHtml(): string {
     };
 
     function pill(text) {
-      return '<span class="pill">' + text + '</span>';
+      return '<span class="pill">' + escapeHtml(text) + '</span>';
     }
 
     function escapeHtml(text) {
@@ -536,7 +536,8 @@ function dashboardHtml(): string {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     function flash(message, tone) {
@@ -601,7 +602,7 @@ function dashboardHtml(): string {
         actions.push(['retry', 'Retry', 'btn-accent']);
       }
       return '<div class="action-stack">' + actions.map(([action, label, cls]) =>
-        '<button class="btn ' + cls + '" data-queue-action="' + action + '" data-queue-id="' + item.queueId + '">' + label + '</button>'
+        '<button class="btn ' + cls + '" data-queue-action="' + action + '" data-queue-id="' + escapeHtml(item.queueId) + '">' + label + '</button>'
       ).join('') + '</div>';
     }
 

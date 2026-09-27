@@ -51,7 +51,8 @@
       "title": "HTML escaping and untrusted browser rendering",
       "evidence": [
         { "path": "src/tests/demo.test.ts", "marker": "receipt HTML escapes untrusted fixture fields and refuses unsafe source protocols" },
-        { "path": "src/tests/web-verifier.test.ts", "marker": "local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe report controls" }
+        { "path": "src/tests/web-verifier.test.ts", "marker": "local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe report controls" },
+        { "path": "src/tests/management-server-security.test.ts", "marker": "management server sends browser hardening headers and rejects cross-origin posts" }
       ]
     },
     {
