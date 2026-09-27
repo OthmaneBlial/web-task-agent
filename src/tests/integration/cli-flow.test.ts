@@ -19,8 +19,8 @@ function runCli(args: string[], env: NodeJS.ProcessEnv, cwd: string = process.cw
   });
 }
 
-function createCompletedJob(databasePath: string, jobId: string): void {
-  new JobStore({
+function createCompletedJob(databasePath: string, jobId: string): JobStore {
+  return new JobStore({
     databasePath,
     jobId,
     taskType: "agent",
@@ -187,6 +187,42 @@ test("three decision packs write review-gated plans without starting browser or 
 
     assert.equal(fs.existsSync(path.join(tempDir, ".cache")), false);
     assert.equal(fs.existsSync(path.join(tempDir, "reports")), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("CLI file outputs preserve existing files unless force is explicit", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cli-output-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const env = { WEB_TASK_AGENT_DB_PATH: databasePath };
+  const planPath = path.join(tempDir, "plan.md");
+  const logsPath = path.join(tempDir, "logs.md");
+
+  try {
+    fs.writeFileSync(planPath, "keep this plan", "utf8");
+    const planArgs = ["pack", "plan", "validate-an-idea", "--topic", "safe output", "--output", planPath];
+    assert.throws(() => runCli(planArgs, env, tempDir));
+    assert.equal(fs.readFileSync(planPath, "utf8"), "keep this plan");
+    runCli([...planArgs, "--force"], env, tempDir);
+    assert.match(fs.readFileSync(planPath, "utf8"), /Topic: safe output/);
+
+    createCompletedJob(databasePath, "job_logs").appendRunEvent("log", "keep the existing evidence");
+    fs.writeFileSync(logsPath, "keep these logs", "utf8");
+    const logsArgs = ["job", "logs", "job_logs", "--output", logsPath];
+    assert.throws(() => runCli(logsArgs, env, tempDir));
+    assert.equal(fs.readFileSync(logsPath, "utf8"), "keep these logs");
+    runCli([...logsArgs, "--force"], env, tempDir);
+    assert.match(fs.readFileSync(logsPath, "utf8"), /keep the existing evidence/);
+
+    if (process.platform !== "win32") {
+      const victimPath = path.join(tempDir, "victim.md");
+      const linkPath = path.join(tempDir, "linked-output.md");
+      fs.writeFileSync(victimPath, "do not change this file", "utf8");
+      fs.symlinkSync(victimPath, linkPath, "file");
+      assert.throws(() => runCli([...planArgs.slice(0, -1), linkPath, "--force"], env, tempDir));
+      assert.equal(fs.readFileSync(victimPath, "utf8"), "do not change this file");
+    }
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

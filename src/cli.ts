@@ -133,6 +133,42 @@ function exportExtension(format: JobExportFormat): string {
   return format === "markdown" ? "md" : format;
 }
 
+function writeLocalOutput(outputPath: string, content: string, force: boolean): void {
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  try {
+    const stats = fs.lstatSync(outputPath);
+    if (stats.isSymbolicLink() || !stats.isFile()) {
+      throw new Error(`refusing unsafe output file: ${outputPath}`);
+    }
+    if (!force) throw new Error(`refusing to overwrite ${outputPath}; pass --force to replace it.`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const flags =
+    fs.constants.O_WRONLY |
+    fs.constants.O_CREAT |
+    (fs.constants.O_NOFOLLOW ?? 0) |
+    (fs.constants.O_NONBLOCK ?? 0) |
+    (force ? 0 : fs.constants.O_EXCL);
+  let descriptor: number;
+  try {
+    descriptor = fs.openSync(outputPath, flags, 0o666);
+  } catch (error) {
+    if (!force && (error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new Error(`refusing to overwrite ${outputPath}; pass --force to replace it.`);
+    }
+    throw error;
+  }
+  try {
+    if (!fs.fstatSync(descriptor).isFile()) throw new Error(`refusing unsafe output file: ${outputPath}`);
+    if (force) fs.ftruncateSync(descriptor, 0);
+    fs.writeFileSync(descriptor, content, "utf8");
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
 function writeLocalExport(input: {
   outputPath: string;
   content: string;
@@ -148,11 +184,7 @@ function writeLocalExport(input: {
     console.log(`  Destination: ${input.outputPath}`);
     return;
   }
-  if (fs.existsSync(input.outputPath) && !input.force) {
-    throw new Error(`refusing to overwrite ${input.outputPath}; pass --force to replace it.`);
-  }
-  fs.mkdirSync(path.dirname(input.outputPath), { recursive: true });
-  fs.writeFileSync(input.outputPath, input.content, "utf8");
+  writeLocalOutput(input.outputPath, input.content, input.force);
   console.log(`Local export written: ${input.outputPath}`);
 }
 
@@ -722,6 +754,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .option("--context <text>", "Optional business context or constraint")
     .option("--preset <name>", "Preset for generated workflow commands", "standard")
     .option("--output <path>", "Write the plan to a specific Markdown file")
+    .option("--force", "Replace an existing plan file")
     .option("--dry-run", "Print the review-gated plan and bounds without writing a file")
     .action((id, options) => {
       const definition = getDecisionPack(String(id));
@@ -734,8 +767,7 @@ Use "web-task-agent <command> --help" for the full option list.
         return;
       }
       const outputPath = options.output ? path.resolve(String(options.output)) : path.join(process.cwd(), "reports", "packs", definition.id, topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "topic", "plan.md");
-      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-      fs.writeFileSync(outputPath, `${content}\n`, "utf8");
+      writeLocalOutput(outputPath, `${content}\n`, Boolean(options.force));
       console.log("Review-gated decision pack plan created.");
       console.log(`Plan: ${outputPath}`);
       console.log("Next: preview or run only the first listed workflow, then review its evidence package before continuing.");
@@ -1158,6 +1190,7 @@ Use "web-task-agent <command> --help" for the full option list.
       50
     )
     .option("--output <path>", "Write the job log events to a file")
+    .option("--force", "Replace an existing job log file")
     .action((jobId, options) => {
       const events = listJobRunEvents({
         jobId: String(jobId),
@@ -1180,8 +1213,7 @@ Use "web-task-agent <command> --help" for the full option list.
 
       if (options.output) {
         const outputPath = path.resolve(String(options.output));
-        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-        fs.writeFileSync(outputPath, `${renderedLines.join("\n")}\n`, "utf8");
+        writeLocalOutput(outputPath, `${renderedLines.join("\n")}\n`, Boolean(options.force));
         console.log(`Wrote job logs to ${outputPath}`);
       } else {
         for (const line of renderedLines) {
