@@ -250,8 +250,11 @@ export class SourceAcquisitionPolicy {
     return null;
   }
 
-  async checkNetworkTarget(rawUrl: string): Promise<SourceAcquisitionDecision> {
-    const sourceDecision = evaluateSourceUrlPolicy(rawUrl);
+  async checkNetworkTarget(
+    rawUrl: string,
+    options?: { ignoreConfiguredAllowlist?: boolean }
+  ): Promise<SourceAcquisitionDecision> {
+    const sourceDecision = evaluateSourceUrlPolicy(rawUrl, options);
     if (sourceDecision.action === "deny") {
       return { ...sourceDecision, waitedMs: 0, domainRequestCount: null, domainRequestLimit: this.maxRequestsPerDomain };
     }

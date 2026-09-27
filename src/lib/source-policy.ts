@@ -9,6 +9,7 @@ export interface SourcePolicyDecision {
 export interface SourcePolicyOptions {
   blockedDomains?: readonly string[];
   allowedDomains?: readonly string[];
+  ignoreConfiguredAllowlist?: boolean;
 }
 
 function normalizeDomain(value: string): string {
@@ -173,7 +174,10 @@ export function evaluateSourceUrlPolicy(rawUrl: string, options: SourcePolicyOpt
   const blocked = [...(options.blockedDomains ?? []), ...configuredDomains(process.env.WEB_TASK_AGENT_BLOCKED_DOMAINS)].map(normalizeDomain).filter(Boolean);
   if (blocked.some((domain) => isDomainMatch(hostname, domain))) return { action: "deny", reason: "source policy denied configured blocked domain", signals: ["blocked_domain"] };
 
-  const allowed = [...(options.allowedDomains ?? []), ...configuredDomains(process.env.WEB_TASK_AGENT_ALLOWED_DOMAINS)].map(normalizeDomain).filter(Boolean);
+  const allowed = [
+    ...(options.allowedDomains ?? []),
+    ...(options.ignoreConfiguredAllowlist ? [] : configuredDomains(process.env.WEB_TASK_AGENT_ALLOWED_DOMAINS))
+  ].map(normalizeDomain).filter(Boolean);
   if (allowed.length > 0 && !allowed.some((domain) => isDomainMatch(hostname, domain))) return { action: "deny", reason: "source policy denied domain outside configured allowlist", signals: ["outside_allowlist"] };
 
   return { action: "allow", reason: "source policy allowed public HTTP(S) URL", signals: ["public_http_url"] };

@@ -5,6 +5,8 @@ import { promisify } from "node:util";
 
 import CDP = require("chrome-remote-interface");
 
+import { SourceAcquisitionPolicy } from "./source-acquisition-policy";
+import type { SourceAcquisitionDecision } from "./source-acquisition-policy";
 import type {
   CDPClient,
   LocatedElement,
@@ -30,6 +32,17 @@ export interface CdpBackendStatus {
 
 type LightpandaCommandAction = "start" | "restart";
 type LightpandaCommandRunner = (action: LightpandaCommandAction) => Promise<void>;
+
+export interface CreatePageSessionOptions {
+  userAgent?: string;
+  requestTargetPolicy?: (url: string) => Promise<SourceAcquisitionDecision>;
+  onMainFrameBlocked?: (decision: SourceAcquisitionDecision) => void;
+}
+
+export interface RequestPolicyGuard {
+  mainFrameDenial: () => SourceAcquisitionDecision | null;
+  blockedMainFrame: Promise<SourceAcquisitionDecision>;
+}
 
 let lightpandaCommandRunner: LightpandaCommandRunner = async (action) => {
   if (!fs.existsSync(LIGHTPANDA_START_SCRIPT)) {
@@ -270,11 +283,76 @@ async function enableCoreDomains(client: CDPClient): Promise<void> {
   await client.Network.enable();
 }
 
+export async function installRequestPolicy(
+  client: CDPClient,
+  checkTarget: (url: string) => Promise<SourceAcquisitionDecision>,
+  onMainFrameBlocked?: (decision: SourceAcquisitionDecision) => void
+): Promise<RequestPolicyGuard> {
+  let mainFrameId: string | undefined;
+  let denial: SourceAcquisitionDecision | null = null;
+  let resolveBlockedMainFrame!: (decision: SourceAcquisitionDecision) => void;
+  const blockedMainFrame = new Promise<SourceAcquisitionDecision>((resolve) => {
+    resolveBlockedMainFrame = resolve;
+  });
+
+  client.on("Fetch.requestPaused", async (event: {
+    requestId: string;
+    request: { url: string };
+    frameId: string;
+    resourceType: string;
+  }) => {
+    const mainDocument = event.resourceType === "Document" &&
+      (mainFrameId === undefined || event.frameId === mainFrameId);
+    if (mainDocument && mainFrameId === undefined) mainFrameId = event.frameId;
+
+    let decision: SourceAcquisitionDecision;
+    try {
+      decision = await checkTarget(event.request.url);
+    } catch {
+      decision = {
+        action: "deny",
+        reason: "source acquisition could not validate browser request target",
+        signals: ["request_target_validation_failed", "human_review_required"],
+        waitedMs: 0
+      };
+    }
+
+    try {
+      if (decision.action === "deny") {
+        if (mainDocument && !denial) {
+          denial = decision;
+          resolveBlockedMainFrame(decision);
+          try {
+            onMainFrameBlocked?.(decision);
+          } catch {
+            // A reporting callback must not leave the browser request paused.
+          }
+        }
+        await client.Fetch.failRequest({ requestId: event.requestId, errorReason: "BlockedByClient" });
+      } else {
+        await client.Fetch.continueRequest({ requestId: event.requestId });
+      }
+    } catch {
+      try {
+        await client.Fetch.failRequest({ requestId: event.requestId, errorReason: "BlockedByClient" });
+      } catch {
+        // The browser may close the session while a request is being denied.
+      }
+    }
+  });
+
+  await client.Fetch.enable({
+    patterns: [{ urlPattern: "*", requestStage: "Request" }]
+  });
+
+  return { mainFrameDenial: () => denial, blockedMainFrame };
+}
+
 /**
  * Create a new CDP session by connecting directly to the Lightpanda WebSocket.
  * Each call creates an independent page context.
  */
-export async function createPageSession(url?: string, options?: { userAgent?: string }): Promise<CDPClient> {
+export async function createPageSession(url?: string, options?: CreatePageSessionOptions): Promise<CDPClient> {
   await ensureDebuggerReady();
 
   const versionResp = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
@@ -355,6 +433,14 @@ export async function createPageSession(url?: string, options?: { userAgent?: st
   if (options?.userAgent) {
     await proxyClient.Network.setUserAgentOverride({ userAgent: options.userAgent });
   }
+
+  const acquisitionPolicy = options?.requestTargetPolicy ? null : new SourceAcquisitionPolicy();
+  await installRequestPolicy(
+    proxyClient,
+    options?.requestTargetPolicy ?? ((targetUrl) =>
+      acquisitionPolicy!.checkNetworkTarget(targetUrl, { ignoreConfiguredAllowlist: true })),
+    options?.onMainFrameBlocked
+  );
 
   if (url) {
     await proxyClient.Page.navigate({ url });

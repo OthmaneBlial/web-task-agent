@@ -98,7 +98,14 @@ test("browser fetcher blocks a redirect to a private address before connecting",
     }
   };
 
-  cdpModule.createPageSession = async () => client as never;
+  cdpModule.createPageSession = async (_url, options) => {
+    await cdpModule.installRequestPolicy(
+      client,
+      options!.requestTargetPolicy!,
+      options!.onMainFrameBlocked
+    );
+    return client as never;
+  };
 
   try {
     const policy = new SourceAcquisitionPolicy({

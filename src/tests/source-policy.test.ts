@@ -128,6 +128,29 @@ test("source policy supports explicit allow and block domain controls", () => {
   );
 });
 
+test("browser network checks can preserve explicit blocks while bypassing the source allowlist", () => {
+  const previousAllowlist = process.env.WEB_TASK_AGENT_ALLOWED_DOMAINS;
+  process.env.WEB_TASK_AGENT_ALLOWED_DOMAINS = "docs.example.com";
+
+  try {
+    assert.equal(evaluateSourceUrlPolicy("https://html.duckduckgo.com/html/").action, "deny");
+    assert.equal(
+      evaluateSourceUrlPolicy("https://html.duckduckgo.com/html/", { ignoreConfiguredAllowlist: true }).action,
+      "allow"
+    );
+    assert.equal(
+      evaluateSourceUrlPolicy("https://blocked.example.net/", {
+        ignoreConfiguredAllowlist: true,
+        blockedDomains: ["example.net"]
+      }).action,
+      "deny"
+    );
+  } finally {
+    if (previousAllowlist === undefined) delete process.env.WEB_TASK_AGENT_ALLOWED_DOMAINS;
+    else process.env.WEB_TASK_AGENT_ALLOWED_DOMAINS = previousAllowlist;
+  }
+});
+
 test("source policy normalizes absolute DNS names before local and domain checks", () => {
   for (const url of [
     "http://localhost./",

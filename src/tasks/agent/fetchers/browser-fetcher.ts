@@ -64,65 +64,6 @@ function normalizeBrowserUrl(rawUrl: string): string | null {
   }
 }
 
-async function installRequestPolicy(client: CDPClient, checkTarget: (url: string) => Promise<SourceAcquisitionDecision>): Promise<{
-  mainFrameDenial: () => SourceAcquisitionDecision | null;
-  blockedMainFrame: Promise<SourceAcquisitionDecision>;
-}> {
-  let mainFrameId: string | undefined;
-  let denial: SourceAcquisitionDecision | null = null;
-  let resolveBlockedMainFrame!: (decision: SourceAcquisitionDecision) => void;
-  const blockedMainFrame = new Promise<SourceAcquisitionDecision>((resolve) => {
-    resolveBlockedMainFrame = resolve;
-  });
-
-  client.on("Fetch.requestPaused", async (event: {
-    requestId: string;
-    request: { url: string };
-    frameId: string;
-    resourceType: string;
-  }) => {
-    const mainDocument = event.resourceType === "Document" &&
-      (mainFrameId === undefined || event.frameId === mainFrameId);
-    if (mainDocument && mainFrameId === undefined) mainFrameId = event.frameId;
-
-    let decision: SourceAcquisitionDecision;
-    try {
-      decision = await checkTarget(event.request.url);
-    } catch {
-      decision = {
-        action: "deny",
-        reason: "source acquisition could not validate browser request target",
-        signals: ["request_target_validation_failed", "human_review_required"],
-        waitedMs: 0
-      };
-    }
-
-    try {
-      if (decision.action === "deny") {
-        if (mainDocument && !denial) {
-          denial = decision;
-          resolveBlockedMainFrame(decision);
-        }
-        await client.Fetch.failRequest({ requestId: event.requestId, errorReason: "BlockedByClient" });
-      } else {
-        await client.Fetch.continueRequest({ requestId: event.requestId });
-      }
-    } catch {
-      try {
-        await client.Fetch.failRequest({ requestId: event.requestId, errorReason: "BlockedByClient" });
-      } catch {
-        // The browser may close the session while a request is being denied.
-      }
-    }
-  });
-
-  await client.Fetch.enable({
-    patterns: [{ urlPattern: "*", requestStage: "Request" }]
-  });
-
-  return { mainFrameDenial: () => denial, blockedMainFrame };
-}
-
 export class BrowserPageFetcher implements AgentFetcher {
   readonly id = "browser_page_fetcher";
   readonly label = "Browser Page Fetcher";
@@ -286,18 +227,29 @@ export class BrowserPageFetcher implements AgentFetcher {
             let client: CDPClient | null = null;
             try {
               this.log(`opening article: ${result.title}`);
-              client = await createPageSession(undefined, { userAgent: this.acquisitionPolicy.userAgent });
-              const requestPolicy = await installRequestPolicy(
-                client,
-                (url) => this.acquisitionPolicy.checkNetworkTarget(url)
-              );
+              let mainFrameDenial: SourceAcquisitionDecision | null = null;
+              let resolveBlockedMainFrame!: (decision: SourceAcquisitionDecision) => void;
+              const readMainFrameDenial = () => mainFrameDenial;
+              const blockedMainFrame = new Promise<SourceAcquisitionDecision>((resolve) => {
+                resolveBlockedMainFrame = resolve;
+              });
+              client = await createPageSession(undefined, {
+                userAgent: this.acquisitionPolicy.userAgent,
+                requestTargetPolicy: (url) => this.acquisitionPolicy.checkNetworkTarget(url),
+                onMainFrameBlocked: (decision) => {
+                  if (!mainFrameDenial) {
+                    mainFrameDenial = decision;
+                    resolveBlockedMainFrame(decision);
+                  }
+                }
+              });
               const navigation = navigateTo(client, result.url, { waitForIdle: false }).then(
                 () => ({ kind: "loaded" as const }),
                 (error: unknown) => ({ kind: "failed" as const, error })
               );
               const navigationOutcome = await Promise.race([
                 navigation,
-                requestPolicy.blockedMainFrame.then((decision) => ({ kind: "blocked" as const, decision }))
+                blockedMainFrame.then((decision) => ({ kind: "blocked" as const, decision }))
               ]);
               if (navigationOutcome.kind === "blocked") {
                 this.log(`quarantining redirect target: ${result.title} (${navigationOutcome.decision.reason})`);
@@ -313,7 +265,7 @@ export class BrowserPageFetcher implements AgentFetcher {
               if (navigationOutcome.kind === "failed") {
                 throw navigationOutcome.error;
               }
-              const blockedNavigation = requestPolicy.mainFrameDenial();
+              const blockedNavigation = readMainFrameDenial();
               if (blockedNavigation) {
                 return {
                   page: undefined,
@@ -326,7 +278,7 @@ export class BrowserPageFetcher implements AgentFetcher {
               }
 
               const page = await this.scrapePageDigest(client);
-              const lateBlockedNavigation = requestPolicy.mainFrameDenial();
+              const lateBlockedNavigation = readMainFrameDenial();
               if (lateBlockedNavigation) {
                 return {
                   page: undefined,
