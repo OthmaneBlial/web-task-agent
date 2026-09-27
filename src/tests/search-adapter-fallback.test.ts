@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseBingRssResults } from "../tasks/agent/search-adapters/bing-rss";
+import { BingRssSearchAdapter, parseBingRssResults } from "../tasks/agent/search-adapters/bing-rss";
 import { ResilientSearchAdapter } from "../tasks/agent/search-adapters/resilient-search";
 import type { AgentSearchAdapter } from "../tasks/agent/search-adapter";
 
@@ -29,6 +29,19 @@ test("parseBingRssResults extracts result items from RSS xml", () => {
   assert.equal(results[0]?.site, "reddit.com");
   assert.match(results[0]?.snippet ?? "", /best PDF editor apps/i);
   assert.equal(results[1]?.site, "play.google.com");
+});
+
+test("Bing RSS search applies a request deadline", async () => {
+  let requestSignal: AbortSignal | null | undefined;
+  const adapter = new BingRssSearchAdapter(() => undefined, async (_url, init) => {
+    requestSignal = init?.signal;
+    return new Response("<rss><channel></channel></rss>", { status: 200 });
+  });
+
+  await adapter.search("bounded query", 5);
+
+  assert.ok(requestSignal instanceof AbortSignal);
+  assert.equal(requestSignal.aborted, false);
 });
 
 test("ResilientSearchAdapter falls back when the primary provider fails", async () => {

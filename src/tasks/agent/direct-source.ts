@@ -566,9 +566,6 @@ async function fetchPlayStoreAppMetadata(url: string): Promise<DirectAppMetadata
   const appId = parsePlayStoreAppId(normalizedUrl);
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
-
     const response = await fetch(normalizedUrl, {
       headers: {
         "user-agent":
@@ -576,9 +573,8 @@ async function fetchPlayStoreAppMetadata(url: string): Promise<DirectAppMetadata
         "accept-language": "en-US,en;q=0.9"
       },
       redirect: "follow",
-      signal: controller.signal
+      signal: AbortSignal.timeout(15_000)
     });
-    clearTimeout(timeout);
 
     if (!response.ok) {
       return null;
@@ -635,7 +631,8 @@ async function fetchPlayStoreSearchAppIds(query: string, limit: number = 24): Pr
           "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "accept-language": "en-US,en;q=0.9"
       },
-      redirect: "follow"
+      redirect: "follow",
+      signal: AbortSignal.timeout(15_000)
     });
     if (!response.ok) {
       return [];
