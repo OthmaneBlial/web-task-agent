@@ -184,6 +184,7 @@ async function callTool(paramsValue: unknown): Promise<Record<string, unknown>> 
       changes: comparison.changes,
       newSources: comparison.newSources.length,
       disappearedSources: comparison.disappearedSources.length,
+      changedSources: comparison.changedSources.length,
       changedClaimIds: comparison.changedClaims.map((claim) => claim.id)
     };
   } else if (params.name === "import_result") {

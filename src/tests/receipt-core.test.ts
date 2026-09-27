@@ -164,10 +164,26 @@ test("core diff separates source, policy, model, prompt, claim, and decision cha
     prompt: true,
     decision: true
   });
+  assert.deepEqual(comparison.changedSources, []);
   const markdown = renderDecisionReceiptComparison(comparison);
   assert.match(markdown, /Policy changed: yes/);
   assert.match(markdown, /Model changed: yes/);
   assert.match(markdown, /Prompt contract changed: yes/);
+});
+
+test("core diff reports changed source snapshots at an existing URL", () => {
+  const earlier = exampleReceipt("full");
+  const later = structuredClone(earlier);
+  later.sources[0]!.snapshotSha256 = "b".repeat(64);
+
+  const comparison = compareDecisionReceipts(earlier, later);
+  assert.deepEqual(comparison.newSources, []);
+  assert.deepEqual(comparison.disappearedSources, []);
+  assert.equal(comparison.changes.sources, true);
+  assert.equal(comparison.changedSources.length, 1);
+  assert.equal(comparison.changedSources[0]?.url, earlier.sources[0]?.url);
+  assert.match(comparison.changedBecause.join(" "), /existing source URL changed/);
+  assert.match(renderDecisionReceiptComparison(comparison), /Existing sources changed/);
 });
 
 test("a clean TypeScript project installs only the core tarball and renders a diff", () => {

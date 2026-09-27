@@ -364,6 +364,7 @@ Use "web-task-agent <command> --help" for the full option list.
           `Later: ${comparison.laterTitle}`,
           `New sources: ${comparison.newSources.length}`,
           `Sources no longer present: ${comparison.disappearedSources.length}`,
+          `Existing source URLs changed: ${comparison.changedSources.length}`,
           `Decision changed: ${comparison.decisionChanged ? "yes" : "no"}`
         ]
       });

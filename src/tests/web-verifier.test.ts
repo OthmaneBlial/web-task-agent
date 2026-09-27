@@ -26,6 +26,7 @@ function embeddedFixtures(): Record<string, EmbeddedFixture> {
 function browserVerifier(): {
   unpackReceiptZip(input: Uint8Array): Promise<ReceiptBundle>;
   verifyReceiptBundle(input: ReceiptBundle): ReturnType<typeof verifyReceiptBundle>;
+  compareDecisionReceipts: typeof compareDecisionReceipts;
 } {
   const context: Record<string, unknown> = {
     crypto: webcrypto,
@@ -153,6 +154,17 @@ test("actual browser bundle streams a rooted ZIP and rejects path traversal", as
     verifier.unpackReceiptZip(zipSync({ "../private.txt": strToU8("private") })),
     /unsafe path/
   );
+});
+
+test("browser verifier reports a changed snapshot when its source URL stays the same", () => {
+  const fixture = embeddedFixtures().valid!;
+  const receipt = JSON.parse(fixture.files["receipt.json"]!) as DecisionReceipt;
+  const later = structuredClone(receipt);
+  later.sources[0]!.snapshotSha256 = "b".repeat(64);
+
+  const comparison = browserVerifier().compareDecisionReceipts(receipt, later);
+  assert.equal(comparison.changes.sources, true);
+  assert.equal(comparison.changedSources.length, 1);
 });
 
 test("default verification report code omits receipt text and source data", () => {

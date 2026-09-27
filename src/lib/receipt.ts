@@ -143,6 +143,11 @@ export interface DecisionReceiptComparison {
   decisionChanged: boolean;
   newSources: DecisionReceiptSource[];
   disappearedSources: DecisionReceiptSource[];
+  changedSources: Array<{
+    url: string;
+    earlier: DecisionReceiptSource[];
+    later: DecisionReceiptSource[];
+  }>;
   changedClaims: Array<{
     id: string;
     earlier: DecisionReceiptClaim | null;

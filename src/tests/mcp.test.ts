@@ -169,6 +169,7 @@ test("local MCP exposes exactly four bounded offline receipt tools", async () =>
       arguments: { earlier_path: "receipts/minimal", later_path: "receipts/minimal", format: "json" }
     }));
     assert.equal((compared.structuredContent as { decisionChanged: boolean }).decisionChanged, false);
+    assert.equal((compared.structuredContent as { changedSources: number }).changedSources, 0);
 
     const rendered = resultObject(await client.request("tools/call", {
       name: "render_receipt",
