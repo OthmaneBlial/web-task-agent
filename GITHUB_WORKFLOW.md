@@ -2,6 +2,8 @@
 
 This repository keeps its Decision Receipt integrity gate inside `web-task-agent`. It does not depend on a separately maintained repository.
 
+GitHub Actions are disabled at the repository level, so GitHub does not execute the checked-in workflows. Run `npm ci && npm run test:ci && npm run audit:secrets && npm run audit:prod` locally to run the project's CI checks.
+
 The checked-in [workflow](.github/workflows/decision-receipt.yml) uses read-only permissions and no secret. It installs the reviewed lockfile, builds the local verifier, verifies the valid fixture, and proves that the tampered fixture is rejected:
 
 ```yaml
