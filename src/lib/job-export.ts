@@ -264,6 +264,11 @@ export interface JobComparison {
   rightJobId: string;
   newSources: ExportedResearchSource[];
   disappearedSources: ExportedResearchSource[];
+  changedSources: Array<{
+    url: string;
+    earlier: ExportedResearchSource;
+    later: ExportedResearchSource;
+  }>;
   reportChanged: boolean;
   decisionChanged: boolean;
   leftDecisionExcerpt: string | null;
@@ -277,18 +282,37 @@ export function compareJobExports(left: JobExportData, right: JobExportData): Jo
   const changedBecause: string[] = [];
   const newSources = right.sources.filter((source) => !leftByUrl.has(source.url)).sort(compareSourceUrl);
   const disappearedSources = left.sources.filter((source) => !rightByUrl.has(source.url)).sort(compareSourceUrl);
+  const sourceMetadata = (source: ExportedResearchSource) => JSON.stringify([
+    source.title,
+    source.site,
+    source.query,
+    source.collectedAt,
+    source.reviewStatus,
+    source.qualityScore
+  ]);
+  const changedSources = left.sources.flatMap((earlier) => {
+    const later = rightByUrl.get(earlier.url);
+    return later && sourceMetadata(earlier) !== sourceMetadata(later)
+      ? [{ url: earlier.url, earlier, later }]
+      : [];
+  }).sort((leftSource, rightSource) => compareSourceUrl(leftSource.earlier, rightSource.earlier));
   const reportChanged = left.reportSha256 !== right.reportSha256;
   const decisionChanged = left.decisionExcerpt !== right.decisionExcerpt;
   if (newSources.length > 0) changedBecause.push(`${newSources.length} source(s) were added`);
   if (disappearedSources.length > 0) changedBecause.push(`${disappearedSources.length} source(s) disappeared`);
+  if (changedSources.length > 0) {
+    const noun = changedSources.length === 1 ? "source" : "sources";
+    changedBecause.push(`${changedSources.length} existing ${noun} changed`);
+  }
   if (reportChanged && !decisionChanged) changedBecause.push("the report changed while its decision excerpt stayed the same");
   if (decisionChanged) changedBecause.push("the decision excerpt changed after synthesis");
-  if (changedBecause.length === 0) changedBecause.push("no source or decision change was detected");
+  if (changedBecause.length === 0) changedBecause.push("no cached source or decision change was detected");
   return {
     leftJobId: left.job.id,
     rightJobId: right.job.id,
     newSources,
     disappearedSources,
+    changedSources,
     reportChanged,
     decisionChanged,
     leftDecisionExcerpt: left.decisionExcerpt,
@@ -307,6 +331,7 @@ export function renderJobComparison(comparison: JobComparison, format: "markdown
     "",
     `- Report changed: ${safeComparison.reportChanged ? "yes" : "no"}`,
     `- Decision excerpt changed: ${safeComparison.decisionChanged ? "yes" : "no"}`,
+    `- Existing sources changed: ${safeComparison.changedSources.length}`,
     "",
     "## Decision changed because",
     "",
@@ -319,6 +344,16 @@ export function renderJobComparison(comparison: JobComparison, format: "markdown
     "## Sources no longer present",
     "",
     ...(safeComparison.disappearedSources.length > 0 ? safeComparison.disappearedSources.map(renderSourceLine) : ["None."]),
+    "",
+    "## Existing sources changed",
+    "",
+    ...(safeComparison.changedSources.length > 0
+      ? safeComparison.changedSources.flatMap(({ url, earlier, later }) => [
+          `- ${inlineCode(url)}`,
+          `  - Earlier: ${inlineCode(JSON.stringify(earlier))}`,
+          `  - Later: ${inlineCode(JSON.stringify(later))}`
+        ])
+      : ["None."]),
     "",
     "## Decision excerpts",
     "",

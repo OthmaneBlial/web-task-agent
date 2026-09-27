@@ -118,8 +118,14 @@ test("job comparison reports new and disappeared sources plus decision changes",
     const rightCache = path.join(tempDir, "right.json");
     const leftReport = path.join(tempDir, "left.md");
     const rightReport = path.join(tempDir, "right.md");
-    writeResearchCache(leftCache, [{ title: "Old source", url: "https://docs.example.com/old" }]);
-    writeResearchCache(rightCache, [{ title: "New source", url: "https://docs.example.com/new" }]);
+    writeResearchCache(leftCache, [
+      { title: "Old source", url: "https://docs.example.com/old" },
+      { title: "Common source", url: "https://docs.example.com/common" }
+    ]);
+    writeResearchCache(rightCache, [
+      { title: "New source", url: "https://docs.example.com/new" },
+      { title: "Updated common source", url: "https://docs.example.com/common" }
+    ]);
     fs.writeFileSync(leftReport, "## Decision\n\nKeep the old direction.\n", "utf8");
     fs.writeFileSync(rightReport, "## Decision\n\nChange the direction.\n", "utf8");
 
@@ -144,6 +150,10 @@ test("job comparison reports new and disappeared sources plus decision changes",
       "https://docs.example.com/old",
       "https://docs.example.com/z-old"
     ]);
+    assert.equal(comparison.changedSources.length, 1);
+    assert.equal(comparison.changedSources[0]?.url, "https://docs.example.com/common");
+    assert.equal(comparison.changedSources[0]?.earlier.title, "Common source");
+    assert.equal(comparison.changedSources[0]?.later.title, "Updated common source");
     assert.deepEqual(compareJobExports(
       { ...left, sources: [...left.sources].reverse() },
       { ...right, sources: [...right.sources].reverse() }
@@ -158,6 +168,9 @@ test("job comparison reports new and disappeared sources plus decision changes",
     assert.ok(markdown.includes(`${wideFence}${JSON.stringify(title)}${wideFence}`));
     assert.ok(markdown.includes(`${wideFence}${JSON.stringify(excerpt)}${wideFence}`));
     assert.match(markdown, /Sources no longer present/);
+    assert.match(markdown, /Existing sources changed/);
+    assert.match(markdown, /Updated common source/);
+    assert.match(renderJobComparison(comparison, "json"), /"changedSources"/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

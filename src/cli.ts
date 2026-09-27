@@ -1289,6 +1289,7 @@ Use "web-task-agent <command> --help" for the full option list.
           `Later job: ${comparison.rightJobId}`,
           `New sources: ${comparison.newSources.length}`,
           `Sources no longer present: ${comparison.disappearedSources.length}`,
+          `Existing sources changed: ${comparison.changedSources.length}`,
           `Decision changed: ${comparison.decisionChanged ? "yes" : "no"}`,
           `Redaction: ${options.redact ? "enabled" : "disabled"}`
         ]
