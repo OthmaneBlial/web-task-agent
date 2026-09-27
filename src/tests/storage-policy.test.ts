@@ -193,8 +193,25 @@ test("storage backup and restore preserve a consistent prior database with a saf
       budget: {},
       output: {}
     });
+    if (process.platform !== "win32") {
+      const danglingTargetPath = path.join(tempDir, "missing-backup-target.sqlite");
+      fs.symlinkSync(danglingTargetPath, backupPath);
+      assert.throws(
+        () => backupJobStore({ databasePath, outputPath: backupPath }),
+        /refusing to overwrite existing backup/
+      );
+      assert.equal(fs.existsSync(danglingTargetPath), false);
+      fs.unlinkSync(backupPath);
+    }
     const backup = backupJobStore({ databasePath, outputPath: backupPath });
     assert.ok(backup.sizeBytes > 0);
+    if (process.platform !== "win32") {
+      assert.equal(fs.statSync(backupPath).mode & 0o777, 0o600);
+    }
+    assert.equal(
+      fs.readdirSync(tempDir).some((name) => name.startsWith("backup.sqlite.backup-") && name.endsWith(".tmp")),
+      false
+    );
 
     new JobStore({
       databasePath,
@@ -242,6 +259,51 @@ test("storage backup and restore preserve a consistent prior database with a saf
       /pass --force/
     );
   } finally {
+    closeSharedJobDatabase(databasePath);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("failed storage backup removes its partial temporary database", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-storage-backup-failure-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const backupPath = path.join(tempDir, "backup.sqlite");
+  const originalExec = DatabaseSync.prototype.exec;
+
+  try {
+    new JobStore({
+      databasePath,
+      jobId: "job_backup_failure",
+      taskType: "agent",
+      workflowName: null,
+      title: "Backup failure source",
+      instruction: null,
+      status: "completed",
+      startedAt: "2026-08-26T10:00:00.000Z",
+      input: {},
+      budget: {},
+      output: {}
+    });
+    DatabaseSync.prototype.exec = function failVacuum(sql: string) {
+      const match = /^VACUUM INTO '((?:''|[^'])*)'$/.exec(sql);
+      if (match) {
+        fs.writeFileSync(match[1]!.replace(/''/g, "'"), "partial backup", "utf8");
+        throw new Error("injected VACUUM INTO failure");
+      }
+      return originalExec.call(this, sql);
+    };
+
+    assert.throws(
+      () => backupJobStore({ databasePath, outputPath: backupPath }),
+      /injected VACUUM INTO failure/
+    );
+    assert.equal(fs.existsSync(backupPath), false);
+    assert.equal(
+      fs.readdirSync(tempDir).some((name) => name.startsWith("backup.sqlite.backup-") && name.endsWith(".tmp")),
+      false
+    );
+  } finally {
+    DatabaseSync.prototype.exec = originalExec;
     closeSharedJobDatabase(databasePath);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

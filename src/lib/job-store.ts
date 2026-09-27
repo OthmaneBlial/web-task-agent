@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -1146,12 +1146,54 @@ export function backupJobStore(options: {
   if (backupPath === databasePath) {
     throw new Error("backup output must be different from the active database path");
   }
-  if (fs.existsSync(backupPath)) {
+  try {
+    fs.lstatSync(backupPath);
     throw new Error(`refusing to overwrite existing backup: ${backupPath}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
   }
   ensureParentDir(backupPath);
-  db.exec(`VACUUM INTO ${quoteSqlString(backupPath)}`);
-  assertJobStoreBackupFile(backupPath);
+  const temporaryPath = `${backupPath}.backup-${process.pid}-${randomUUID()}.tmp`;
+  let temporaryDescriptor: number | null = null;
+  let temporaryOwned = false;
+  try {
+    temporaryDescriptor = fs.openSync(
+      temporaryPath,
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL,
+      0o600
+    );
+    temporaryOwned = true;
+    fs.closeSync(temporaryDescriptor);
+    temporaryDescriptor = null;
+    db.exec(`VACUUM INTO ${quoteSqlString(temporaryPath)}`);
+    assertJobStoreBackupFile(temporaryPath);
+    fs.chmodSync(temporaryPath, 0o600);
+    // Publish only a complete backup and fail if the destination appeared meanwhile.
+    fs.linkSync(temporaryPath, backupPath);
+  } catch (error) {
+    if (temporaryDescriptor !== null) {
+      try {
+        fs.closeSync(temporaryDescriptor);
+      } catch {
+        // Keep the original backup error.
+      }
+    }
+    if (temporaryOwned) {
+      try {
+        fs.unlinkSync(temporaryPath);
+      } catch {
+        // Keep the original backup error.
+      }
+    }
+    throw error;
+  }
+  try {
+    fs.unlinkSync(temporaryPath);
+  } catch {
+    // The published backup is complete; keep it even if temp cleanup fails.
+  }
   return {
     databasePath,
     backupPath,
