@@ -25,6 +25,7 @@
       "title": "Archive limits, traversal, symlinks, and relative paths",
       "evidence": [
         { "path": "src/tests/web-verifier.test.ts", "marker": "actual browser bundle streams a rooted ZIP and rejects path traversal" },
+        { "path": "src/tests/receipt.test.ts", "marker": "receipt verification refuses symlinked package files" },
         { "path": "packages/decision-receipt/src/verify.ts", "marker": "manifest_path_unsafe" },
         { "path": "src/tests/mcp.test.ts", "marker": "escapes DECISION_RECEIPT_ROOT" }
       ]

@@ -60,6 +60,31 @@ test("receipt verification identifies tampered artifacts and unsupported source 
   }
 });
 
+test("receipt verification refuses symlinked package files", { skip: process.platform === "win32" }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-symlink-"));
+  try {
+    for (const [index, file] of (["receipt.json", "integrity-manifest.json", "snapshot"] as const).entries()) {
+      const bundle = path.join(root, `bundle-${index}`);
+      writeDemoPackage({ id: "local-first-risk-review", outputDir: bundle });
+      const receipt = JSON.parse(fs.readFileSync(path.join(bundle, "receipt.json"), "utf8")) as {
+        sources: Array<{ snapshotPath: string | null }>;
+      };
+      const relativePath = file === "snapshot" ? receipt.sources[0]!.snapshotPath! : file;
+      const packageFile = path.join(bundle, relativePath);
+      const outsideFile = path.join(root, `outside-${index}.dat`);
+      fs.copyFileSync(packageFile, outsideFile);
+      fs.unlinkSync(packageFile);
+      fs.symlinkSync(outsideFile, packageFile, "file");
+
+      const result = verifyReceiptDirectory(bundle);
+      assert.equal(result.valid, false, `${file} symlink unexpectedly verified`);
+      assert.ok(result.errors.some((error) => error.includes("symlinked")), result.errors.join("; "));
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("decision receipt comparison explains source, claim, and decision changes", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-diff-"));
   try {

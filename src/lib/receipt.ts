@@ -21,6 +21,7 @@ import {
   DECISION_RECEIPT_SPEC_VERSION,
   canonicalizeReceiptForSigning,
   compareDecisionReceipts as compareCoreDecisionReceipts,
+  isSafeRelativeReceiptPath,
   isSupportedDecisionReceiptSpecVersion,
   renderDecisionReceiptComparison as renderCoreDecisionReceiptComparison,
   validateDecisionReceipt
@@ -169,6 +170,28 @@ export function renderDecisionReceiptComparison(
   format: "markdown" | "json" = "markdown"
 ): string {
   return renderCoreDecisionReceiptComparison(comparison, format);
+}
+
+function readReceiptFile(rootDir: string, relativePath: string): Buffer | null {
+  if (!isSafeRelativeReceiptPath(relativePath)) return null;
+  let candidatePath = rootDir;
+  try {
+    const parts = relativePath.split("/");
+    for (const [index, part] of parts.entries()) {
+      candidatePath = path.join(candidatePath, part);
+      const stats = fs.lstatSync(candidatePath);
+      if (stats.isSymbolicLink() || (index < parts.length - 1 ? !stats.isDirectory() : !stats.isFile())) return null;
+    }
+    const descriptor = fs.openSync(candidatePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    try {
+      if (!fs.fstatSync(descriptor).isFile()) return null;
+      return fs.readFileSync(descriptor);
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  } catch {
+    return null;
+  }
 }
 
 export interface FixtureReceiptInput {
@@ -738,10 +761,10 @@ function validateReceiptShape(receipt: unknown, rootDir: string, errors: string[
       }
     }
     if (typed.snapshotPath) {
-      const snapshotPath = path.resolve(rootDir, typed.snapshotPath);
-      if (!snapshotPath.startsWith(`${rootDir}${path.sep}`) || !fs.existsSync(snapshotPath)) {
-        errors.push(`missing source snapshot for ${typed.id}: ${typed.snapshotPath}`);
-      } else if (typed.snapshotSha256 && fileSha256(snapshotPath) !== typed.snapshotSha256) {
+      const snapshot = readReceiptFile(rootDir, typed.snapshotPath);
+      if (!snapshot) {
+        errors.push(`source snapshot is missing, unsafe, symlinked, or not a regular file for ${typed.id}: ${typed.snapshotPath}`);
+      } else if (typed.snapshotSha256 && createHash("sha256").update(snapshot).digest("hex") !== typed.snapshotSha256) {
         errors.push(`source snapshot hash mismatch for ${typed.id}`);
       }
     }
@@ -785,8 +808,8 @@ function validateReceiptShape(receipt: unknown, rootDir: string, errors: string[
       }
       const source = sources.find((item) => item && typeof item === "object" && (item as DecisionReceiptSource).id === reference.sourceId) as DecisionReceiptSource | undefined;
       if (source?.snapshotPath) {
-        const snapshotPath = path.resolve(rootDir, source.snapshotPath);
-        if (fs.existsSync(snapshotPath) && !fs.readFileSync(snapshotPath, "utf8").includes(reference.excerpt)) {
+        const snapshot = readReceiptFile(rootDir, source.snapshotPath);
+        if (snapshot && !snapshot.toString("utf8").includes(reference.excerpt)) {
           errors.push(`evidence excerpt ${reference.id} is absent from ${source.snapshotPath}`);
         }
       }
@@ -819,16 +842,16 @@ function validateReceiptSignature(receipt: DecisionReceipt, errors: string[]): v
 export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationResult {
   const rootDir = path.resolve(inputDir);
   const errors: string[] = [];
-  const receiptPath = path.join(rootDir, "receipt.json");
-  const manifestPath = path.join(rootDir, "integrity-manifest.json");
+  const receiptBytes = readReceiptFile(rootDir, "receipt.json");
+  const manifestBytes = readReceiptFile(rootDir, "integrity-manifest.json");
   let receipt: DecisionReceipt | null = null;
   let checkedFiles = 0;
 
-  if (!fs.existsSync(receiptPath)) {
-    errors.push("receipt.json is missing");
+  if (!receiptBytes) {
+    errors.push("receipt.json is missing, unsafe, symlinked, or not a regular file");
   } else {
     try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
+      const parsed: unknown = JSON.parse(receiptBytes.toString("utf8"));
       if (validateReceiptShape(parsed, rootDir, errors)) {
         receipt = parsed;
         validateReceiptSignature(receipt, errors);
@@ -838,11 +861,11 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
     }
   }
 
-  if (!fs.existsSync(manifestPath)) {
-    errors.push("integrity-manifest.json is missing");
+  if (!manifestBytes) {
+    errors.push("integrity-manifest.json is missing, unsafe, symlinked, or not a regular file");
   } else {
     try {
-      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Partial<ReceiptIntegrityManifest>;
+      const manifest = JSON.parse(manifestBytes.toString("utf8")) as Partial<ReceiptIntegrityManifest>;
       if (
         manifest.type !== "receipt-integrity-manifest" ||
         manifest.schemaVersion !== DECISION_RECEIPT_SCHEMA_VERSION ||
@@ -855,20 +878,20 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
       } else {
         for (const entry of manifest.files) {
           const relative = String(entry?.path ?? "");
-          const candidatePath = path.resolve(rootDir, relative);
           checkedFiles += 1;
-          if (!relative || !candidatePath.startsWith(`${rootDir}${path.sep}`)) {
+          if (!isSafeRelativeReceiptPath(relative)) {
             errors.push(`integrity manifest path escapes package root: ${relative}`);
             continue;
           }
-          if (!fs.existsSync(candidatePath) || !fs.statSync(candidatePath).isFile()) {
-            errors.push(`integrity manifest file is missing: ${relative}`);
+          const contents = readReceiptFile(rootDir, relative);
+          if (!contents) {
+            errors.push(`integrity manifest file is missing, unsafe, symlinked, or not a regular file: ${relative}`);
             continue;
           }
-          if (fileSha256(candidatePath) !== entry.sha256) {
+          if (createHash("sha256").update(contents).digest("hex") !== entry.sha256) {
             errors.push(`integrity hash mismatch: ${relative}`);
           }
-          if (fs.statSync(candidatePath).size !== entry.bytes) {
+          if (contents.byteLength !== entry.bytes) {
             errors.push(`integrity byte count mismatch: ${relative}`);
           }
         }
