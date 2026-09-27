@@ -7,7 +7,7 @@ import readline from "node:readline";
 import test from "node:test";
 
 interface RpcResponse {
-  id: number | null;
+  id: string | number | null;
   result?: unknown;
   error?: { code: number; message: string };
 }
@@ -32,8 +32,8 @@ class LocalMcpClient {
     });
     readline.createInterface({ input: this.child.stdout, crlfDelay: Infinity }).on("line", (line) => {
       const response = JSON.parse(line) as RpcResponse;
-      const pending = response.id === null ? undefined : this.waiting.get(response.id);
-      if (response.id !== null && pending) {
+      const pending = typeof response.id === "number" ? this.waiting.get(response.id) : undefined;
+      if (typeof response.id === "number" && pending) {
         this.waiting.delete(response.id);
         pending.resolve(response);
       } else if (this.unsolicitedWaiter) {
@@ -103,6 +103,73 @@ test("local MCP rejects an oversized request before its newline arrives", async 
     assert.equal(response.error?.message, "Request exceeds the 2 MB limit");
     client.child.stdin.write("\n");
     assert.deepEqual(resultObject(await client.request("ping")), {});
+  } finally {
+    await client.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("local MCP ignores notifications instead of responding to them", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-mcp-notification-"));
+  fs.copyFileSync(path.resolve("examples", "interop", "browser-use-result.json"), path.join(root, "provider-result.json"));
+  const guard = path.join(root, "deny-network.cjs");
+  fs.writeFileSync(guard, [
+    'const net = require("node:net");',
+    'function deny() { throw new Error("unexpected MCP network access"); }',
+    'globalThis.fetch = deny;',
+    'net.connect = deny;',
+    'net.createConnection = deny;'
+  ].join("\n"), "utf8");
+  const client = new LocalMcpClient(root, guard);
+  try {
+    await client.request("initialize", {});
+    const noResponse = client.waitForUnsolicitedMessage(500);
+    client.notify("tools/call", {
+      name: "import_result",
+      arguments: { input_path: "provider-result.json", output_path: "imports/should-not-exist" }
+    });
+    await assert.rejects(noResponse, /timed out/);
+    assert.ok(resultObject(await client.request("tools/list", {})).tools);
+    assert.equal(fs.existsSync(path.join(root, "imports", "should-not-exist")), false);
+  } finally {
+    await client.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("local MCP rejects null and non-integer request IDs", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-mcp-invalid-id-"));
+  const guard = path.join(root, "deny-network.cjs");
+  fs.writeFileSync(guard, [
+    'const net = require("node:net");',
+    'function deny() { throw new Error("unexpected MCP network access"); }',
+    'globalThis.fetch = deny;',
+    'net.connect = deny;',
+    'net.createConnection = deny;'
+  ].join("\n"), "utf8");
+  const client = new LocalMcpClient(root, guard);
+  try {
+    await client.request("initialize", {});
+    for (const id of [null, 1.5, true]) {
+      const responsePromise = client.waitForUnsolicitedMessage();
+      client.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method: "tools/list" })}\n`);
+      const response = await responsePromise;
+      assert.equal(response.id, null);
+      assert.equal(response.error?.code, -32600);
+      assert.equal(response.result, undefined);
+    }
+
+    const stringIdResponse = client.waitForUnsolicitedMessage();
+    client.child.stdin.write('{"jsonrpc":"2.0","id":"valid-string-id","method":"tools/list"}\n');
+    const validStringId = await stringIdResponse;
+    assert.equal(validStringId.id, "valid-string-id");
+    assert.ok((validStringId.result as Record<string, unknown>).tools);
+
+    const notificationWithId = client.waitForUnsolicitedMessage();
+    client.child.stdin.write('{"jsonrpc":"2.0","id":99,"method":"notifications/initialized"}\n');
+    const invalidNotification = await notificationWithId;
+    assert.equal(invalidNotification.id, 99);
+    assert.equal(invalidNotification.error?.code, -32600);
   } finally {
     await client.close();
     fs.rmSync(root, { recursive: true, force: true });

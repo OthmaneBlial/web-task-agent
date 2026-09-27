@@ -17,11 +17,12 @@ const PROTOCOL_VERSION = "2025-11-25";
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
 const MAX_RESULT_BYTES = 2 * 1024 * 1024;
 
-type JsonRpcId = string | number | null;
+type JsonRpcId = string | number;
+type JsonRpcResponseId = JsonRpcId | null;
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
-  id?: JsonRpcId;
+  id: JsonRpcId;
   method: string;
   params?: unknown;
 }
@@ -47,6 +48,10 @@ function optionalBoolean(args: Record<string, unknown>, name: string): boolean {
   if (value === undefined) return false;
   if (typeof value !== "boolean") throw new Error(`${name} must be a boolean`);
   return value;
+}
+
+function isJsonRpcId(value: unknown): value is JsonRpcId {
+  return typeof value === "string" || (typeof value === "number" && Number.isSafeInteger(value));
 }
 
 function workspaceRoot(): string {
@@ -224,12 +229,12 @@ function result(id: JsonRpcId, value: unknown): void {
   writeMessage({ jsonrpc: "2.0", id, result: value });
 }
 
-function error(id: JsonRpcId, code: number, message: string): void {
+function error(id: JsonRpcResponseId, code: number, message: string): void {
   writeMessage({ jsonrpc: "2.0", id, error: { code, message } });
 }
 
 async function handleRequest(request: JsonRpcRequest): Promise<void> {
-  const id = request.id ?? null;
+  const id = request.id;
   if (request.method === "initialize") {
     result(id, {
       // MCP asks a server to return a version it actually supports when the
@@ -276,13 +281,23 @@ function processLine(line: string): void {
     error(null, -32600, "Invalid Request");
     return;
   }
-  const request = parsed as Partial<JsonRpcRequest>;
+  const request = parsed as { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: unknown };
   if (request.jsonrpc !== "2.0" || typeof request.method !== "string") {
-    error(request.id ?? null, -32600, "Invalid Request");
+    error(isJsonRpcId(request.id) ? request.id : null, -32600, "Invalid Request");
     return;
   }
-  void handleRequest(request as JsonRpcRequest).catch((requestError) => {
-    error(request.id ?? null, -32603, requestError instanceof Error ? requestError.message : String(requestError));
+  if (request.id === undefined) return;
+  if (!isJsonRpcId(request.id)) {
+    error(null, -32600, "Invalid Request: id must be a string or safe integer");
+    return;
+  }
+  if (request.method.startsWith("notifications/")) {
+    error(request.id, -32600, "Invalid Request: notifications must not include an id");
+    return;
+  }
+  const validRequest = request as JsonRpcRequest;
+  void handleRequest(validRequest).catch((requestError) => {
+    error(validRequest.id, -32603, requestError instanceof Error ? requestError.message : String(requestError));
   });
 }
 
