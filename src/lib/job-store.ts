@@ -1100,10 +1100,26 @@ function quoteSqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-function assertSqliteBackupFile(filePath: string): void {
+function assertJobStoreBackupFile(filePath: string): void {
   const header = fs.readFileSync(filePath).subarray(0, 16).toString("utf8");
   if (header !== "SQLite format 3\u0000") {
     throw new Error(`backup is not a SQLite database: ${filePath}`);
+  }
+
+  const database = new DatabaseSync(filePath, { readOnly: true });
+  try {
+    const integrity = database.prepare("PRAGMA quick_check").all() as Array<Record<string, unknown>>;
+    if (integrity.length !== 1 || integrity[0]?.quick_check !== "ok") {
+      throw new Error(`backup failed SQLite integrity check: ${filePath}`);
+    }
+    const jobsTable = database.prepare(
+      "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'jobs'"
+    ).get();
+    if (!jobsTable) {
+      throw new Error(`restore input is not a Web Task Agent job store backup: ${filePath}`);
+    }
+  } finally {
+    database.close();
   }
 }
 
@@ -1121,7 +1137,7 @@ export function backupJobStore(options: {
   }
   ensureParentDir(backupPath);
   db.exec(`VACUUM INTO ${quoteSqlString(backupPath)}`);
-  assertSqliteBackupFile(backupPath);
+  assertJobStoreBackupFile(backupPath);
   return {
     databasePath,
     backupPath,
@@ -1143,7 +1159,7 @@ export function restoreJobStore(options: {
   if (!fs.existsSync(inputPath)) {
     throw new Error(`restore input does not exist: ${inputPath}`);
   }
-  assertSqliteBackupFile(inputPath);
+  assertJobStoreBackupFile(inputPath);
   if (inputPath === databasePath) {
     throw new Error("restore input must be different from the active database path");
   }
@@ -1162,7 +1178,7 @@ export function restoreJobStore(options: {
   const temporaryPath = `${databasePath}.restore-${process.pid}-${Date.now()}.tmp`;
   try {
     fs.copyFileSync(inputPath, temporaryPath, fs.constants.COPYFILE_EXCL);
-    assertSqliteBackupFile(temporaryPath);
+    assertJobStoreBackupFile(temporaryPath);
     fs.renameSync(temporaryPath, databasePath);
   } finally {
     if (fs.existsSync(temporaryPath)) {

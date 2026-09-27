@@ -212,6 +212,17 @@ test("storage backup and restore preserve a consistent prior database with a saf
     const restored = restoreJobStore({ databasePath, inputPath: backupPath, force: true });
     assert.ok(restored.safetyBackupPath);
     assert.equal(maintainJobStore({ databasePath }).jobs, 1);
+
+    const unrelatedPath = path.join(tempDir, "unrelated.sqlite");
+    const unrelatedDatabase = new DatabaseSync(unrelatedPath);
+    unrelatedDatabase.exec("CREATE TABLE unrelated (value TEXT)");
+    unrelatedDatabase.close();
+    assert.throws(
+      () => restoreJobStore({ databasePath, inputPath: unrelatedPath, force: true }),
+      /not a Web Task Agent job store backup/i
+    );
+    assert.equal(maintainJobStore({ databasePath }).jobs, 1);
+
     assert.throws(
       () => restoreJobStore({ databasePath, inputPath: backupPath, force: false }),
       /pass --force/

@@ -120,7 +120,7 @@ Create a consistent SQLite copy without uploading any data:
 web-task-agent storage backup --output ./web-task-agent-backup.sqlite
 ```
 
-Restoration is intentionally explicit because it replaces the local database. It requires `--force`, validates the SQLite input, and first creates a safety backup of the current state (or writes it to `--backup <path>` when you choose the location):
+Restoration is intentionally explicit because it replaces the local database. It requires `--force`, checks SQLite integrity and the job-store schema before replacement, and first creates a safety backup of the current state (or writes it to `--backup <path>` when you choose the location):
 
 ```bash
 web-task-agent storage restore \
