@@ -59,14 +59,41 @@ export function saveTaskState<T extends { runId: string }>(
   return filePath;
 }
 
-export function loadTaskState<T>(filePath: string): T {
+export function loadTaskState<T extends { runId: string }>(filePath: string): T {
   const raw = fs.readFileSync(filePath, "utf8");
-  const parsed = JSON.parse(raw) as CacheEnvelope<T> | T;
+  const parsed: unknown = JSON.parse(raw);
 
-  if (parsed && typeof parsed === "object" && "state" in parsed) {
-    return (parsed as CacheEnvelope<T>).state;
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && "state" in parsed) {
+    const envelope = parsed as Record<string, unknown>;
+    const state = envelope.state;
+    if (envelope.version !== CACHE_VERSION) {
+      throw new Error(`Unsupported cache envelope version: ${String(envelope.version)}.`);
+    }
+    if (
+      typeof envelope.task !== "string" ||
+      typeof envelope.runId !== "string" ||
+      typeof envelope.savedAt !== "string" ||
+      !Number.isFinite(Date.parse(envelope.savedAt)) ||
+      !state ||
+      typeof state !== "object" ||
+      Array.isArray(state)
+    ) {
+      throw new Error("Cache envelope is malformed.");
+    }
+    if ((state as Record<string, unknown>).runId !== envelope.runId) {
+      throw new Error("Cache envelope run ID does not match its saved task state.");
+    }
+    return state as T;
   }
 
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed) ||
+    typeof (parsed as Record<string, unknown>).runId !== "string"
+  ) {
+    throw new Error("Cache does not contain a task state with a run ID.");
+  }
   return parsed as T;
 }
 
