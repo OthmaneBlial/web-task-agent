@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { ensureDir } from "./cache";
+import { ensureDir, writeTextAtomic } from "./cache";
 
 function adapterSlug(value: string): string {
   const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -138,8 +138,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process
 
 The generated raw fixture is synthetic. Replace it only with redistributable evidence and document the engine version, command, limitations, and consent boundary.
 `;
-  fs.writeFileSync(adapterPath, adapterSource, "utf8");
-  fs.writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
-  fs.writeFileSync(readmePath, readme, "utf8");
+  writeTextAtomic(adapterPath, adapterSource);
+  writeTextAtomic(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`);
+  writeTextAtomic(readmePath, readme);
   return { outputDir, adapterPath, fixturePath, readmePath };
 }
