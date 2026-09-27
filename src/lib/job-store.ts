@@ -2001,6 +2001,7 @@ export class JobStore {
   private readonly db: DatabaseSync;
   private readonly jobId: string;
   private job: Required<Omit<JobStoreOptions, "databasePath">>;
+  private leaseOwnerId: string | null = null;
 
   constructor(options: JobStoreOptions) {
     const { db, databasePath } = getDatabase(options.databasePath);
@@ -2230,9 +2231,10 @@ export class JobStore {
     }
 
     const lease = this.getExecutionLease();
-    if (!lease) {
+    if (!lease || lease.ownerId !== options.ownerId) {
       throw new Error(`failed to acquire execution lease for job ${this.jobId}`);
     }
+    this.leaseOwnerId = options.ownerId;
 
     this.recordRunEvent(
       recovered ? "lease_recovered" : "lease_acquired",
@@ -2258,16 +2260,20 @@ export class JobStore {
     ttlSeconds?: number;
     output?: unknown;
   }): JobExecutionLeaseSnapshot {
-    const activeLease = this.getExecutionLease();
-    if (!activeLease) {
+    const ownerId = this.leaseOwnerId;
+    if (!ownerId) {
       throw new Error(`job ${this.jobId} has no active execution lease`);
+    }
+    const activeLease = this.getExecutionLease();
+    if (!activeLease || activeLease.ownerId !== ownerId) {
+      throw new Error(`failed to refresh execution lease for job ${this.jobId}`);
     }
 
     const timestamp = nowIso();
     const ttlSeconds = Math.max(60, Math.round(options?.ttlSeconds ?? activeLease.staleAfterSeconds));
     const expiresAt = addSecondsToIso(timestamp, ttlSeconds);
 
-    this.db.prepare(`
+    const result = this.db.prepare(`
       UPDATE jobs
       SET
         heartbeat_at = ?,
@@ -2284,25 +2290,33 @@ export class JobStore {
       timestamp,
       serializeJson(options?.output ?? this.job.output),
       this.jobId,
-      activeLease.ownerId
+      ownerId
     );
 
-    this.job.updatedAt = timestamp;
-    this.job.output = options?.output ?? this.job.output;
-    const lease = this.getExecutionLease();
-    if (!lease) {
+    if (Number(result.changes ?? 0) === 0) {
       throw new Error(`failed to refresh execution lease for job ${this.jobId}`);
     }
+    const lease = this.getExecutionLease();
+    if (!lease || lease.ownerId !== ownerId) {
+      throw new Error(`failed to refresh execution lease for job ${this.jobId}`);
+    }
+    this.job.updatedAt = timestamp;
+    this.job.output = options?.output ?? this.job.output;
     return lease;
   }
 
   releaseLease(): void {
+    const ownerId = this.leaseOwnerId;
+    if (!ownerId) {
+      return;
+    }
     const activeLease = this.getExecutionLease();
-    if (!activeLease) {
+    if (!activeLease || activeLease.ownerId !== ownerId) {
+      this.leaseOwnerId = null;
       return;
     }
 
-    this.db.prepare(`
+    const result = this.db.prepare(`
       UPDATE jobs
       SET
         lease_owner_id = NULL,
@@ -2314,11 +2328,15 @@ export class JobStore {
     `).run(
       nowIso(),
       this.jobId,
-      activeLease.ownerId
+      ownerId
     );
+    this.leaseOwnerId = null;
+    if (Number(result.changes ?? 0) === 0) {
+      return;
+    }
 
-    this.recordRunEvent("lease_released", `Released execution lease for ${activeLease.ownerId}`, {
-      ownerId: activeLease.ownerId,
+    this.recordRunEvent("lease_released", `Released execution lease for ${ownerId}`, {
+      ownerId,
       heartbeatAt: activeLease.heartbeatAt
     });
   }
