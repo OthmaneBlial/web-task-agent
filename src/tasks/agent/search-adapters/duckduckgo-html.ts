@@ -32,6 +32,22 @@ import type {
 import { createBingRssSearchAdapter } from "./bing-rss";
 import { createResilientSearchAdapter } from "./resilient-search";
 
+export function normalizeDuckDuckGoSearchUrl(rawUrl: string, baseUrl?: string): string | null {
+  try {
+    const parsed = new URL(rawUrl, baseUrl);
+    return parsed.protocol === "https:" &&
+      parsed.hostname === "html.duckduckgo.com" &&
+      !parsed.port &&
+      !parsed.username &&
+      !parsed.password &&
+      ["/html", "/html/"].includes(parsed.pathname)
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
   readonly id = DUCKDUCKGO_SEARCH_PROVIDER;
   readonly label = "DuckDuckGo HTML";
@@ -279,7 +295,7 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
     const pagesTarget = Math.max(1, Math.ceil(maxResultsPerQuery / 10));
     const seenUrls = new Set<string>();
     const aggregated: AgentSearchResult[] = [];
-    let nextPageUrl: string | null = searchUrl;
+    let nextPageUrl: string | null = normalizeDuckDuckGoSearchUrl(searchUrl);
     let pagesVisited = 0;
 
     while (nextPageUrl && aggregated.length < maxResultsPerQuery && pagesVisited < pagesTarget) {
@@ -331,7 +347,12 @@ export class DuckDuckGoHtmlSearchAdapter implements AgentSearchAdapter {
         }
 
         pagesVisited += 1;
-        nextPageUrl = page.nextPageUrl;
+        nextPageUrl = page.nextPageUrl
+          ? normalizeDuckDuckGoSearchUrl(page.nextPageUrl, searchUrl)
+          : null;
+        if (page.nextPageUrl && !nextPageUrl) {
+          this.log("stopping search pagination because DuckDuckGo returned an unsafe next URL");
+        }
       } catch (error) {
         throw error;
       }
