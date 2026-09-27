@@ -3,10 +3,10 @@
 async function boot(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.length === 2 && args[0] === "mcp" && args[1] === "serve") {
-    await import("./mcp/server");
+    await import("./mcp/server.js");
     return;
   }
-  await import("./cli");
+  await import("./cli.js");
 }
 
 void boot().catch((error: unknown) => {
