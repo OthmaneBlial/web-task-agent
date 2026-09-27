@@ -30,16 +30,29 @@ function text(value: ReceiptBundleFile): string {
   return typeof value === "string" ? value : decoder.decode(bytes(value));
 }
 
-function normalizedBundle(bundle: ReceiptBundle): ReceiptBundle {
-  return Object.fromEntries(Object.entries(bundle).map(([name, value]) => [name.replace(/^\.\//, ""), value]));
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function issue(issues: ReceiptValidationIssue[], path: string, code: string, message: string): void {
   issues.push({ path, code, message });
+}
+
+function normalizedBundle(bundle: ReceiptBundle, issues: ReceiptValidationIssue[]): ReceiptBundle {
+  const normalized = Object.create(null) as ReceiptBundle;
+  for (const [name, value] of Object.entries(bundle)) {
+    const filePath = name.replace(/^\.\//, "");
+    if (!isSafeRelativeReceiptPath(filePath)) {
+      issue(issues, "/files", "bundle_path_unsafe", `Bundle path is unsafe: ${name}.`);
+      continue;
+    }
+    if (Object.hasOwn(normalized, filePath)) {
+      issue(issues, `/files/${filePath}`, "bundle_path_duplicate", `Bundle path is duplicated: ${filePath}.`);
+      continue;
+    }
+    normalized[filePath] = value;
+  }
+  return normalized;
 }
 
 export async function sha256Hex(value: ReceiptBundleFile): Promise<string> {
@@ -81,8 +94,8 @@ async function verifySignature(receipt: DecisionReceipt): Promise<boolean | null
 }
 
 export async function verifyReceiptBundle(input: ReceiptBundle): Promise<ReceiptBundleVerificationResult> {
-  const bundle = normalizedBundle(input);
   const issues: ReceiptValidationIssue[] = [];
+  const bundle = normalizedBundle(input, issues);
   let checkedFiles = 0;
   let signatureVerified: boolean | null = null;
   let receipt: DecisionReceipt | null = null;

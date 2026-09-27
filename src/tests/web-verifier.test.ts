@@ -138,6 +138,17 @@ test("actual browser bundle streams a rooted ZIP and rejects path traversal", as
   assert.equal(Object.hasOwn(magicFilename, "__proto__"), true);
   assert.equal(new TextDecoder().decode(magicFilename["__proto__"] as Uint8Array), "preserved");
 
+  const duplicatePathArchive = zipSync({ "first.txt": strToU8("first"), "other.txt": strToU8("second") });
+  const originalName = strToU8("other.txt");
+  const duplicateName = strToU8("first.txt");
+  for (let offset = 0; offset <= duplicatePathArchive.length - originalName.length; offset += 1) {
+    if (originalName.every((byte, index) => duplicatePathArchive[offset + index] === byte)) {
+      duplicatePathArchive.set(duplicateName, offset);
+      offset += originalName.length - 1;
+    }
+  }
+  await assert.rejects(verifier.unpackReceiptZip(duplicatePathArchive), /duplicate path/);
+
   await assert.rejects(
     verifier.unpackReceiptZip(zipSync({ "../private.txt": strToU8("private") })),
     /unsafe path/

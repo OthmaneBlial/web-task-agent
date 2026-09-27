@@ -40,6 +40,7 @@ export function unpackReceiptZip(input: ArrayBuffer | Uint8Array): Promise<Recor
   return new Promise((resolve, reject) => {
     const output = Object.create(null) as Record<string, Uint8Array>;
     const active = new Set<UnzipFile>();
+    const seenPaths = new Set<string>();
     let files = 0;
     let extracted = 0;
     let inputFinished = false;
@@ -64,6 +65,12 @@ export function unpackReceiptZip(input: ArrayBuffer | Uint8Array): Promise<Recor
         fail(new Error(`ZIP contains an unsafe path: ${file.name}.`));
         return;
       }
+      const filePath = directory ? file.name.slice(0, -1) : file.name;
+      if (seenPaths.has(filePath)) {
+        fail(new Error(`ZIP contains a duplicate path: ${filePath}.`));
+        return;
+      }
+      seenPaths.add(filePath);
       if (!directory) {
         files += 1;
         if (files > MAX_FILES) {

@@ -73,6 +73,29 @@ test("receipt manifest covers receipt.json and every referenced source snapshot"
   }
 });
 
+test("receipt bundle verification rejects inherited and aliased file paths", async () => {
+  const bundle = readBundle(path.join("packages", "decision-receipt", "examples", "minimal"));
+  const manifest = JSON.parse(String(bundle["integrity-manifest.json"])) as {
+    files: Array<{ path: string; sha256: string; bytes: number }>;
+  };
+  manifest.files.push({
+    path: "toString",
+    sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    bytes: 0
+  });
+  bundle["integrity-manifest.json"] = JSON.stringify(manifest);
+
+  const verification = await verifyReceiptBundle(bundle);
+  assert.equal(verification.valid, false);
+  assert.ok(verification.issues.some((issue) => issue.code === "integrity_file_missing" && issue.message.includes("toString")));
+
+  const aliasBundle = readBundle(path.join("packages", "decision-receipt", "examples", "minimal"));
+  aliasBundle["./receipt.json"] = aliasBundle["receipt.json"]!;
+  const aliased = await verifyReceiptBundle(aliasBundle);
+  assert.equal(aliased.valid, false);
+  assert.ok(aliased.issues.some((issue) => issue.code === "bundle_path_duplicate"));
+});
+
 test("experimental schema-v1 receipts migrate once and unknown versions fail closed", () => {
   const legacy = exampleReceipt("minimal") as unknown as Record<string, unknown>;
   delete legacy.specVersion;
