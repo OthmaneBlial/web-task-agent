@@ -10,6 +10,7 @@
         { "path": "src/tests/receipt-core.test.ts", "marker": "standalone core verifies every public example and identifies the falsified bytes" },
         { "path": "scripts/run-schema-conformance.mjs", "marker": "schema-unknown-major" },
         { "path": "scripts/run-schema-conformance.mjs", "marker": "schema-invalid-impossible-generated-at" },
+        { "path": "scripts/run-schema-conformance.mjs", "marker": "schema-invalid-trailing-slash-path" },
         { "path": "src/tests/interop.test.ts", "marker": "adapter contract agrees with independent JSON Schema validation" }
       ]
     },

@@ -50,6 +50,12 @@
       "expectedCode": "source_snapshot_path_unsafe"
     },
     {
+      "id": "unsafe-path-trailing-slash",
+      "mutation": "unsafe-snapshot-trailing-slash",
+      "expectedValid": false,
+      "expectedCode": "source_snapshot_path_unsafe"
+    },
+    {
       "id": "unknown-version",
       "mutation": "unknown-spec-version",
       "expectedValid": false,

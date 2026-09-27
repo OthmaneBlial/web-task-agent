@@ -25,6 +25,7 @@ const cases = [
   { id: "schema-invalid-shape", receipt: (() => { const value = clone(baseline); delete value.decision; return value; })(), expected: false },
   { id: "schema-unsafe-path", receipt: (() => { const value = clone(baseline); value.sources[0].snapshotPath = "../private.md"; return value; })(), expected: false },
   { id: "schema-dot-path", receipt: (() => { const value = clone(baseline); value.sources[0].snapshotPath = "evidence/./source.md"; return value; })(), expected: false },
+  { id: "schema-invalid-trailing-slash-path", receipt: (() => { const value = clone(baseline); value.sources[0].snapshotPath = "evidence/"; return value; })(), expected: false },
   { id: "schema-credential-url", receipt: (() => { const value = clone(baseline); value.sources[0].url = "https://user:password@example.com"; return value; })(), expected: false },
   { id: "schema-incomplete-snapshot-pair", receipt: (() => { const value = clone(baseline); value.sources[0].snapshotSha256 = null; return value; })(), expected: false },
   { id: "schema-contradiction-relation-required", receipt: (() => { const value = clone(baseline); value.claims[0].status = "contradicted"; return value; })(), expected: false },

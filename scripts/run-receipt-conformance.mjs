@@ -103,6 +103,7 @@ async function bundleFor(mutation) {
   if (mutation === "remove-decision") delete receipt.decision;
   if (mutation === "duplicate-source") receipt.sources.push({ ...receipt.sources[0] });
   if (mutation === "unsafe-snapshot-path") receipt.sources[0].snapshotPath = "../private.md";
+  if (mutation === "unsafe-snapshot-trailing-slash") receipt.sources[0].snapshotPath = "evidence/";
   if (mutation === "unknown-spec-version") receipt.specVersion = "9.0.0";
   if (mutation === "signature-mismatch") addSignature(receipt, true);
 
