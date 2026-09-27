@@ -108,6 +108,49 @@ test("source acquisition caches robots decisions and paces repeated domains", as
   assert.ok(second.signals.includes("domain_rate_limited"));
 });
 
+test("source acquisition refreshes cached robots rules after 24 hours", async () => {
+  let now = 1_000;
+  let robotsCalls = 0;
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    now: () => now,
+    resolveHostname: resolvePublicHostname,
+    fetchRobots: async () => {
+      robotsCalls += 1;
+      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+    }
+  });
+
+  await policy.prepare("https://docs.example.com/one");
+  now += 24 * 60 * 60 * 1_000;
+  await policy.prepare("https://docs.example.com/two");
+
+  assert.equal(robotsCalls, 2);
+});
+
+test("denied robots fetches retry after a short cooldown", async () => {
+  let now = 1_000;
+  let robotsCalls = 0;
+  let status = 503;
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    now: () => now,
+    resolveHostname: resolvePublicHostname,
+    fetchRobots: async () => {
+      robotsCalls += 1;
+      return { ok: status === 200, status, text: async () => "User-agent: *\nAllow: /\n" };
+    }
+  });
+
+  assert.equal((await policy.prepare("https://docs.example.com/one")).action, "deny");
+  assert.equal((await policy.prepare("https://docs.example.com/two")).action, "deny");
+  assert.equal(robotsCalls, 1);
+  now += 60 * 1_000;
+  status = 200;
+  assert.equal((await policy.prepare("https://docs.example.com/three")).action, "allow");
+  assert.equal(robotsCalls, 2);
+});
+
 test("concurrent source acquisition coalesces robots requests and reserves paced domain slots", async () => {
   let robotsCalls = 0;
   const robotsResolvers: Array<(response: RobotsFetchResponse) => void> = [];

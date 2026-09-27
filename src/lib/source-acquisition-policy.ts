@@ -25,6 +25,11 @@ interface RobotsResult {
   denial?: SourceAcquisitionDecision;
 }
 
+interface RobotsCacheEntry {
+  promise: Promise<RobotsResult>;
+  expiresAt: number;
+}
+
 export interface SourceAcquisitionPolicyOptions {
   userAgent?: string;
   minDomainDelayMs?: number;
@@ -47,6 +52,8 @@ interface RobotsGroup {
 }
 
 const MAX_ROBOTS_BYTES = 512 * 1024;
+const ROBOTS_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+const ROBOTS_DENIAL_RETRY_MS = 60 * 1_000;
 
 async function readRobotsText(response: RobotsFetchResponse): Promise<string> {
   if (!response.body) {
@@ -233,7 +240,7 @@ export class SourceAcquisitionPolicy {
   private readonly resolveHostname: (hostname: string) => Promise<Array<{ address: string; family: number }>>;
   private readonly now: () => number;
   private readonly sleep: (milliseconds: number) => Promise<void>;
-  private readonly robotsByOrigin = new Map<string, Promise<RobotsResult>>();
+  private readonly robotsByOrigin = new Map<string, RobotsCacheEntry>();
   private readonly nextRequestAt = new Map<string, number>();
   private readonly requestsByDomain = new Map<string, number>();
 
@@ -257,7 +264,8 @@ export class SourceAcquisitionPolicy {
 
   private getRobots(origin: string): Promise<RobotsResult> {
     const cached = this.robotsByOrigin.get(origin);
-    if (cached) return cached;
+    if (cached && cached.expiresAt > this.now()) return cached.promise;
+    if (cached) this.robotsByOrigin.delete(origin);
 
     const robotsRequest = (async () => {
       const deny = (reason: string, signals: string[]): RobotsResult => ({
@@ -332,7 +340,15 @@ export class SourceAcquisitionPolicy {
 
       return deny("source acquisition denied source because robots.txt redirect limit was reached", ["robots_redirect_limit", "human_review_required"]);
     })();
-    this.robotsByOrigin.set(origin, robotsRequest);
+    const cacheEntry = { promise: robotsRequest, expiresAt: Number.POSITIVE_INFINITY };
+    this.robotsByOrigin.set(origin, cacheEntry);
+    void robotsRequest.then((result) => {
+      if (this.robotsByOrigin.get(origin) === cacheEntry) {
+        cacheEntry.expiresAt = this.now() + (result.denial ? ROBOTS_DENIAL_RETRY_MS : ROBOTS_CACHE_TTL_MS);
+      }
+    }).catch(() => {
+      if (this.robotsByOrigin.get(origin) === cacheEntry) this.robotsByOrigin.delete(origin);
+    });
     return robotsRequest;
   }
 

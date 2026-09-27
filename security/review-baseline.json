@@ -49,6 +49,8 @@
         { "path": "src/tests/source-acquisition-policy.test.ts", "marker": "robots server errors, access denial, and network failures deny source acquisition" },
         { "path": "src/tests/source-acquisition-policy.test.ts", "marker": "robots response parsing stops at 512 KiB and cancels the remaining body" },
         { "path": "src/tests/source-acquisition-policy.test.ts", "marker": "concurrent source acquisition coalesces robots requests and reserves paced domain slots" },
+        { "path": "src/tests/source-acquisition-policy.test.ts", "marker": "source acquisition refreshes cached robots rules after 24 hours" },
+        { "path": "src/tests/source-acquisition-policy.test.ts", "marker": "denied robots fetches retry after a short cooldown" },
         { "path": "src/tests/direct-source.test.ts", "marker": "direct app URLs require the official HTTPS store hosts" },
         { "path": "src/tests/direct-source.test.ts", "marker": "direct app URLs reject credentials and nonstandard ports before metadata fetch" },
         { "path": "src/tests/evaluation.test.ts", "marker": "spoofed app-store URL falls back to DNS policy before robots or navigation" },

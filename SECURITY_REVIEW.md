@@ -42,7 +42,7 @@ Reviewers should also open the local verifier with network recording enabled, lo
 | Schema/runtime agreement | independent Ajv suite plus runtime conformance cases |
 | Tamper and signature failures | deterministic invalid hash and signature-mismatch cases |
 | Archive input | compressed, per-file, extracted-size, file-count, root, and traversal limits |
-| HTML, URL, and acquisition safety | receipt, management-dashboard, and verifier escaping; public HTTPS and app-store credential/port checks; private DNS and redirect rejection; robots parsing limit, product-token/group/pattern matching, safe redirects, fail-closed errors, and concurrent per-domain pacing |
+| HTML, URL, and acquisition safety | receipt, management-dashboard, and verifier escaping; public HTTPS and app-store credential/port checks; private DNS and redirect rejection; robots parsing limit, product-token/group/pattern matching, safe redirects, fail-closed errors, cache expiry, and concurrent per-domain pacing |
 | Secrets | publication scan over Git-tracked/publishable files and ignored local-state guards |
 | Local management server | loopback binding, attacker-controlled Host rejection, and same-origin control checks |
 | Local verifier | folder/ZIP fixtures, diff, keyboard/mobile checks, no persistent storage, offline-after-load manual QA |
