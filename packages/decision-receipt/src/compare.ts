@@ -24,6 +24,7 @@ export function compareDecisionReceipts(
     source.role,
     source.collectedAt,
     source.captureType,
+    source.snapshotPath,
     source.snapshotSha256
   ]);
   const sameSources = (left: DecisionReceiptSource[], right: DecisionReceiptSource[]) => {
@@ -143,8 +144,21 @@ export function renderDecisionReceiptComparison(
   const section = (title: string, lines: string[]) => lines.length > 0 ? [`## ${title}`, "", ...lines, ""] : [];
   const sourceLines = (items: DecisionReceiptSource[]) => items.map((source) =>
     `- ${inlineCode(JSON.stringify(source.title))} (${inlineCode(source.url)})`);
-  const changedSourceLines = comparison.changedSources.map(({ url, earlier, later }) =>
-    `- ${inlineCode(url)}: snapshot or source details changed (${earlier.length} earlier, ${later.length} later).`);
+  const sourceFields = ["title", "publisher", "role", "collectedAt", "captureType", "snapshotPath", "snapshotSha256"] as const;
+  const sourceValues = (sources: DecisionReceiptSource[], field: typeof sourceFields[number]) =>
+    [...sources]
+      .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+      .map((source) => ({ id: source.id, value: source[field] }));
+  const changedSourceLines = comparison.changedSources.flatMap(({ url, earlier, later }) => [
+    `- ${inlineCode(url)}`,
+    ...sourceFields.flatMap((field) => {
+      const previous = sourceValues(earlier, field);
+      const current = sourceValues(later, field);
+      return JSON.stringify(previous) === JSON.stringify(current)
+        ? []
+        : [`  - ${field}: ${inlineCode(JSON.stringify(previous))} → ${inlineCode(JSON.stringify(current))}`];
+    })
+  ]);
   const evidenceKey = (item: DecisionReceiptEvidenceRef | null) => item === null
     ? null
     : JSON.stringify([item.sourceId, item.relation, item.excerpt]);

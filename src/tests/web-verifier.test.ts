@@ -56,6 +56,8 @@ test("local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe 
   assert.match(app, /Synthesis \/ claims/);
   assert.match(app, /Next validation/);
   assert.match(app, /Show exact changes/);
+  assert.match(app, /comparison\.changedSources\.forEach/);
+  assert.match(app, /snapshotSha256/);
   assert.match(app, /comparison\.changedClaims\.forEach/);
   assert.match(app, /privateReceiptDataIncluded/);
   assert.match(app, /const bundle = Object\.create\(null\)/);

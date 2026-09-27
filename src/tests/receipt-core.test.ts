@@ -253,6 +253,8 @@ test("core diff reports changed source snapshots at an existing URL", () => {
   const earlier = exampleReceipt("full");
   const later = structuredClone(earlier);
   later.sources[0]!.snapshotSha256 = "b".repeat(64);
+  later.sources[0]!.collectedAt = "2026-09-01T00:00:00.000Z";
+  later.sources[0]!.title = "Updated `source` ![pixel](https://example.invalid/track)";
 
   const comparison = compareDecisionReceipts(earlier, later);
   assert.deepEqual(comparison.newSources, []);
@@ -261,7 +263,22 @@ test("core diff reports changed source snapshots at an existing URL", () => {
   assert.equal(comparison.changedSources.length, 1);
   assert.equal(comparison.changedSources[0]?.url, earlier.sources[0]?.url);
   assert.match(comparison.changedBecause.join(" "), /existing source URL changed/);
-  assert.match(renderDecisionReceiptComparison(comparison), /Existing sources changed/);
+  const markdown = renderDecisionReceiptComparison(comparison);
+  assert.match(markdown, /Existing sources changed/);
+  assert.match(markdown, /collectedAt/);
+  assert.match(markdown, /snapshotSha256/);
+  assert.match(markdown, /``\[\{"id":"source-1","value":"Updated `source` !\[pixel\]\(https:\/\/example\.invalid\/track\)"\}\]``/);
+});
+
+test("core diff detects a changed source snapshot path", () => {
+  const earlier = exampleReceipt("full");
+  const later = structuredClone(earlier);
+  later.sources[0]!.snapshotPath = "evidence/updated-source.md";
+
+  const comparison = compareDecisionReceipts(earlier, later);
+  assert.equal(comparison.changes.sources, true);
+  assert.equal(comparison.changedSources.length, 1);
+  assert.match(renderDecisionReceiptComparison(comparison), /snapshotPath/);
 });
 
 test("a clean TypeScript project installs only the core tarball and renders a diff", () => {
