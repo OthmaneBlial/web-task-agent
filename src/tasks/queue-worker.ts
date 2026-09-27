@@ -26,10 +26,6 @@ interface QueueWorkerResult {
   processedJobs: number;
 }
 
-function sleepMs(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export class QueueWorkerTask extends BaseTask<QueueWorkerOptions, QueueWorkerResult> {
   async run(): Promise<QueueWorkerResult> {
     injectFailure("queue-worker.run");
@@ -38,11 +34,13 @@ export class QueueWorkerTask extends BaseTask<QueueWorkerOptions, QueueWorkerRes
     let recoveredJobs = 0;
     let processedJobs = 0;
     let stopRequested = false;
+    let wakeIdleWait: (() => void) | null = null;
 
     const requestStop = (signal: string) => {
       if (!stopRequested) {
         stopRequested = true;
         this.log(`worker ${workerId} received ${signal}; finishing the current iteration before exit`);
+        wakeIdleWait?.();
       }
     };
 
@@ -54,6 +52,8 @@ export class QueueWorkerTask extends BaseTask<QueueWorkerOptions, QueueWorkerRes
 
     try {
       while (true) {
+        if (stopRequested) break;
+
         recoveredJobs += recoverStaleQueuedJobs({
           databasePath: this.options.databasePath
         });
@@ -70,7 +70,16 @@ export class QueueWorkerTask extends BaseTask<QueueWorkerOptions, QueueWorkerRes
           }
 
           this.log(`worker ${workerId} is idle; polling again soon`);
-          await sleepMs(Math.max(1, this.options.pollIntervalSeconds) * 1000);
+          await new Promise<void>((resolve) => {
+            let timer: NodeJS.Timeout;
+            const finish = () => {
+              clearTimeout(timer);
+              wakeIdleWait = null;
+              resolve();
+            };
+            timer = setTimeout(finish, Math.max(1, this.options.pollIntervalSeconds) * 1000);
+            wakeIdleWait = finish;
+          });
           continue;
         }
 
