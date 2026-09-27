@@ -12,8 +12,9 @@ test("public positioning explains source-backed research in plain language", () 
   const readme = read("README.md");
   const homepage = read("docs/index.html");
 
-  assert.match(readme, /The verification layer for AI research/);
-  assert.match(readme, /verify, challenge, and compare offline/);
+  assert.match(readme, /Research with sources attached\./);
+  assert.match(readme, /GitHub Actions are disabled for this repository/);
+  assert.doesNotMatch(readme, /actions\/workflows\//);
   assert.match(homepage, /Research with sources attached\./);
   assert.match(homepage, /Get a short report, source links, and an offline file check\./);
   assert.match(homepage, /Try the sample/);
