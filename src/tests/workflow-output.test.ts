@@ -13,14 +13,57 @@ import {
   buildAgentOutputPaths,
   writeWorkflowPackageArtifacts
 } from "../workflows/output-package";
+import { verifyReceiptDirectory } from "../lib/receipt";
 import { renderReport, renderResearchSummary } from "../tasks/agent/synthesis-stage";
 import type {
   AgentEvidenceBundle,
+  AgentEvidenceSource,
   AgentRunState
 } from "../types";
 
 function fixturePath(...segments: string[]): string {
   return path.join(process.cwd(), "src", "tests", "fixtures", ...segments);
+}
+
+function createEvidenceSource(input: {
+  rank: number;
+  sourceId: string;
+  title: string;
+  excerpt: string;
+  extractionId: string;
+  kind: AgentEvidenceSource["extractions"][number]["kind"];
+}): AgentEvidenceSource {
+  return {
+    query: "ai summary automation demand",
+    queryStatus: "completed",
+    rank: input.rank,
+    sourceId: input.sourceId,
+    documentId: `doc_${input.rank}`,
+    title: input.title,
+    url: `https://example.com/${input.sourceId}`,
+    canonicalUrl: `https://example.com/${input.sourceId}`,
+    site: "example.com",
+    snippet: input.excerpt,
+    reviewStatus: "read",
+    headings: [],
+    paragraphs: [],
+    contentType: "general",
+    qualitySignals: [],
+    sourceQualityScore: 0.8,
+    freshnessScore: 0.9,
+    trendScore: 0.9,
+    overallScore: 0.85,
+    extractions: [{
+      id: input.extractionId,
+      sourceId: input.sourceId,
+      documentId: `doc_${input.rank}`,
+      kind: input.kind,
+      value: input.excerpt,
+      evidenceText: input.excerpt,
+      confidence: 0.8,
+      method: "fixture"
+    }]
+  };
 }
 
 function createSampleEvidence(): AgentEvidenceBundle {
@@ -42,7 +85,24 @@ function createSampleEvidence(): AgentEvidenceBundle {
         searchProvider: "test"
       }
     ],
-    sources: [],
+    sources: [
+      createEvidenceSource({
+        rank: 1,
+        sourceId: "src_1",
+        title: "AI summaries work well for short runs",
+        excerpt: "AI summaries work well for short runs.",
+        extractionId: "ext_1",
+        kind: "claim"
+      }),
+      createEvidenceSource({
+        rank: 2,
+        sourceId: "src_2",
+        title: "Manual synthesis is too slow",
+        excerpt: "Manual synthesis is too slow.",
+        extractionId: "ext_3",
+        kind: "complaint"
+      })
+    ],
     highlights: {
       entities: ["AI Summary Automation"],
       themes: ["Long-running research workflows"],
@@ -312,6 +372,14 @@ test("workflow package writer creates polished handoff files", () => {
       )
     );
     assert.equal(JSON.parse(packageManifest).layoutChecks.allPresent, true);
+    const receiptVerification = verifyReceiptDirectory(tempDir);
+    assert.equal(receiptVerification.valid, true, receiptVerification.errors.join("; "));
+    const receipt = JSON.parse(fs.readFileSync(String(state.outputs.receiptPath), "utf8")) as {
+      claims: Array<{ evidence: Array<{ id: string }> }>;
+      contradictions: Array<{ evidenceIds: string[] }>;
+    };
+    const evidenceIds = new Set(receipt.claims.flatMap((claim) => claim.evidence.map((item) => item.id)));
+    assert.ok(receipt.contradictions[0]?.evidenceIds.every((id) => evidenceIds.has(id)));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

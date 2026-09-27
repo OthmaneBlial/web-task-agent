@@ -531,12 +531,38 @@ export function buildAgentDecisionReceipt(input: {
       limitation: references.length > 0 ? undefined : "No persisted source reference was attached to this finding."
     };
   }).filter((claim) => claim.evidence[0]?.sourceId);
-  const contradictions = evidence.contradictions.map((item) => ({
-    id: item.id,
-    topic: item.topic,
-    evidenceIds: item.evidenceIds,
-    note: item.reason
-  }));
+  const contradictionClaims: DecisionReceiptClaim[] = [];
+  const contradictions = evidence.contradictions.map((item, index) => {
+    const references = item.evidenceIds
+      .map((evidenceId): DecisionReceiptEvidenceRef | null => {
+        const direct = evidenceById.get(evidenceId);
+        const linked = referenced.get(evidenceId);
+        const sourceId = direct?.sourceId ?? linked?.sourceId;
+        if (!sourceId || !sourceIds.has(sourceId)) return null;
+        return {
+          id: `evidence-contradiction-${index + 1}-${evidenceId}`,
+          sourceId,
+          excerpt: direct?.text || linked?.value || item.topic,
+          relation: "context"
+        };
+      })
+      .filter((reference): reference is DecisionReceiptEvidenceRef => Boolean(reference));
+    if (references.length === 0 || references.length !== item.evidenceIds.length) {
+      throw new Error(`cannot preserve contradiction ${item.id}: source evidence is missing or unsafe`);
+    }
+    contradictionClaims.push({
+      id: `contradiction-${index + 1}`,
+      text: `Sources disagree about ${item.topic}: ${item.leftLabel} / ${item.rightLabel}.`,
+      status: "supported",
+      evidence: references
+    });
+    return {
+      id: item.id,
+      topic: item.topic,
+      evidenceIds: references.map((reference) => reference.id),
+      note: item.reason
+    };
+  });
   const limitations = [
     "A live receipt records the inputs and policy decisions observed by this run; it does not prove that a web source is true or complete.",
     ...(state.status === "completed" ? [] : [`Run status is ${state.status}; review incomplete stages before relying on the decision.`]),
@@ -562,7 +588,7 @@ export function buildAgentDecisionReceipt(input: {
       title: state.input.jobTitle || state.input.workflowName || "Web research decision",
       summary: state.researchSummary?.executiveSummary || "Review the evidence and unresolved validation items before deciding."
     },
-    claims,
+    claims: [...claims, ...contradictionClaims],
     sources: sourceItems,
     contradictions,
     nextValidation: state.researchSummary?.recommendations?.[0] || "Review the strongest claim, its contrary evidence, and the smallest test that could disprove it.",
@@ -598,12 +624,55 @@ export function signReceiptDirectory(input: {
 }): string {
   const rootDir = path.resolve(input.directory);
   const receiptPath = path.join(rootDir, "receipt.json");
-  if (!fs.existsSync(receiptPath)) throw new Error(`receipt.json is missing: ${receiptPath}`);
+  const receiptBytes = readReceiptFile(rootDir, "receipt.json");
+  if (!receiptBytes) throw new Error("receipt.json is missing, unsafe, or not a regular file");
+  const parsedReceipt: unknown = JSON.parse(receiptBytes.toString("utf8"));
+  const validation = validateDecisionReceipt(parsedReceipt);
+  if (!validation.valid || !validation.receipt) {
+    throw new Error(`cannot sign an invalid receipt: ${validation.errors.join("; ")}`);
+  }
+  const receipt = validation.receipt;
+  const receiptErrors: string[] = [];
+  if (!validateReceiptShape(receipt, rootDir, receiptErrors)) {
+    throw new Error(`cannot sign a receipt with invalid package evidence: ${receiptErrors.join("; ")}`);
+  }
   if (!input.keyId.trim()) throw new Error("signature keyId is required");
-  const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8")) as DecisionReceipt;
-  if (receipt.type !== "decision-receipt") throw new Error("cannot sign a non-decision receipt");
   const privateKey = privateKeyObject(input.privateKey);
   if (privateKey.asymmetricKeyType !== "ed25519") throw new Error("receipt signing requires an Ed25519 private key");
+
+  const manifestPath = path.join(rootDir, "integrity-manifest.json");
+  let existingManifest: Partial<ReceiptIntegrityManifest> | null = null;
+  try {
+    const manifestStats = fs.lstatSync(manifestPath);
+    if (manifestStats.isSymbolicLink() || !manifestStats.isFile()) {
+      throw new Error("integrity-manifest.json must be a regular package file");
+    }
+    const manifestBytes = readReceiptFile(rootDir, "integrity-manifest.json");
+    if (!manifestBytes) throw new Error("integrity-manifest.json is missing or unsafe");
+    const parsedManifest: unknown = JSON.parse(manifestBytes.toString("utf8"));
+    if (!parsedManifest || typeof parsedManifest !== "object" || Array.isArray(parsedManifest)) {
+      throw new Error("integrity-manifest.json must contain an object");
+    }
+    existingManifest = parsedManifest as Partial<ReceiptIntegrityManifest>;
+    if (existingManifest.files !== undefined && !Array.isArray(existingManifest.files)) {
+      throw new Error("integrity-manifest.json files must be an array");
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const existingFiles = (existingManifest?.files ?? []).map((entry) => {
+    const relative = String(entry?.path ?? "");
+    if (!isSafeRelativeReceiptPath(relative)) throw new Error(`integrity manifest path is unsafe: ${relative}`);
+    return path.join(rootDir, relative);
+  });
+  const files = [receiptPath, ...existingFiles, ...receipt.sources.flatMap((source) => source.snapshotPath ? [path.join(rootDir, source.snapshotPath)] : [])];
+  integrityFiles(rootDir, files);
+  const generatedAt = existingManifest?.generatedAt || receipt.generatedAt;
+  if (typeof generatedAt !== "string" || !Number.isFinite(Date.parse(generatedAt))) {
+    throw new Error("integrity manifest generatedAt must be a valid timestamp");
+  }
+
   const signatureBase64 = signBytes(null, receiptSigningPayload(receipt), privateKey).toString("base64");
   const publicKeyPem = createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString();
   const signedReceipt: DecisionReceipt = {
@@ -617,12 +686,7 @@ export function signReceiptDirectory(input: {
     }
   };
   writeJsonAtomic(receiptPath, signedReceipt);
-  const manifestPath = path.join(rootDir, "integrity-manifest.json");
-  const existingManifest = fs.existsSync(manifestPath)
-    ? JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Partial<ReceiptIntegrityManifest>
-    : null;
-  const files = (existingManifest?.files ?? []).map((entry) => path.join(rootDir, String(entry.path)));
-  writeReceiptIntegrityManifest({ rootDir, files: [receiptPath, ...files], generatedAt: existingManifest?.generatedAt || receipt.generatedAt });
+  writeReceiptIntegrityManifest({ rootDir, files, generatedAt });
   return receiptPath;
 }
 
@@ -670,13 +734,19 @@ function validateHttpsUrl(value: string): boolean {
 }
 
 function integrityFiles(rootDir: string, paths: string[]): ReceiptIntegrityManifestFile[] {
-  return [...new Set(paths)]
-    .map((filePath) => path.resolve(filePath))
-    .filter((filePath) => fs.existsSync(filePath) && fs.statSync(filePath).isFile())
-    .map((filePath) => ({
-      path: safeRelativePath(rootDir, filePath),
-      sha256: fileSha256(filePath),
-      bytes: fs.statSync(filePath).size
+  const contentsByPath = new Map<string, Buffer>();
+  for (const filePath of paths) {
+    const relative = safeRelativePath(rootDir, path.resolve(filePath));
+    if (contentsByPath.has(relative)) continue;
+    const contents = readReceiptFile(rootDir, relative);
+    if (!contents) throw new Error(`receipt artifact is missing, unsafe, or not a regular file: ${relative}`);
+    contentsByPath.set(relative, contents);
+  }
+  return [...contentsByPath.entries()]
+    .map(([filePath, contents]) => ({
+      path: filePath,
+      sha256: sha256(contents),
+      bytes: contents.byteLength
     }))
     .sort((left, right) => left.path.localeCompare(right.path));
 }
@@ -688,15 +758,32 @@ export function writeReceiptIntegrityManifest(input: {
 }): string {
   const rootDir = path.resolve(input.rootDir);
   const manifestPath = path.join(rootDir, "integrity-manifest.json");
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  if (typeof generatedAt !== "string" || !Number.isFinite(Date.parse(generatedAt))) {
+    throw new Error("integrity manifest generatedAt must be a valid timestamp");
+  }
   ensureDir(rootDir);
+  const receiptBytes = readReceiptFile(rootDir, "receipt.json");
+  if (!receiptBytes) throw new Error("receipt.json must exist as a regular package file before writing its integrity manifest");
+  const validation = validateDecisionReceipt(JSON.parse(receiptBytes.toString("utf8")));
+  if (!validation.valid || !validation.receipt) {
+    throw new Error(`cannot write an integrity manifest for an invalid receipt: ${validation.errors.join("; ")}`);
+  }
+  const files = integrityFiles(rootDir, input.files.filter((filePath) => path.resolve(filePath) !== manifestPath));
+  const includedPaths = new Set(files.map((entry) => entry.path));
+  const requiredPaths = ["receipt.json", ...validation.receipt.sources.flatMap((source) => source.snapshotPath ? [source.snapshotPath] : [])];
+  const missingPaths = requiredPaths.filter((filePath) => !includedPaths.has(filePath));
+  if (missingPaths.length > 0) {
+    throw new Error(`integrity manifest files do not cover required receipt artifacts: ${missingPaths.join(", ")}`);
+  }
   const manifest: ReceiptIntegrityManifest = {
     schemaVersion: DECISION_RECEIPT_SCHEMA_VERSION,
     specVersion: DECISION_RECEIPT_SPEC_VERSION,
     type: "receipt-integrity-manifest",
     algorithm: RECEIPT_HASH_ALGORITHM,
     receiptPath: "receipt.json",
-    generatedAt: input.generatedAt ?? new Date().toISOString(),
-    files: integrityFiles(rootDir, input.files.filter((filePath) => path.resolve(filePath) !== manifestPath))
+    generatedAt,
+    files
   };
   writeJsonAtomic(manifestPath, manifest);
   return manifestPath;

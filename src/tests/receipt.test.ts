@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +9,8 @@ import { listDemoFixtures, writeDemoPackage } from "../demos";
 import {
   compareDecisionReceipts,
   renderDecisionReceiptComparison,
+  signReceiptDirectory,
+  writeReceiptIntegrityManifest,
   verifyReceiptDirectory
 } from "../lib/receipt";
 
@@ -27,6 +30,52 @@ test("deterministic demo packages include a verifiable decision receipt", () => 
     assert.ok(result.receipt?.claims.every((claim) => claim.evidence.length > 0));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("manifest writer refuses missing package artifacts without replacing a valid manifest", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-manifest-write-"));
+  try {
+    const written = writeDemoPackage({ id: "local-first-risk-review", outputDir: root });
+    const manifestPath = path.join(root, "integrity-manifest.json");
+    const originalManifest = fs.readFileSync(manifestPath);
+    const manifest = JSON.parse(originalManifest.toString("utf8")) as {
+      generatedAt: string;
+      files: Array<{ path: string }>;
+    };
+    const files = manifest.files.map((entry) => path.join(root, entry.path));
+
+    assert.throws(
+      () => writeReceiptIntegrityManifest({
+        rootDir: root,
+        files: [...files, path.join(root, "handoff", "missing.md")],
+        generatedAt: manifest.generatedAt
+      }),
+      /receipt artifact is missing, unsafe, or not a regular file/
+    );
+    assert.deepEqual(fs.readFileSync(manifestPath), originalManifest);
+    assert.equal(verifyReceiptDirectory(written.outputDir).valid, true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("receipt signing refuses incomplete packages before replacing receipt bytes", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-sign-incomplete-"));
+  try {
+    const written = writeDemoPackage({ id: "local-first-risk-review", outputDir: root });
+    const receiptJsonPath = path.join(root, "receipt.json");
+    const originalReceipt = fs.readFileSync(receiptJsonPath);
+    fs.rmSync(written.reportPath);
+    const keyPair = generateKeyPairSync("ed25519");
+
+    assert.throws(
+      () => signReceiptDirectory({ directory: root, privateKey: keyPair.privateKey, keyId: "test-key" }),
+      /receipt artifact is missing, unsafe, or not a regular file/
+    );
+    assert.deepEqual(fs.readFileSync(receiptJsonPath), originalReceipt);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

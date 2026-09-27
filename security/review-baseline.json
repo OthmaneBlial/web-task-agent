@@ -26,6 +26,8 @@
       "evidence": [
         { "path": "src/tests/web-verifier.test.ts", "marker": "actual browser bundle streams a rooted ZIP and rejects path traversal" },
         { "path": "src/tests/receipt.test.ts", "marker": "receipt verification refuses symlinked package files" },
+        { "path": "src/tests/receipt.test.ts", "marker": "manifest writer refuses missing package artifacts without replacing a valid manifest" },
+        { "path": "src/tests/receipt.test.ts", "marker": "receipt signing refuses incomplete packages before replacing receipt bytes" },
         { "path": "src/tests/receipt-core.test.ts", "marker": "receipt manifest covers receipt.json and every referenced source snapshot" },
         { "path": "src/tests/receipt.test.ts", "marker": "receipt directory verification rejects malformed manifest metadata" },
         { "path": "src/tests/receipt.test.ts", "marker": "receipt directory verification rejects duplicate manifest paths" },
