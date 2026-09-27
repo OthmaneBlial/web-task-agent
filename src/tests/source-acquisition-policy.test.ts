@@ -143,6 +143,30 @@ test("invalid numeric options retain configured source acquisition bounds", asyn
   }
 });
 
+test("positive fractional domain request limits keep a one-request cap", async () => {
+  const previousLimit = process.env.WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS;
+  process.env.WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS = "0.4";
+
+  try {
+    const policy = new SourceAcquisitionPolicy({
+      minDomainDelayMs: 0,
+      resolveHostname: resolvePublicHostname,
+      fetchRobots: async () => ({ ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" })
+    });
+
+    const first = await policy.prepare("https://docs.example.com/one");
+    const second = await policy.prepare("https://docs.example.com/two");
+
+    assert.equal(first.action, "allow");
+    assert.equal(first.domainRequestLimit, 1);
+    assert.equal(second.action, "deny");
+    assert.equal(second.domainRequestLimit, 1);
+  } finally {
+    if (previousLimit === undefined) delete process.env.WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS;
+    else process.env.WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS = previousLimit;
+  }
+});
+
 test("source acquisition refreshes cached robots rules after 24 hours", async () => {
   let now = 1_000;
   let robotsCalls = 0;

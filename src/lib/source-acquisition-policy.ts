@@ -93,8 +93,7 @@ function configuredDomainRequestLimit(): number | null {
   if (raw === undefined || raw.trim() === "") return 12;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) return 12;
-  const rounded = Math.round(parsed);
-  return rounded <= 0 ? null : Math.min(100, rounded);
+  return parsed <= 0 ? null : Math.max(1, Math.min(100, Math.round(parsed)));
 }
 
 function normalizeDomain(value: string): string {
