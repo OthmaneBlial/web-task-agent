@@ -15,7 +15,7 @@ import { loadAgentMemory } from "../lib/agent-memory";
 import { JobStore } from "../lib/job-store";
 import { LlmService } from "../lib/llm";
 import { createPromptTraceRecorder } from "../lib/prompt-trace";
-import { linkQueuedJobToJob } from "../lib/job-queue";
+import { linkQueuedJobToJob, ownsQueuedJobLease } from "../lib/job-queue";
 import type {
   AgentCommentsDraft,
   AgentEvidenceBundle,
@@ -109,6 +109,12 @@ interface AgentTaskResult extends TaskJobInfo {
 class JobControlSignal extends Error {
   constructor(readonly action: JobControlAction) {
     super(`job control requested: ${action}`);
+  }
+}
+
+class QueueLeaseLostSignal extends Error {
+  constructor(queueId: string) {
+    super(`queue lease for ${queueId} is no longer owned by this worker`);
   }
 }
 
@@ -535,10 +541,27 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
   }
 
   private saveState(cachePath: string, state: AgentRunState): void {
+    this.assertQueueLeaseOwned();
     this.activeLeaseStore?.assertExecutionLeaseOwned();
     state.updatedAt = nowIso();
     this.writePipelineManifest(state);
     saveTaskState("agent", cachePath, state);
+  }
+
+  private assertQueueLeaseOwned(): void {
+    const queueId = this.options.queuedJobId;
+    const workerId = this.options.queueWorkerId;
+    if (
+      queueId &&
+      workerId &&
+      !ownsQueuedJobLease({
+        databasePath: this.options.queueDatabasePath,
+        queueId,
+        workerId
+      })
+    ) {
+      throw new QueueLeaseLostSignal(queueId);
+    }
   }
 
   private writeDraftFiles(
@@ -573,6 +596,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     state: AgentRunState,
     cachePath: string
   ): void {
+    this.assertQueueLeaseOwned();
     jobStore.assertExecutionLeaseOwned();
     const pending = jobStore.getPendingControlAction();
     if (!pending) {
@@ -1159,6 +1183,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       });
       leaseAcquired = true;
       this.activeLeaseStore = jobStore;
+      this.assertQueueLeaseOwned();
       this.jobEventLogger = (message) => {
         jobStore.appendRunEvent("log", message, {
           source: "agent-runner"
@@ -1436,7 +1461,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                         searchUrl: result.searchUrl,
                         pagesVisited: result.pagesVisited,
                         resultCount: result.results.length
-                      })
+                      }),
+                      assertOwnership: () => this.assertQueueLeaseOwned()
                     }
                   );
                   const filteredResults = this.filterNovelSearchResults(
@@ -1529,7 +1555,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                             result.startIndex + result.fetchedCount
                           )
                         )
-                      })
+                      }),
+                      assertOwnership: () => this.assertQueueLeaseOwned()
                     }
                   );
 
@@ -1568,7 +1595,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                     documentCount: result.documentCount,
                     extractionCount: result.extractionCount,
                     snapshotCount: result.snapshotCount
-                  })
+                  }),
+                  assertOwnership: () => this.assertQueueLeaseOwned()
                 }
               );
 
@@ -1753,7 +1781,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
                 evidenceSources: evidenceBundle!.counts.sources,
                 evidenceExtractions: evidenceBundle!.counts.extractions,
                 referencedEvidence: result.referencedEvidence.length
-              })
+              }),
+              assertOwnership: () => this.assertQueueLeaseOwned()
             }
           );
 
@@ -1819,7 +1848,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             {
               output: (result) => ({
                 headline: result.headline
-              })
+              }),
+              assertOwnership: () => this.assertQueueLeaseOwned()
             }
           );
           updateStepStatus(state.plan, "draft_post", "completed");
@@ -1856,7 +1886,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
             {
               output: (result) => ({
                 commentsCount: result.comments.length
-              })
+              }),
+              assertOwnership: () => this.assertQueueLeaseOwned()
             }
           );
           updateStepStatus(state.plan, "draft_comments", "completed");
@@ -1937,7 +1968,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           reportPath: synthesisStage.writeReportArtifact(state, jobStore)
         }),
         {
-          output: (result) => result
+          output: (result) => result,
+          assertOwnership: () => this.assertQueueLeaseOwned()
         }
       );
       writeWorkflowPackageArtifacts(state, jobStore.getAgentEvidenceBundle());
@@ -2002,6 +2034,9 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         elapsedMinutes: computeElapsedMinutes(state.startedAt, state.updatedAt)
       };
     } catch (error) {
+      if (error instanceof QueueLeaseLostSignal) {
+        throw error;
+      }
       if (!leaseAcquired || !jobStore.ownsExecutionLease()) {
         throw error;
       }

@@ -13,8 +13,15 @@ import {
   listJobRunEvents,
   requestStoredJobControl
 } from "../lib/job-store";
+import {
+  claimNextQueuedJob,
+  enqueueQueuedAgentJob,
+  ownsQueuedJobLease,
+  recoverStaleQueuedJobs
+} from "../lib/job-queue";
 import { createPipelineState } from "../tasks/agent/pipeline-state";
 import type {
+  AgentRunOptions,
   AgentPlan,
   AgentResearchResult,
   AgentResearchSummary,
@@ -116,7 +123,11 @@ function createState(input: {
   };
 }
 
-function createRunner(cachePath: string, reportPath: string) {
+function createRunner(
+  cachePath: string,
+  reportPath: string,
+  extraOptions: Partial<AgentRunOptions> = {}
+) {
   const { AgentRunnerTask } = require("../tasks/agent-runner") as typeof import("../tasks/agent-runner");
   return new AgentRunnerTask({
     instruction: "Research interruption handling",
@@ -126,7 +137,8 @@ function createRunner(cachePath: string, reportPath: string) {
     maxQueries: 3,
     maxResultsPerQuery: 8,
     fetchBatchSize: 4,
-    maxRuntimeHours: 4
+    maxRuntimeHours: 4,
+    ...extraOptions
   });
 }
 
@@ -337,6 +349,107 @@ test("agent runner does not change an active job before acquiring its lease", as
     assert.deepEqual(after?.artifacts, before?.artifacts);
     assert.deepEqual(after?.events, before?.events);
     assert.deepEqual(fs.readFileSync(cachePath), cacheBefore);
+  } finally {
+    restoreStubs();
+    closeSharedJobDatabase(databasePath);
+    process.env.ANTHROPIC_API_KEY = previousEnv.apiKey;
+    process.env.ANTHROPIC_BASE_URL = previousEnv.baseUrl;
+    process.env.WEB_TASK_AGENT_DB_PATH = previousEnv.databasePath;
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("agent runner releases its job lease when its queue lease is replaced", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-runner-queue-lease-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const queueDatabasePath = path.join(tempDir, "queue.sqlite");
+  const cachePath = path.join(tempDir, "agent-cache.json");
+  const reportPath = path.join(tempDir, "artifacts", "report.md");
+  const previousEnv = {
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    baseUrl: process.env.ANTHROPIC_BASE_URL,
+    databasePath: process.env.WEB_TASK_AGENT_DB_PATH
+  };
+  const state = createState({
+    runId: "job_replaced_queue_lease",
+    reportPath,
+    plan: createPlan({ researchQueries: ["queue lease ownership"] })
+  });
+  let cacheAtLeaseLoss: Buffer | null = null;
+  let replacementClaimed = false;
+
+  process.env.ANTHROPIC_API_KEY = "test-key";
+  process.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:1";
+  process.env.WEB_TASK_AGENT_DB_PATH = databasePath;
+  saveTaskState("agent", cachePath, state);
+
+  const queued = enqueueQueuedAgentJob({
+    databasePath: queueDatabasePath,
+    payload: {
+      taskType: "agent",
+      mode: "agent",
+      label: "Lease replacement test",
+      options: {
+        instruction: state.input.instruction,
+        resume: true,
+        cachePath,
+        reportPath
+      }
+    }
+  });
+  assert.ok(claimNextQueuedJob({
+    databasePath: queueDatabasePath,
+    workerId: "worker-old",
+    leaseTtlSeconds: 60
+  }));
+  const restoreStubs = installRunnerTestStubs(() => {
+    cacheAtLeaseLoss = fs.readFileSync(cachePath);
+    const db = new DatabaseSync(queueDatabasePath);
+    try {
+      db.prepare("UPDATE queued_jobs SET lease_expires_at = ? WHERE id = ?")
+        .run("2000-01-01T00:00:00.000Z", queued.queueId);
+    } finally {
+      db.close();
+    }
+    assert.equal(recoverStaleQueuedJobs({ databasePath: queueDatabasePath }), 1);
+    replacementClaimed = Boolean(claimNextQueuedJob({
+      databasePath: queueDatabasePath,
+      workerId: "worker-new",
+      leaseTtlSeconds: 60
+    }));
+  });
+
+  try {
+    await assert.rejects(
+      createRunner(cachePath, reportPath, {
+        queuedJobId: queued.queueId,
+        queueWorkerId: "worker-old",
+        queueDatabasePath
+      }).run(),
+      /queue lease for .* is no longer owned by this worker/
+    );
+    assert.equal(replacementClaimed, true);
+    assert.equal(ownsQueuedJobLease({
+      databasePath: queueDatabasePath,
+      queueId: queued.queueId,
+      workerId: "worker-new"
+    }), true);
+    assert.ok(cacheAtLeaseLoss);
+    assert.deepEqual(fs.readFileSync(cachePath), cacheAtLeaseLoss);
+    const detail = getStoredJobDetail({ databasePath, jobId: state.runId });
+    assert.equal(detail?.job.status, "running");
+    assert.equal(
+      detail?.steps.find((step) => step.stepKey === "search_sources")?.status,
+      "running"
+    );
+    const jobDb = new DatabaseSync(databasePath);
+    try {
+      const row = jobDb.prepare("SELECT lease_owner_id FROM jobs WHERE id = ?")
+        .get(state.runId) as Record<string, unknown> | undefined;
+      assert.equal(row?.lease_owner_id, null);
+    } finally {
+      jobDb.close();
+    }
   } finally {
     restoreStubs();
     closeSharedJobDatabase(databasePath);

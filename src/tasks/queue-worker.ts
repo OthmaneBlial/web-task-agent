@@ -88,12 +88,18 @@ export class QueueWorkerTask extends BaseTask<QueueWorkerOptions, QueueWorkerRes
 
         try {
           heartbeatTimer = setInterval(() => {
-            heartbeatQueuedJob({
-              databasePath: this.options.databasePath,
-              queueId: queuedJob.queueId,
-              workerId,
-              leaseTtlSeconds: queueLeaseTtlSeconds
-            });
+            try {
+              heartbeatQueuedJob({
+                databasePath: this.options.databasePath,
+                queueId: queuedJob.queueId,
+                workerId,
+                leaseTtlSeconds: queueLeaseTtlSeconds
+              });
+            } catch (error) {
+              this.log(
+                `queue heartbeat warning: ${error instanceof Error ? error.message : String(error)}`
+              );
+            }
           }, Math.max(15, Math.round(queueLeaseTtlSeconds / 4)) * 1000);
           heartbeatTimer.unref?.();
 
@@ -104,7 +110,9 @@ export class QueueWorkerTask extends BaseTask<QueueWorkerOptions, QueueWorkerRes
           const result = await new AgentRunnerTask(
             {
               ...(queuedJob.payload.options as AgentRunOptions),
-              queuedJobId: queuedJob.queueId
+              queuedJobId: queuedJob.queueId,
+              queueWorkerId: workerId,
+              queueDatabasePath: this.options.databasePath
             }
           ).run();
           if (result.status === "paused" || result.status === "cancelled") {

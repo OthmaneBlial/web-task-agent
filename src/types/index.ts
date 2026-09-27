@@ -459,6 +459,8 @@ export interface AgentRunOptions {
   workflowTemplateId?: string | null;
   workflowInputs?: Record<string, string | null>;
   queuedJobId?: string | null;
+  queueWorkerId?: string | null;
+  queueDatabasePath?: string;
 }
 
 export type AgentPipelineStage = "search" | "fetch" | "extract" | "completed";

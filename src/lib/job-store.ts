@@ -3852,15 +3852,19 @@ export class JobStore {
     work: () => Promise<T>,
     options?: {
       output?: (result: T) => unknown;
+      assertOwnership?: () => void;
     }
   ): Promise<T> {
+    options?.assertOwnership?.();
     this.startStep(step);
 
     try {
       const result = await work();
+      options?.assertOwnership?.();
       this.completeStep(step, options?.output ? options.output(result) : undefined);
       return result;
     } catch (error) {
+      options?.assertOwnership?.();
       this.failStep(step, error);
       throw error;
     }

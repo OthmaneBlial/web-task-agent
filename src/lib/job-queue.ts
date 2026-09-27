@@ -762,7 +762,7 @@ export function heartbeatQueuedJob(input: {
 }): void {
   withQueueDatabase(input.databasePath, (db) => {
     const timestamp = nowIso();
-    db.prepare(`
+    const result = db.prepare(`
       UPDATE queued_jobs
       SET
         lease_expires_at = ?,
@@ -775,6 +775,24 @@ export function heartbeatQueuedJob(input: {
       input.queueId,
       input.workerId
     );
+    if (Number(result.changes ?? 0) === 0) {
+      throw new Error(`queue lease for ${input.queueId} is no longer owned by ${input.workerId}`);
+    }
+  });
+}
+
+export function ownsQueuedJobLease(input: {
+  databasePath?: string;
+  queueId: string;
+  workerId: string;
+}): boolean {
+  return withQueueDatabase(input.databasePath, (db) => {
+    const row = db.prepare(`
+      SELECT 1
+      FROM queued_jobs
+      WHERE id = ? AND status = 'running' AND leased_by = ?
+    `).get(input.queueId, input.workerId);
+    return Boolean(row);
   });
 }
 

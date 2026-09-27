@@ -13,6 +13,8 @@ import {
   enqueueQueuedAgentJob,
   failQueuedJob,
   getQueuedJobSummary,
+  heartbeatQueuedJob,
+  ownsQueuedJobLease,
   recoverStaleQueuedJobs
 } from "../lib/job-queue";
 
@@ -46,6 +48,7 @@ test("stale queued job recovery forces resume from saved cache state", () => {
     });
     assert.ok(claimed);
     assert.equal(claimed.payload.options.resume, false);
+    assert.equal(ownsQueuedJobLease({ databasePath, queueId: queued.queueId, workerId: "worker-a" }), true);
 
     saveTaskState("agent", cachePath, {
       runId: "saved_run",
@@ -84,6 +87,17 @@ test("stale queued job recovery forces resume from saved cache state", () => {
     });
     assert.ok(reclaimed);
     assert.equal(reclaimed.payload.options.resume, true);
+    assert.equal(ownsQueuedJobLease({ databasePath, queueId: queued.queueId, workerId: "worker-a" }), false);
+    assert.equal(ownsQueuedJobLease({ databasePath, queueId: queued.queueId, workerId: "worker-b" }), true);
+    assert.throws(
+      () => heartbeatQueuedJob({
+        databasePath,
+        queueId: queued.queueId,
+        workerId: "worker-a",
+        leaseTtlSeconds: 60
+      }),
+      /no longer owned by worker-a/
+    );
     const summary = getQueuedJobSummary({
       databasePath
     });
