@@ -123,12 +123,31 @@ test("job comparison reports new and disappeared sources plus decision changes",
     fs.writeFileSync(leftReport, "## Decision\n\nKeep the old direction.\n", "utf8");
     fs.writeFileSync(rightReport, "## Decision\n\nChange the direction.\n", "utf8");
 
-    const comparison = compareJobExports(
-      buildJobExportData(createDetail({ id: "job_old", cachePath: leftCache, reportPath: leftReport })),
-      buildJobExportData(createDetail({ id: "job_new", cachePath: rightCache, reportPath: rightReport }))
+    const left = buildJobExportData(createDetail({ id: "job_old", cachePath: leftCache, reportPath: leftReport }));
+    const right = buildJobExportData(createDetail({ id: "job_new", cachePath: rightCache, reportPath: rightReport }));
+    left.sources.push(
+      { ...left.sources[0]!, title: "Old alpha", url: "https://docs.example.com/a-old" },
+      { ...left.sources[0]!, title: "Old zeta", url: "https://docs.example.com/z-old" }
     );
-    assert.equal(comparison.newSources[0]?.title, "New source");
-    assert.equal(comparison.disappearedSources[0]?.title, "Old source");
+    right.sources.push(
+      { ...right.sources[0]!, title: "New alpha", url: "https://docs.example.com/a-new" },
+      { ...right.sources[0]!, title: "New zeta", url: "https://docs.example.com/z-new" }
+    );
+    const comparison = compareJobExports(left, right);
+    assert.deepEqual(comparison.newSources.map((source) => source.url), [
+      "https://docs.example.com/a-new",
+      "https://docs.example.com/new",
+      "https://docs.example.com/z-new"
+    ]);
+    assert.deepEqual(comparison.disappearedSources.map((source) => source.url), [
+      "https://docs.example.com/a-old",
+      "https://docs.example.com/old",
+      "https://docs.example.com/z-old"
+    ]);
+    assert.deepEqual(compareJobExports(
+      { ...left, sources: [...left.sources].reverse() },
+      { ...right, sources: [...right.sources].reverse() }
+    ), comparison);
     assert.equal(comparison.decisionChanged, true);
     const title = "![pixel](https://example.invalid/track) ``title``";
     const excerpt = "![pixel](https://example.invalid/track) ``decision``";

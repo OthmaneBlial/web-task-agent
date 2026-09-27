@@ -17,6 +17,10 @@ export interface ExportedResearchSource {
   qualityScore: number | null;
 }
 
+function compareSourceUrl(left: ExportedResearchSource, right: ExportedResearchSource): number {
+  return left.url < right.url ? -1 : left.url > right.url ? 1 : 0;
+}
+
 export interface JobExportData {
   schemaVersion: 1;
   exportedAt: string;
@@ -150,7 +154,7 @@ export function collectCachedResearchSources(cachePath: string | null): Exported
     }
   }
 
-  return sources.sort((left, right) => left.url.localeCompare(right.url));
+  return sources.sort(compareSourceUrl);
 }
 
 export function buildJobExportData(detail: StoredJobDetail, exportedAt: string = new Date().toISOString()): JobExportData {
@@ -271,8 +275,8 @@ export function compareJobExports(left: JobExportData, right: JobExportData): Jo
   const leftByUrl = new Map(left.sources.map((source) => [source.url, source]));
   const rightByUrl = new Map(right.sources.map((source) => [source.url, source]));
   const changedBecause: string[] = [];
-  const newSources = right.sources.filter((source) => !leftByUrl.has(source.url));
-  const disappearedSources = left.sources.filter((source) => !rightByUrl.has(source.url));
+  const newSources = right.sources.filter((source) => !leftByUrl.has(source.url)).sort(compareSourceUrl);
+  const disappearedSources = left.sources.filter((source) => !rightByUrl.has(source.url)).sort(compareSourceUrl);
   const reportChanged = left.reportSha256 !== right.reportSha256;
   const decisionChanged = left.decisionExcerpt !== right.decisionExcerpt;
   if (newSources.length > 0) changedBecause.push(`${newSources.length} source(s) were added`);
