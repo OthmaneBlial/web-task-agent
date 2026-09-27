@@ -69,6 +69,12 @@
       "expectedCode": "manifest_contract_invalid"
     },
     {
+      "id": "manifest-path-duplicated",
+      "mutation": "duplicate-manifest-file",
+      "expectedValid": false,
+      "expectedCode": "manifest_path_duplicate"
+    },
+    {
       "id": "signature-mismatch",
       "mutation": "signature-mismatch",
       "expectedValid": false,

@@ -115,6 +115,16 @@ test("actual browser bundle streams a rooted ZIP and rejects path traversal", as
   assert.equal(malformed.valid, false);
   assert.ok(malformed.issues.some((issue) => issue.code === "manifest_contract_invalid"));
 
+  const duplicateManifestBundle = { ...unpacked };
+  const duplicateManifest = JSON.parse(new TextDecoder().decode(duplicateManifestBundle["integrity-manifest.json"] as Uint8Array)) as {
+    files: Array<{ path: string; sha256: string; bytes: number }>;
+  };
+  duplicateManifest.files.push({ ...duplicateManifest.files[0]! });
+  duplicateManifestBundle["integrity-manifest.json"] = strToU8(JSON.stringify(duplicateManifest));
+  const duplicated = await verifier.verifyReceiptBundle(duplicateManifestBundle);
+  assert.equal(duplicated.valid, false);
+  assert.ok(duplicated.issues.some((issue) => issue.code === "manifest_path_duplicate"));
+
   const magicPathArchive = zipSync({ "payload99": strToU8("preserved") });
   const oldName = strToU8("payload99");
   const magicName = strToU8("__proto__");

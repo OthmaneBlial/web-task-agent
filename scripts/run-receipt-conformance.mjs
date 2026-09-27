@@ -113,6 +113,7 @@ async function bundleFor(mutation) {
   if (mutation === "invalid-manifest-algorithm") manifest.algorithm = "md5";
   if (mutation === "invalid-manifest-receipt-path") manifest.receiptPath = "other.json";
   if (mutation === "invalid-manifest-timestamp") manifest.generatedAt = "not-a-date";
+  if (mutation === "duplicate-manifest-file") manifest.files.push({ ...manifest.files[0] });
   const bundle = {
     ...files,
     "integrity-manifest.json": `${JSON.stringify(manifest, null, 2)}\n`

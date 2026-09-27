@@ -136,6 +136,26 @@ test("receipt directory verification rejects malformed manifest metadata", () =>
   }
 });
 
+test("receipt directory verification rejects duplicate manifest paths", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-manifest-duplicate-"));
+  try {
+    const bundle = path.join(root, "bundle");
+    writeDemoPackage({ id: "local-first-risk-review", outputDir: bundle });
+    const manifestPath = path.join(bundle, "integrity-manifest.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      files: Array<{ path: string; sha256: string; bytes: number }>;
+    };
+    manifest.files.push({ ...manifest.files[0]! });
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const result = verifyReceiptDirectory(bundle);
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some((error) => error.includes("integrity manifest path is duplicated")), result.errors.join("; "));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("decision receipt comparison explains source, claim, and decision changes", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-diff-"));
   try {

@@ -891,6 +891,10 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
             errors.push(`integrity manifest path escapes package root: ${relative}`);
             continue;
           }
+          if (manifestPaths.has(relative)) {
+            errors.push(`integrity manifest path is duplicated: ${relative}`);
+            continue;
+          }
           manifestPaths.add(relative);
           const contents = readReceiptFile(rootDir, relative);
           if (!contents) {
