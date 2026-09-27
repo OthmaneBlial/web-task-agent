@@ -194,7 +194,9 @@ export function buildJobExportData(detail: StoredJobDetail, exportedAt: string =
 
 function escapeCsv(value: unknown): string {
   const normalized = String(value ?? "");
-  return /[",\n]/.test(normalized) ? `"${normalized.replace(/"/g, '""')}"` : normalized;
+  const formulaLikeText = typeof value === "string" && /^\s*[=+\-@＝＋－＠]/u.test(value);
+  const cell = `${formulaLikeText ? "\t" : ""}${normalized}`;
+  return `"${cell.replace(/"/g, '""')}"`;
 }
 
 function renderMarkdown(data: JobExportData): string {

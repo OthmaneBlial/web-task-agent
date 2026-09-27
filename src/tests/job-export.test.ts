@@ -95,6 +95,17 @@ test("job export renders local source data in Markdown, JSON, and CSV with redac
     assert.ok(markdown.includes(`${wideFence}${JSON.stringify(excerpt)}${wideFence}`));
     assert.ok(markdown.includes('`"javascript:alert(1)"`'));
     assert.doesNotMatch(markdown, /\]\(javascript:/);
+
+    const spreadsheetData = structuredClone(data);
+    spreadsheetData.sources[0]!.title = '=HYPERLINK("https://example.invalid","open");@SUM(1,1)';
+    spreadsheetData.sources[0]!.query = "\t=1+1";
+    spreadsheetData.sources[0]!.site = "＝HYPERLINK";
+    spreadsheetData.sources[0]!.qualityScore = -0.4;
+    const csv = renderJobExport(spreadsheetData, "csv");
+    assert.ok(csv.includes('"\t=HYPERLINK(""https://example.invalid"",""open"");@SUM(1,1)"'));
+    assert.ok(csv.includes('"\t\t=1+1"'));
+    assert.ok(csv.includes('"\t＝HYPERLINK"'));
+    assert.ok(csv.includes('"-0.4"'));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
