@@ -46,7 +46,8 @@ export function compareDecisionReceipts(
     const current = laterSources.get(url);
     return current && !sameSources(previous, current) ? [{ url, earlier: previous, later: current }] : [];
   });
-  const decisionChanged = earlier.decision.summary !== later.decision.summary;
+  const decisionChanged = earlier.decision.title !== later.decision.title
+    || earlier.decision.summary !== later.decision.summary;
   const changes = {
     sources: newSources.length > 0 || disappearedSources.length > 0 || changedSources.length > 0,
     claims: changedClaims.length > 0,
@@ -66,7 +67,7 @@ export function compareDecisionReceipts(
   if (changes.policy) changedBecause.push("the source or acquisition policy changed");
   if (changes.model) changedBecause.push("the declared model changed");
   if (changes.prompt) changedBecause.push("the prompt or synthesis contract changed");
-  if (decisionChanged) changedBecause.push("the decision summary changed");
+  if (decisionChanged) changedBecause.push("the decision title or summary changed");
   if (changedBecause.length === 0) changedBecause.push("no source, claim, policy, model, prompt, or decision change was detected");
   return {
     earlierTitle: earlier.decision.title,

@@ -232,6 +232,13 @@ test("decision receipt comparison explains source, claim, and decision changes",
     assert.equal(comparison.disappearedSources.length, 3);
     assert.ok(comparison.changedBecause.length >= 3);
     assert.match(renderDecisionReceiptComparison(comparison), /Decision changed because/);
+
+    const renamed = structuredClone(earlier.receipt!);
+    renamed.decision.title = `${renamed.decision.title} (revised)`;
+    const titleOnly = compareDecisionReceipts(earlier.receipt!, renamed);
+    assert.equal(titleOnly.decisionChanged, true);
+    assert.equal(titleOnly.changes.decision, true);
+    assert.deepEqual(titleOnly.changedBecause, ["the decision title or summary changed"]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
