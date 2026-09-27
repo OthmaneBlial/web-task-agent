@@ -223,6 +223,20 @@ test("storage backup and restore preserve a consistent prior database with a saf
     );
     assert.equal(maintainJobStore({ databasePath }).jobs, 1);
 
+    const futureSchemaPath = path.join(tempDir, "future-schema.sqlite");
+    const futureDatabase = new DatabaseSync(futureSchemaPath);
+    futureDatabase.exec(`
+      CREATE TABLE jobs (id TEXT PRIMARY KEY);
+      CREATE TABLE job_store_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT INTO job_store_meta (key, value) VALUES ('schema_version', '3');
+    `);
+    futureDatabase.close();
+    assert.throws(
+      () => restoreJobStore({ databasePath, inputPath: futureSchemaPath, force: true }),
+      /backup schema version 3 is newer than supported version 2/i
+    );
+    assert.equal(maintainJobStore({ databasePath }).jobs, 1);
+
     assert.throws(
       () => restoreJobStore({ databasePath, inputPath: backupPath, force: false }),
       /pass --force/

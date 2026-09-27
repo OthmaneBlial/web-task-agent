@@ -1118,6 +1118,20 @@ function assertJobStoreBackupFile(filePath: string): void {
     if (!jobsTable) {
       throw new Error(`restore input is not a Web Task Agent job store backup: ${filePath}`);
     }
+    const metadataTable = database.prepare(
+      "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'job_store_meta'"
+    ).get();
+    if (metadataTable) {
+      const versionRow = database.prepare(
+        "SELECT value FROM job_store_meta WHERE key = 'schema_version'"
+      ).get() as Record<string, unknown> | undefined;
+      const schemaVersion = Number(versionRow?.value);
+      if (Number.isInteger(schemaVersion) && schemaVersion > JOB_STORE_SCHEMA_VERSION) {
+        throw new Error(
+          `backup schema version ${schemaVersion} is newer than supported version ${JOB_STORE_SCHEMA_VERSION}: ${filePath}`
+        );
+      }
+    }
   } finally {
     database.close();
   }
