@@ -2162,6 +2162,17 @@ export class JobStore {
     };
   }
 
+  ownsExecutionLease(): boolean {
+    const ownerId = this.leaseOwnerId;
+    return ownerId !== null && this.getExecutionLease()?.ownerId === ownerId;
+  }
+
+  assertExecutionLeaseOwned(): void {
+    if (!this.ownsExecutionLease()) {
+      throw new Error(`execution lease for job ${this.jobId} is no longer owned by this runner`);
+    }
+  }
+
   acquireLease(options: {
     ownerId: string;
     ttlSeconds: number;
@@ -2363,6 +2374,9 @@ export class JobStore {
   }
 
   private writeStep(step: JobStepDefinition, options: StepWriteOptions): void {
+    if (this.leaseOwnerId) {
+      this.assertExecutionLeaseOwned();
+    }
     const existing = this.getStep(step.stepKey);
     const updatedAt = nowIso();
     const nextStatus = normalizeJobStepStatus(options.status);

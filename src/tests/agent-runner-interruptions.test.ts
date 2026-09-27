@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { DatabaseSync } from "node:sqlite";
 
 import { loadTaskState, saveTaskState } from "../lib/cache";
 import {
@@ -154,7 +155,7 @@ function installControlTrigger(input: {
   };
 }
 
-function installRunnerTestStubs() {
+function installRunnerTestStubs(onSearch?: () => void) {
   const { LlmService } = require("../lib/llm") as typeof import("../lib/llm");
   const { AgentSearchStage } = require("../tasks/agent/search-stage") as typeof import("../tasks/agent/search-stage");
   const originalEnsureDebuggerReady = cdpModule.ensureDebuggerReady;
@@ -173,6 +174,7 @@ function installRunnerTestStubs() {
     } satisfies AgentResearchSummary;
   };
   AgentSearchStage.prototype.search = async function searchStub(query: string) {
+    onSearch?.();
     return {
       query,
       searchedAt: "2026-03-21T09:01:00.000Z",
@@ -208,6 +210,82 @@ function installRunnerTestStubs() {
     AgentSearchStage.prototype.search = originalSearch;
   };
 }
+
+test("agent runner stops saving state after another worker takes its lease", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-runner-lease-loss-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const cachePath = path.join(tempDir, "agent-cache.json");
+  const reportPath = path.join(tempDir, "artifacts", "report.md");
+  const previousEnv = {
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    baseUrl: process.env.ANTHROPIC_BASE_URL,
+    databasePath: process.env.WEB_TASK_AGENT_DB_PATH
+  };
+  const state = createState({
+    runId: "job_replaced_lease",
+    reportPath,
+    plan: createPlan({ researchQueries: ["lease ownership"] })
+  });
+  let cacheAtLeaseLoss: Buffer | null = null;
+  const replacementStore: { value: JobStore | null } = { value: null };
+
+  process.env.ANTHROPIC_API_KEY = "test-key";
+  process.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:1";
+  process.env.WEB_TASK_AGENT_DB_PATH = databasePath;
+  saveTaskState("agent", cachePath, state);
+
+  const restoreStubs = installRunnerTestStubs(() => {
+    cacheAtLeaseLoss = fs.readFileSync(cachePath);
+    const db = new DatabaseSync(databasePath);
+    try {
+      db.prepare("UPDATE jobs SET lease_expires_at = ? WHERE id = ?")
+        .run("2000-01-01T00:00:00.000Z", state.runId);
+    } finally {
+      db.close();
+    }
+
+    replacementStore.value = new JobStore({
+      databasePath,
+      jobId: state.runId,
+      taskType: "agent",
+      workflowName: "agent-runner",
+      title: state.input.jobTitle ?? state.input.instruction,
+      instruction: state.input.instruction,
+      status: "running",
+      startedAt: state.startedAt,
+      cachePath,
+      reportPath,
+      artifactDir: state.artifactDir,
+      input: state.input,
+      budget: {},
+      output: {}
+    });
+    replacementStore.value.acquireLease({ ownerId: "replacement-worker", ttlSeconds: 60 });
+  });
+
+  try {
+    await assert.rejects(
+      createRunner(cachePath, reportPath).run(),
+      /execution lease for job job_replaced_lease is no longer owned/
+    );
+    assert.ok(cacheAtLeaseLoss);
+    assert.deepEqual(fs.readFileSync(cachePath), cacheAtLeaseLoss);
+    assert.equal(replacementStore.value?.getExecutionLease()?.ownerId, "replacement-worker");
+    const detail = getStoredJobDetail({ databasePath, jobId: state.runId });
+    assert.equal(detail?.job.status, "running");
+    assert.equal(
+      detail?.steps.find((step) => step.stepKey === "search_sources")?.status,
+      "running"
+    );
+  } finally {
+    restoreStubs();
+    closeSharedJobDatabase(databasePath);
+    process.env.ANTHROPIC_API_KEY = previousEnv.apiKey;
+    process.env.ANTHROPIC_BASE_URL = previousEnv.baseUrl;
+    process.env.WEB_TASK_AGENT_DB_PATH = previousEnv.databasePath;
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
 
 function persistEvidenceFixture(databasePath: string, state: AgentRunState): void {
   const store = new JobStore({

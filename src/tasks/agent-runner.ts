@@ -513,6 +513,7 @@ function siteKeyFromResult(result: AgentSearchResult): string {
 export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> {
   private readonly llm = new LlmService();
   private jobEventLogger: ((message: string) => void) | null = null;
+  private activeLeaseStore: JobStore | null = null;
 
   protected override log(message: string): void {
     super.log(message);
@@ -534,6 +535,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
   }
 
   private saveState(cachePath: string, state: AgentRunState): void {
+    this.activeLeaseStore?.assertExecutionLeaseOwned();
     state.updatedAt = nowIso();
     this.writePipelineManifest(state);
     saveTaskState("agent", cachePath, state);
@@ -571,6 +573,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     state: AgentRunState,
     cachePath: string
   ): void {
+    jobStore.assertExecutionLeaseOwned();
     const pending = jobStore.getPendingControlAction();
     if (!pending) {
       return;
@@ -1089,6 +1092,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
     let evidenceBundle: AgentEvidenceBundle | null = null;
     let heartbeatTimer: NodeJS.Timeout | null = null;
+    let leaseAcquired = false;
 
     const planStep = {
       stepKey: "plan_job",
@@ -1186,6 +1190,8 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
           ? "resumed cached run after interruption"
           : "continued after interrupted execution"
       });
+      leaseAcquired = true;
+      this.activeLeaseStore = jobStore;
       state.runtime.heartbeatAt = acquiredLease.lease.heartbeatAt;
       state.runtime.recoveryCount = acquiredLease.lease.recoveryCount;
       if (acquiredLease.recovered) {
@@ -1996,6 +2002,10 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         elapsedMinutes: computeElapsedMinutes(state.startedAt, state.updatedAt)
       };
     } catch (error) {
+      if (!leaseAcquired || !jobStore.ownsExecutionLease()) {
+        throw error;
+      }
+
       if (error instanceof JobControlSignal) {
         const nextStatus = error.action === "pause" ? "paused" : "cancelled";
         normalizeInterruptedPlanSteps(state.plan, error.action);
@@ -2056,6 +2066,9 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       this.jobEventLogger = null;
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
+      }
+      if (this.activeLeaseStore === jobStore) {
+        this.activeLeaseStore = null;
       }
       try {
         jobStore.releaseLease();
