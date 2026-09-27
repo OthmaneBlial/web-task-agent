@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 
 import CDP = require("chrome-remote-interface");
 
+import { writeBufferAtomic } from "./cache";
 import { SourceAcquisitionPolicy } from "./source-acquisition-policy";
 import type { SourceAcquisitionDecision } from "./source-acquisition-policy";
 import type {
@@ -463,8 +464,7 @@ export async function closePageSession(client: CDPClient): Promise<void> {
 
 export async function captureScreenshot(client: CDPClient, outPath: string): Promise<string> {
   const image = await client.Page.captureScreenshot({ format: "png" });
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, Buffer.from(String(image.data), "base64"));
+  writeBufferAtomic(outPath, Buffer.from(String(image.data), "base64"));
   return outPath;
 }
 

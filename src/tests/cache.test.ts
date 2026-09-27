@@ -8,6 +8,7 @@ import {
   createOrResumeState,
   loadTaskState,
   saveTaskState,
+  writeBufferAtomic,
   writeJsonAtomic,
   writeTextAtomic
 } from "../lib/cache";
@@ -47,6 +48,19 @@ test("atomic text write failure preserves the existing destination", () => {
     assert.throws(() => writeTextAtomic(targetPath, "new report"));
     assert.equal(fs.readFileSync(markerPath, "utf8"), "keep this file");
     assert.deepEqual(fs.readdirSync(tempDir), ["report.md"]);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("atomic binary writes preserve byte contents", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cache-binary-"));
+  const targetPath = path.join(tempDir, "image.png");
+  const contents = Buffer.from([0, 255, 137, 80, 78, 71, 13, 10, 26, 10]);
+
+  try {
+    writeBufferAtomic(targetPath, contents);
+    assert.deepEqual(fs.readFileSync(targetPath), contents);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

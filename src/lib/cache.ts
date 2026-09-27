@@ -26,7 +26,7 @@ export function buildCachePath(task: string, runId: string, customDir?: string):
   return path.join(dir, `${task}_run_${runId}.json`);
 }
 
-export function writeTextAtomic(filePath: string, contents: string, options: { mode?: number } = {}): void {
+function writeAtomic(filePath: string, contents: string | Buffer, options: { mode?: number }): void {
   ensureDir(path.dirname(filePath));
   const tempPath = `${filePath}.${randomUUID()}.tmp`;
 
@@ -41,6 +41,14 @@ export function writeTextAtomic(filePath: string, contents: string, options: { m
     }
     throw error;
   }
+}
+
+export function writeTextAtomic(filePath: string, contents: string, options: { mode?: number } = {}): void {
+  writeAtomic(filePath, contents, options);
+}
+
+export function writeBufferAtomic(filePath: string, contents: Buffer, options: { mode?: number } = {}): void {
+  writeAtomic(filePath, contents, options);
 }
 
 export function writeJsonAtomic(filePath: string, payload: unknown): void {
