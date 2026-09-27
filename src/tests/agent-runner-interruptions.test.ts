@@ -287,6 +287,66 @@ test("agent runner stops saving state after another worker takes its lease", asy
   }
 });
 
+test("agent runner does not change an active job before acquiring its lease", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-runner-active-lease-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const cachePath = path.join(tempDir, "agent-cache.json");
+  const reportPath = path.join(tempDir, "artifacts", "report.md");
+  const previousEnv = {
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    baseUrl: process.env.ANTHROPIC_BASE_URL,
+    databasePath: process.env.WEB_TASK_AGENT_DB_PATH
+  };
+  const state = createState({
+    runId: "job_active_lease",
+    reportPath,
+    plan: createPlan({ researchQueries: ["lease ownership"] })
+  });
+
+  process.env.ANTHROPIC_API_KEY = "test-key";
+  process.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:1";
+  process.env.WEB_TASK_AGENT_DB_PATH = databasePath;
+  saveTaskState("agent", cachePath, state);
+
+  const ownerStore = new JobStore({
+    databasePath,
+    jobId: state.runId,
+    taskType: "agent",
+    workflowName: "agent-runner",
+    title: state.input.jobTitle ?? state.input.instruction,
+    instruction: state.input.instruction,
+    status: "running",
+    startedAt: state.startedAt,
+    cachePath,
+    reportPath,
+    artifactDir: state.artifactDir,
+    input: state.input,
+    budget: {},
+    output: {}
+  });
+  ownerStore.acquireLease({ ownerId: "existing-worker", ttlSeconds: 60 });
+  const before = getStoredJobDetail({ databasePath, jobId: state.runId });
+  const cacheBefore = fs.readFileSync(cachePath);
+  const restoreStubs = installRunnerTestStubs();
+
+  try {
+    await assert.rejects(createRunner(cachePath, reportPath).run(), /already leased by existing-worker/);
+    const after = getStoredJobDetail({ databasePath, jobId: state.runId });
+    assert.deepEqual(after?.job, before?.job);
+    assert.deepEqual(after?.steps, before?.steps);
+    assert.deepEqual(after?.artifacts, before?.artifacts);
+    assert.deepEqual(after?.events, before?.events);
+    assert.deepEqual(fs.readFileSync(cachePath), cacheBefore);
+  } finally {
+    restoreStubs();
+    closeSharedJobDatabase(databasePath);
+    process.env.ANTHROPIC_API_KEY = previousEnv.apiKey;
+    process.env.ANTHROPIC_BASE_URL = previousEnv.baseUrl;
+    process.env.WEB_TASK_AGENT_DB_PATH = previousEnv.databasePath;
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 function persistEvidenceFixture(databasePath: string, state: AgentRunState): void {
   const store = new JobStore({
     databasePath,

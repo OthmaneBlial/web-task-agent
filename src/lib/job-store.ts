@@ -2028,10 +2028,13 @@ export class JobStore {
       errorMessage: options.errorMessage ?? null
     };
 
-    this.upsertJob();
+    if (!this.getExecutionLease()) {
+      this.upsertJob();
+    }
   }
 
   private upsertJob(): void {
+    this.assertLeaseOwnershipIfAcquired();
     this.db.prepare(`
       INSERT INTO jobs (
         id, task_type, workflow_name, title, instruction, status, cache_path, report_path,
@@ -2107,6 +2110,7 @@ export class JobStore {
   }
 
   clearControlRequest(): void {
+    this.assertLeaseOwnershipIfAcquired();
     this.db.prepare(`
       UPDATE jobs
       SET
@@ -2170,6 +2174,12 @@ export class JobStore {
   assertExecutionLeaseOwned(): void {
     if (!this.ownsExecutionLease()) {
       throw new Error(`execution lease for job ${this.jobId} is no longer owned by this runner`);
+    }
+  }
+
+  private assertLeaseOwnershipIfAcquired(): void {
+    if (this.leaseOwnerId) {
+      this.assertExecutionLeaseOwned();
     }
   }
 
@@ -2374,9 +2384,7 @@ export class JobStore {
   }
 
   private writeStep(step: JobStepDefinition, options: StepWriteOptions): void {
-    if (this.leaseOwnerId) {
-      this.assertExecutionLeaseOwned();
-    }
+    this.assertLeaseOwnershipIfAcquired();
     const existing = this.getStep(step.stepKey);
     const updatedAt = nowIso();
     const nextStatus = normalizeJobStepStatus(options.status);
@@ -2444,6 +2452,7 @@ export class JobStore {
   }
 
   syncJob(patch: Partial<Omit<JobStoreOptions, "jobId" | "taskType" | "startedAt" | "databasePath">>): void {
+    this.assertLeaseOwnershipIfAcquired();
     this.job = {
       ...this.job,
       workflowName: patch.workflowName !== undefined ? patch.workflowName ?? null : this.job.workflowName,
@@ -2501,6 +2510,7 @@ export class JobStore {
     artifactPath: string,
     metadata?: unknown
   ): void {
+    this.assertLeaseOwnershipIfAcquired();
     const timestamp = nowIso();
 
     this.db.prepare(`
@@ -2781,6 +2791,7 @@ export class JobStore {
     }>;
     metadata?: unknown;
   }): void {
+    this.assertLeaseOwnershipIfAcquired();
     if (input.referencedEvidence.length === 0) {
       return;
     }
@@ -2830,6 +2841,7 @@ export class JobStore {
     extractionCount: number;
     snapshotCount: number;
   } {
+    this.assertLeaseOwnershipIfAcquired();
     const timestamp = nowIso();
     const queryId = `${this.jobId}:query:${hashValue(research.query.toLowerCase()).slice(0, 16)}`;
     const queryStatus =

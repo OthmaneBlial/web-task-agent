@@ -985,33 +985,6 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         researchQueriesCompleted: state.research.length
       }
     });
-    this.jobEventLogger = (message) => {
-      jobStore.appendRunEvent("log", message, {
-        source: "agent-runner"
-      });
-    };
-    if (state.outputs.promptTracePath) {
-      const promptTraceRecorder = createPromptTraceRecorder({
-        outputPath: state.outputs.promptTracePath,
-        appendRunEvent: (eventType, message, metadata) => {
-          jobStore.appendRunEvent(eventType, message, metadata);
-        }
-      });
-      this.llm.setTraceHooks(promptTraceRecorder.createHooks());
-    } else {
-      this.llm.setTraceHooks(null);
-    }
-    if (this.options.queuedJobId) {
-      linkQueuedJobToJob({
-        queueId: this.options.queuedJobId,
-        jobId: state.runId
-      });
-    }
-    jobStore.registerArtifact("cache", "cache_state", cachePath, {
-      task: "agent"
-    });
-    this.syncArtifacts(jobStore, state);
-
     const searchAdapter = createDefaultAgentSearchAdapter((message) => this.log(message));
     const searchStage = new AgentSearchStage(searchAdapter);
     const fetcher = createDefaultAgentFetcher((message) => this.log(message));
@@ -1174,12 +1147,6 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     this.log("attached to Lightpanda CDP server");
 
     const memory = loadAgentMemory(this.options.memoryPath ?? state.input.memoryPath ?? undefined);
-    if (memory && state.input.memoryPath !== memory.path) {
-      state.input.memoryPath = memory.path;
-      jobStore.syncJob({
-        input: state.input
-      });
-    }
 
     try {
       state.runtime.leaseOwnerId = nextLeaseOwnerId(state.runId);
@@ -1192,6 +1159,38 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       });
       leaseAcquired = true;
       this.activeLeaseStore = jobStore;
+      this.jobEventLogger = (message) => {
+        jobStore.appendRunEvent("log", message, {
+          source: "agent-runner"
+        });
+      };
+      if (state.outputs.promptTracePath) {
+        const promptTraceRecorder = createPromptTraceRecorder({
+          outputPath: state.outputs.promptTracePath,
+          appendRunEvent: (eventType, message, metadata) => {
+            jobStore.appendRunEvent(eventType, message, metadata);
+          }
+        });
+        this.llm.setTraceHooks(promptTraceRecorder.createHooks());
+      } else {
+        this.llm.setTraceHooks(null);
+      }
+      if (this.options.queuedJobId) {
+        linkQueuedJobToJob({
+          queueId: this.options.queuedJobId,
+          jobId: state.runId
+        });
+      }
+      jobStore.registerArtifact("cache", "cache_state", cachePath, {
+        task: "agent"
+      });
+      this.syncArtifacts(jobStore, state);
+      if (memory && state.input.memoryPath !== memory.path) {
+        state.input.memoryPath = memory.path;
+        jobStore.syncJob({
+          input: state.input
+        });
+      }
       state.runtime.heartbeatAt = acquiredLease.lease.heartbeatAt;
       state.runtime.recoveryCount = acquiredLease.lease.recoveryCount;
       if (acquiredLease.recovered) {
@@ -1203,6 +1202,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       }
       this.saveState(cachePath, state);
       jobStore.syncJob({
+        status: state.status === "failed" ? "planning" : state.status,
         updatedAt: state.updatedAt,
         budget: {
           maxQueries: state.input.maxQueries,
