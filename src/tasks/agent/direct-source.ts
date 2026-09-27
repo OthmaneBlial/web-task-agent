@@ -1,4 +1,7 @@
 import type { AgentPageDigest, AgentResearchResult, AgentSearchResult } from "../../types";
+import { readBoundedResponseText } from "../../lib/read-bounded-response-text";
+
+const MAX_PLAY_STORE_RESPONSE_BYTES = 4 * 1024 * 1024;
 
 function uniqueStrings(values: string[], limit?: number): string[] {
   const seen = new Set<string>();
@@ -592,7 +595,7 @@ async function fetchPlayStoreAppMetadata(url: string): Promise<DirectAppMetadata
       return null;
     }
 
-    const html = await response.text();
+    const html = await readBoundedResponseText(response, MAX_PLAY_STORE_RESPONSE_BYTES, "play store");
     const fullTitle =
       extractFirstMatch(html, [
         /<meta[^>]+property="og:title"[^>]+content="([\s\S]*?)"/i,
@@ -650,7 +653,7 @@ async function fetchPlayStoreSearchAppIds(query: string, limit: number = 24): Pr
       return [];
     }
 
-    const html = await response.text();
+    const html = await readBoundedResponseText(response, MAX_PLAY_STORE_RESPONSE_BYTES, "play store");
     return extractPlayStoreSearchAppIds(html, limit);
   } catch {
     return [];

@@ -1,33 +1,11 @@
 import type { AgentSearchResult } from "../../../types";
+import { readBoundedResponseText } from "../../../lib/read-bounded-response-text";
 import { BING_RSS_SEARCH_PROVIDER, nowIso } from "../shared";
 import type { AgentSearchAdapter, AgentSearchStageResult } from "../search-adapter";
 
 type FetchLike = typeof fetch;
 
 const MAX_BING_RSS_BYTES = 2 * 1024 * 1024;
-
-async function readBingRss(response: Response): Promise<string> {
-  if (!response.body) return "";
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let bytesRead = 0;
-  let xml = "";
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) return xml + decoder.decode();
-      bytesRead += value.byteLength;
-      if (bytesRead > MAX_BING_RSS_BYTES) {
-        await reader.cancel().catch(() => undefined);
-        throw new Error("bing rss response exceeded " + MAX_BING_RSS_BYTES + " bytes");
-      }
-      xml += decoder.decode(value, { stream: true });
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
 
 function decodeXmlText(value: string): string {
   return value
@@ -112,7 +90,7 @@ export class BingRssSearchAdapter implements AgentSearchAdapter {
       throw new Error(`bing rss search failed with status ${response.status}`);
     }
 
-    const xml = await readBingRss(response);
+    const xml = await readBoundedResponseText(response, MAX_BING_RSS_BYTES, "bing rss");
     const results = parseBingRssResults(xml, maxResultsPerQuery);
 
     return {

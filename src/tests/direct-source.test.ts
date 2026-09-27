@@ -62,3 +62,30 @@ test("direct-source enrichment normalizes Play Store and AppBrain app titles", a
   assert.equal(play.reviewStatus, "read");
   assert.equal(appbrain.reviewStatus, "read");
 });
+
+test("oversized Play Store responses do not become read evidence", async () => {
+  const originalFetch = globalThis.fetch;
+  let canceled = false;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(4 * 1024 * 1024 + 1));
+    },
+    cancel() {
+      canceled = true;
+    }
+  });
+  const response = new Response(body, { status: 200 });
+  response.text = async () => "<html></html>";
+  globalThis.fetch = async () => response;
+
+  try {
+    const result = await enrichProvidedSourceSeedResult(
+      buildProvidedSourceSeedResult("https://play.google.com/store/apps/details?id=com.example.app")
+    );
+
+    assert.notEqual(result.reviewStatus, "read");
+    assert.equal(canceled, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
