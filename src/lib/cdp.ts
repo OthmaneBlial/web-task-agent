@@ -92,7 +92,10 @@ export async function inspectCdpBackend(timeoutMs: number = 1_500): Promise<CdpB
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${endpoint}/json/version`, { signal: controller.signal });
+    const response = await fetch(`${endpoint}/json/version`, {
+      signal: controller.signal,
+      redirect: "error"
+    });
     if (!response.ok) {
       return {
         endpoint,
@@ -145,7 +148,8 @@ async function isDebuggerReachable(timeoutMs: number = 1_500): Promise<boolean> 
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`, {
-      signal: controller.signal
+      signal: controller.signal,
+      redirect: "error"
     });
     return response.ok;
   } catch {
@@ -356,15 +360,37 @@ export async function installRequestPolicy(
 export async function createPageSession(url?: string, options?: CreatePageSessionOptions): Promise<CDPClient> {
   await ensureDebuggerReady();
 
-  const versionResp = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
+  const versionResp = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`, {
+    redirect: "error"
+  });
   if (!versionResp.ok) {
     throw new Error(`failed to get json/version from lightpanda (HTTP ${versionResp.status})`);
   }
-  const versionInfo = await versionResp.json() as { webSocketDebuggerUrl: string };
+  const versionInfo: unknown = await versionResp.json();
+  if (
+    !versionInfo ||
+    typeof versionInfo !== "object" ||
+    Array.isArray(versionInfo) ||
+    typeof (versionInfo as Record<string, unknown>).webSocketDebuggerUrl !== "string"
+  ) {
+    throw new Error("CDP endpoint returned an invalid WebSocket debugger URL");
+  }
+  const webSocketDebuggerUrl = new URL(
+    (versionInfo as Record<string, string>).webSocketDebuggerUrl
+  );
+  if (
+    webSocketDebuggerUrl.protocol !== "ws:" ||
+    !["127.0.0.1", "[::1]"].includes(webSocketDebuggerUrl.hostname) ||
+    Number(webSocketDebuggerUrl.port || "80") !== DEBUG_PORT ||
+    webSocketDebuggerUrl.username !== "" ||
+    webSocketDebuggerUrl.password !== ""
+  ) {
+    throw new Error("refusing non-local CDP WebSocket URL");
+  }
 
   // Connect to the root browser WebSocket
   const rootClient = (await CDP({
-    target: versionInfo.webSocketDebuggerUrl,
+    target: webSocketDebuggerUrl.toString(),
     local: true
   })) as CDPClient;
 
