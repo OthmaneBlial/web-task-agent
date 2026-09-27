@@ -104,6 +104,17 @@ test("actual browser bundle streams a rooted ZIP and rejects path traversal", as
   assert.equal(incomplete.valid, false);
   assert.ok(incomplete.issues.some((issue) => issue.code === "manifest_receipt_missing"));
 
+  const wrongAlgorithm = { ...unpacked };
+  const malformedManifest = JSON.parse(new TextDecoder().decode(wrongAlgorithm["integrity-manifest.json"] as Uint8Array)) as {
+    algorithm: string;
+    files: Array<{ path: string; sha256: string; bytes: number }>;
+  };
+  malformedManifest.algorithm = "md5";
+  wrongAlgorithm["integrity-manifest.json"] = strToU8(JSON.stringify(malformedManifest));
+  const malformed = await verifier.verifyReceiptBundle(wrongAlgorithm);
+  assert.equal(malformed.valid, false);
+  assert.ok(malformed.issues.some((issue) => issue.code === "manifest_contract_invalid"));
+
   const magicPathArchive = zipSync({ "payload99": strToU8("preserved") });
   const oldName = strToU8("payload99");
   const magicName = strToU8("__proto__");

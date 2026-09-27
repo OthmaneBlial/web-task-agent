@@ -867,9 +867,16 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
     try {
       const manifest = JSON.parse(manifestBytes.toString("utf8")) as Partial<ReceiptIntegrityManifest>;
       if (
+        !manifest ||
+        typeof manifest !== "object" ||
+        Array.isArray(manifest) ||
         manifest.type !== "receipt-integrity-manifest" ||
         manifest.schemaVersion !== DECISION_RECEIPT_SCHEMA_VERSION ||
-        !isSupportedDecisionReceiptSpecVersion(manifest.specVersion)
+        !isSupportedDecisionReceiptSpecVersion(manifest.specVersion) ||
+        manifest.algorithm !== RECEIPT_HASH_ALGORITHM ||
+        manifest.receiptPath !== "receipt.json" ||
+        typeof manifest.generatedAt !== "string" ||
+        !Number.isFinite(Date.parse(manifest.generatedAt))
       ) {
         errors.push("integrity manifest has an unsupported shape");
       }

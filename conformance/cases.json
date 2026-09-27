@@ -51,6 +51,24 @@
       "expectedCode": "manifest_snapshot_missing"
     },
     {
+      "id": "manifest-algorithm-invalid",
+      "mutation": "invalid-manifest-algorithm",
+      "expectedValid": false,
+      "expectedCode": "manifest_contract_invalid"
+    },
+    {
+      "id": "manifest-receipt-path-invalid",
+      "mutation": "invalid-manifest-receipt-path",
+      "expectedValid": false,
+      "expectedCode": "manifest_contract_invalid"
+    },
+    {
+      "id": "manifest-timestamp-invalid",
+      "mutation": "invalid-manifest-timestamp",
+      "expectedValid": false,
+      "expectedCode": "manifest_contract_invalid"
+    },
+    {
       "id": "signature-mismatch",
       "mutation": "signature-mismatch",
       "expectedValid": false,

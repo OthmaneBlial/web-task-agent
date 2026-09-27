@@ -109,9 +109,13 @@ async function bundleFor(mutation) {
   const manifestFiles = { ...files };
   if (mutation === "remove-receipt-from-manifest") delete manifestFiles["receipt.json"];
   if (mutation === "remove-snapshot-from-manifest") delete manifestFiles["evidence/source.md"];
+  const manifest = makeManifest(manifestFiles);
+  if (mutation === "invalid-manifest-algorithm") manifest.algorithm = "md5";
+  if (mutation === "invalid-manifest-receipt-path") manifest.receiptPath = "other.json";
+  if (mutation === "invalid-manifest-timestamp") manifest.generatedAt = "not-a-date";
   const bundle = {
     ...files,
-    "integrity-manifest.json": `${JSON.stringify(makeManifest(manifestFiles), null, 2)}\n`
+    "integrity-manifest.json": `${JSON.stringify(manifest, null, 2)}\n`
   };
   if (mutation === "tamper-after-manifest") bundle["evidence/source.md"] += "Tampered.\n";
   return bundle;

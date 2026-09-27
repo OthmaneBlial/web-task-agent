@@ -111,6 +111,31 @@ test("receipt directory verification requires manifest coverage for the receipt 
   }
 });
 
+test("receipt directory verification rejects malformed manifest metadata", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-manifest-shape-"));
+  const invalidValues = {
+    algorithm: "md5",
+    receiptPath: "other.json",
+    generatedAt: "not-a-date"
+  };
+  try {
+    for (const [index, key] of Object.keys(invalidValues).entries()) {
+      const bundle = path.join(root, `bundle-${index}`);
+      writeDemoPackage({ id: "local-first-risk-review", outputDir: bundle });
+      const manifestPath = path.join(bundle, "integrity-manifest.json");
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+      manifest[key] = invalidValues[key as keyof typeof invalidValues];
+      fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+      const result = verifyReceiptDirectory(bundle);
+      assert.equal(result.valid, false, `manifest with invalid ${key} unexpectedly verified`);
+      assert.ok(result.errors.some((error) => error.includes("integrity manifest has an unsupported shape")), result.errors.join("; "));
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("decision receipt comparison explains source, claim, and decision changes", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-diff-"));
   try {
