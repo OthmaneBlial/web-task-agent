@@ -21,6 +21,7 @@ test("workflow scaffold creates a reviewable definition, example, and test plan"
     const scaffoldValidation = validateWorkflowProposalFile(written.definitionPath);
     assert.equal(scaffoldValidation.valid, false);
     assert.ok(scaffoldValidation.errors.some((error) => error.includes("placeholder")));
+    assert.ok(scaffoldValidation.errors.some((error) => error === "invalidation still contains a scaffold placeholder"));
     assert.throws(() => writeWorkflowProposalScaffold({ id: "Developer Tool Review", title: "Developer Tool Review", category: "Validation", outputDir: tempDir }), /refusing to overwrite/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -41,6 +42,7 @@ test("workflow proposal validation requires a complete, reviewable source and ri
     queries: ["developer tool pilot evaluation criteria", "developer tool rollout complaints"],
     freshness: { maxAgeDays: 90, rationale: "Evaluate recent operator feedback and current product capabilities." },
     cost: { maxQueries: 8, maxCandidates: 40, maxRuntimeMinutes: 20 },
+    invalidation: ["Recheck if the target customer segment or product capabilities change."],
     risks: ["Source freshness and marketing claims can bias the recommendation"]
   });
 
@@ -58,6 +60,7 @@ test("workflow proposal validation requires a complete, reviewable source and ri
     queries: ["same query", "same query"],
     freshness: { maxAgeDays: 90, rationale: "Use recent evidence." },
     cost: { maxQueries: 8, maxCandidates: 40, maxRuntimeMinutes: 20 },
+    invalidation: ["Recheck if the target segment changes."],
     risks: ["Freshness"]
   });
   assert.equal(duplicateQuery.valid, false);
@@ -76,4 +79,5 @@ test("workflow proposal validation requires a complete, reviewable source and ri
   assert.equal(missingFreshnessAndCost.valid, false);
   assert.ok(missingFreshnessAndCost.errors.some((error) => error.startsWith("freshness must define")));
   assert.ok(missingFreshnessAndCost.errors.some((error) => error.startsWith("cost must define")));
+  assert.ok(missingFreshnessAndCost.errors.some((error) => error.startsWith("invalidation must be an array")));
 });

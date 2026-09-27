@@ -35,6 +35,10 @@
     "maxCandidates": 40,
     "maxRuntimeMinutes": 20
   },
+  "invalidation": [
+    "Recheck if the current or candidate dependency version, resolved lockfile graph, package manager, or application runtime target changes.",
+    "Invalidate support and advisory claims if their official source changes or is more than 90 days old."
+  ],
   "risks": [
     "Upstream compatibility statements do not prove this application builds or behaves correctly; local verification remains required.",
     "Transitive resolution and peer constraints can change the effective dependency graph; state the resolved graph as unknown until the operator installs and inspects it.",

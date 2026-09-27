@@ -136,6 +136,7 @@ export function validateWorkflowProposalDefinition(
   validateStringList(value.queries, "queries", 2, errors, { placeholders: true, unique: true });
   validateFreshnessContract(value.freshness, errors);
   validateCostContract(value.cost, errors);
+  validateStringList(value.invalidation, "invalidation", 1, errors, { placeholders: true, unique: true });
   validateStringList(value.risks, "risks", 1, errors, { placeholders: true, unique: true });
 
   warnings.push("Schema validation cannot prove semantic distinction; a reviewer must compare the proposal with nearby catalog workflows.");

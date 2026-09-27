@@ -12,6 +12,10 @@ Input names the package, current and candidate versions, runtime versions, packa
 
 The research can report what upstream sources claim. It cannot certify that the operator's application is compatible or that its local tests pass.
 
+## Invalidation
+
+Reopen the decision if the package version, resolved lockfile graph, package manager, or runtime target changes. Refresh support and advisory evidence when the official source changes or becomes more than 90 days old.
+
 ## Difference from the catalog
 
 - `market-entry` and `product-validation` compare market options or demand hypotheses. They do not evaluate a specific dependency version against a named runtime and migration path.

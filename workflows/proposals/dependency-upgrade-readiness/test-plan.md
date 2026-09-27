@@ -5,6 +5,7 @@
 - [x] `web-task-agent workflow validate workflows/proposals/dependency-upgrade-readiness/workflow.json` passes.
 - [x] The fixture declares synthetic provenance and uses reserved `.invalid` URLs.
 - [x] Compare decision focus and source strategy with `market-entry`, `product-validation`, and `content-demand` before catalog registration.
+- [x] Invalidation covers changed dependency inputs and stale or changed support/advisory evidence.
 
 ## Deterministic fixture checks before registration
 

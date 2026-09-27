@@ -234,7 +234,7 @@ npm run build
 
 ## Contribute
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [maintainer/change policy](MAINTAINERS.md), then read the [workflow catalog](examples/workflows/CATALOG.md). Breaking receipt changes require the [public RFC process](docs/rfcs/README.md) before implementation. Run `web-task-agent workflow validate <proposal/workflow.json>` after scaffolding: it checks the contribution contract without registering or launching it, including explicit freshness and bounded-cost fields. A useful workflow contribution has a repeated decision, a distinct source strategy, a stable evidence-backed output, a safety boundary, and a test/fixture — not just a renamed prompt.
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the [maintainer/change policy](MAINTAINERS.md), then read the [workflow catalog](examples/workflows/CATALOG.md). Breaking receipt changes require the [public RFC process](docs/rfcs/README.md) before implementation. Run `web-task-agent workflow validate <proposal/workflow.json>` after scaffolding: it checks the contribution contract without registering or launching it, including freshness, invalidation, and bounded-cost fields. A useful workflow contribution has a repeated decision, a distinct source strategy, a stable evidence-backed output, a safety boundary, and a test/fixture — not just a renamed prompt.
 
 Use [Discussions](https://github.com/OthmaneBlial/web-task-agent/discussions/1) for workflow ideas, reviewable receipts, and first-run questions. Use Issues for reproducible bugs and focused implementation changes.
 
