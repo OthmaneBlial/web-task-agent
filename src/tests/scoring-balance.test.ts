@@ -29,6 +29,7 @@ function createStore(tempDir: string, jobId: string): JobStore {
 
 test("fresh sources score above stale sources when content is comparable", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-freshness-"));
+  const capturedAtAge = (days: number): string => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   try {
     const store = createStore(tempDir, "job_freshness");
@@ -53,7 +54,7 @@ test("fresh sources score above stale sources when content is comparable", () =>
               "Export automation keeps reporting fresh and reduces manual work.",
               "The guide focuses on reusable workflows."
             ],
-            capturedAt: "2026-03-20T10:05:01.000Z"
+            capturedAt: capturedAtAge(30)
           }
         },
         {
@@ -73,7 +74,7 @@ test("fresh sources score above stale sources when content is comparable", () =>
               "Export automation keeps reporting fresh and reduces manual work.",
               "The guide focuses on reusable workflows."
             ],
-            capturedAt: "2026-01-01T10:05:01.000Z"
+            capturedAt: capturedAtAge(240)
           }
         }
       ]

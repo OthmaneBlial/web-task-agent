@@ -116,7 +116,7 @@ test("a clean TypeScript project installs only the core tarball and renders a di
     ].join("\n");
     fs.writeFileSync(path.join(tempDir, "consumer.ts"), `${source}\n`, "utf8");
     execFileSync(path.resolve("node_modules", ".bin", "tsc"), [
-      "--strict", "--target", "ES2022", "--module", "CommonJS", "--moduleResolution", "Node", "--lib", "ES2022,DOM", "consumer.ts"
+      "--strict", "--target", "ES2022", "--module", "Node16", "--moduleResolution", "Node16", "--lib", "ES2022,DOM", "consumer.ts"
     ], { cwd: tempDir, stdio: "pipe" });
     execFileSync("node", ["consumer.js"], { cwd: tempDir, stdio: "pipe" });
     fs.writeFileSync(path.join(tempDir, "consumer.mjs"), [
