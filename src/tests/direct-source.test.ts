@@ -26,6 +26,27 @@ test("direct app URLs require the official HTTPS store hosts", () => {
   assert.equal(isDirectAppUrl("https://play.google.com.attacker.example/store/apps/details?id=com.example.app"), false);
 });
 
+test("direct app URLs reject credentials and nonstandard ports before metadata fetch", async () => {
+  const unsafeUrls = [
+    "https://user:secret@play.google.com/store/apps/details?id=com.example.app",
+    "https://play.google.com:444/store/apps/details?id=com.example.app",
+    "https://user:secret@www.appbrain.com/app/example/com.example.app",
+    "https://www.appbrain.com:444/app/example/com.example.app"
+  ];
+
+  for (const url of unsafeUrls) {
+    let metadataFetches = 0;
+    assert.equal(isDirectAppUrl(url), false, url);
+    await enrichProvidedSourceSeedResult(buildProvidedSourceSeedResult(url), {
+      fetchAppMetadata: async () => {
+        metadataFetches += 1;
+        return null;
+      }
+    });
+    assert.equal(metadataFetches, 0, url);
+  }
+});
+
 test("direct-source enrichment normalizes Play Store and AppBrain app titles", async () => {
   const play = await enrichProvidedSourceSeedResult(
     buildProvidedSourceSeedResult("https://play.google.com/store/apps/details?id=com.nanocv.app"),

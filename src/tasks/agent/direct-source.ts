@@ -43,7 +43,13 @@ function looksLikeAndroidAppId(value: string | null | undefined): value is strin
 export function parsePlayStoreAppId(rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl);
-    if (parsed.protocol !== "https:" || parsed.hostname !== "play.google.com") {
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.hostname !== "play.google.com" ||
+      parsed.username ||
+      parsed.password ||
+      parsed.port
+    ) {
       return null;
     }
     if (parsed.pathname !== "/store/apps/details") {
@@ -61,7 +67,10 @@ export function parseAppBrainAppId(rawUrl: string): string | null {
     const parsed = new URL(rawUrl);
     if (
       parsed.protocol !== "https:" ||
-      (parsed.hostname !== "appbrain.com" && parsed.hostname !== "www.appbrain.com")
+      (parsed.hostname !== "appbrain.com" && parsed.hostname !== "www.appbrain.com") ||
+      parsed.username ||
+      parsed.password ||
+      parsed.port
     ) {
       return null;
     }
@@ -199,7 +208,7 @@ function normalizePlayStoreUrl(rawUrl: string): string {
     }
 
     const parsed = new URL(rawUrl);
-    if (!parsed.hostname.includes("play.google.com")) {
+    if (parsed.hostname !== "play.google.com") {
       return rawUrl;
     }
     if (!parsed.searchParams.get("hl")) {
@@ -564,6 +573,9 @@ export interface DirectAppBenchmarkOptions extends DirectSourceEnrichmentOptions
 async function fetchPlayStoreAppMetadata(url: string): Promise<DirectAppMetadata | null> {
   const normalizedUrl = normalizePlayStoreUrl(url);
   const appId = parsePlayStoreAppId(normalizedUrl);
+  if (!appId) {
+    return null;
+  }
 
   try {
     const response = await fetch(normalizedUrl, {

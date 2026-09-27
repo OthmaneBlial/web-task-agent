@@ -42,7 +42,7 @@ Reviewers should also open the local verifier with network recording enabled, lo
 | Schema/runtime agreement | independent Ajv suite plus runtime conformance cases |
 | Tamper and signature failures | deterministic invalid hash and signature-mismatch cases |
 | Archive input | compressed, per-file, extracted-size, file-count, root, and traversal limits |
-| HTML and URL safety | receipt, management-dashboard, and verifier escaping tests plus public HTTPS credential-free URL policy |
+| HTML and URL safety | receipt, management-dashboard, and verifier escaping tests; public HTTPS policy; official app-store credential/port validation |
 | Secrets | publication scan over Git-tracked/publishable files and ignored local-state guards |
 | Local management server | loopback binding, attacker-controlled Host rejection, and same-origin control checks |
 | Local verifier | folder/ZIP fixtures, diff, keyboard/mobile checks, no persistent storage, offline-after-load manual QA |
