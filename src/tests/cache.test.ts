@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { loadTaskState, saveTaskState, writeJsonAtomic } from "../lib/cache";
+import { createOrResumeState, loadTaskState, saveTaskState, writeJsonAtomic } from "../lib/cache";
 
 test("atomic JSON writes do not follow a predictable temporary-file symlink", (context) => {
   if (process.platform === "win32") {
@@ -49,6 +49,30 @@ test("cache loading rejects invalid envelopes and keeps raw legacy states readab
     const legacyState = { runId: "legacy-run", marker: "preserved" };
     fs.writeFileSync(cachePath, JSON.stringify(legacyState), "utf8");
     assert.deepEqual(loadTaskState<typeof legacyState>(cachePath), legacyState);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("resume rejects a cache envelope saved for a different task", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cache-task-"));
+  const cachePath = path.join(tempDir, "state.json");
+
+  try {
+    saveTaskState("agent", cachePath, { runId: "saved-run" });
+    const originalCache = fs.readFileSync(cachePath, "utf8");
+
+    assert.throws(
+      () =>
+        createOrResumeState({
+          task: "github",
+          resume: true,
+          cachePath,
+          createInitialState: () => ({ runId: "new-run" })
+        }),
+      /task type/i
+    );
+    assert.equal(fs.readFileSync(cachePath, "utf8"), originalCache);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

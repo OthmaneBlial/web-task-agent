@@ -59,7 +59,7 @@ export function saveTaskState<T extends { runId: string }>(
   return filePath;
 }
 
-export function loadTaskState<T extends { runId: string }>(filePath: string): T {
+export function loadTaskState<T extends { runId: string }>(filePath: string, expectedTask?: string): T {
   const raw = fs.readFileSync(filePath, "utf8");
   const parsed: unknown = JSON.parse(raw);
 
@@ -79,6 +79,9 @@ export function loadTaskState<T extends { runId: string }>(filePath: string): T 
       Array.isArray(state)
     ) {
       throw new Error("Cache envelope is malformed.");
+    }
+    if (expectedTask !== undefined && envelope.task !== expectedTask) {
+      throw new Error(`Cache task type does not match requested task: ${expectedTask}.`);
     }
     if ((state as Record<string, unknown>).runId !== envelope.runId) {
       throw new Error("Cache envelope run ID does not match its saved task state.");
@@ -131,7 +134,7 @@ export function createOrResumeState<T extends { runId: string }>(options: {
     const candidatePath = explicitPath ?? findLatestCacheFile(options.task, options.cacheDir);
     if (candidatePath && fs.existsSync(candidatePath)) {
       return {
-        state: loadTaskState<T>(candidatePath),
+        state: loadTaskState<T>(candidatePath, options.task),
         cachePath: candidatePath,
         resumed: true
       };
