@@ -97,7 +97,13 @@ test("adapter contract agrees with independent JSON Schema validation", () => {
   const cases = [
     { id: "valid-lowercase-date-time", expected: true, change: (value: typeof input) => { value.producer.exportedAt = "2026-08-27t00:00:00.000z"; } },
     { id: "invalid-human-date", expected: false, change: (value: typeof input) => { value.producer.exportedAt = "January 1, 2025"; } },
-    { id: "invalid-calendar-date", expected: false, change: (value: typeof input) => { value.sources[0].collectedAt = "2025-02-30T00:00:00Z"; } }
+    { id: "invalid-calendar-date", expected: false, change: (value: typeof input) => { value.sources[0].collectedAt = "2025-02-30T00:00:00Z"; } },
+    { id: "valid-maximum-url-port", expected: true, change: (value: typeof input) => { value.sources[0].url = "https://example.com:65535/path"; } },
+    { id: "invalid-url-space", expected: false, change: (value: typeof input) => { value.sources[0].url = "https://example.com/a b"; } },
+    { id: "invalid-url-escape", expected: false, change: (value: typeof input) => { value.sources[0].url = "https://example.com/%zz"; } },
+    { id: "invalid-url-unicode", expected: false, change: (value: typeof input) => { value.sources[0].url = "https://example.com/é"; } },
+    { id: "invalid-url-port-overflow", expected: false, change: (value: typeof input) => { value.sources[0].url = "https://example.com:65536/path"; } },
+    { id: "invalid-url-credentials", expected: false, change: (value: typeof input) => { value.sources[0].url = "https://user:password@example.com/path"; } }
   ];
   for (const testCase of cases) {
     const candidate = structuredClone(input);

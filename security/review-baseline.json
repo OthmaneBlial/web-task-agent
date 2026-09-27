@@ -12,6 +12,7 @@
         { "path": "scripts/run-schema-conformance.mjs", "marker": "schema-invalid-impossible-generated-at" },
         { "path": "scripts/run-schema-conformance.mjs", "marker": "schema-invalid-trailing-slash-path" },
         { "path": "scripts/run-schema-conformance.mjs", "marker": "schema-invalid-whitespace-title" },
+        { "path": "scripts/run-schema-conformance.mjs", "marker": "schema-invalid-url-port-overflow" },
         { "path": "src/tests/interop.test.ts", "marker": "adapter contract agrees with independent JSON Schema validation" }
       ]
     },

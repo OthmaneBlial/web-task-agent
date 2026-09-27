@@ -73,7 +73,18 @@ export function isSafeRelativeReceiptPath(value: unknown): value is string {
 }
 
 export function isSafePublicSourceUrl(value: unknown): value is string {
-  if (!nonEmpty(value)) return false;
+  if (
+    !nonEmpty(value) ||
+    !/^https?:\/\//.test(value) ||
+    /[^\x21-\x7e]|["<>\\^\x60{|}]/.test(value) ||
+    /%(?![a-f\d]{2})/i.test(value)
+  ) return false;
+  const authorityStart = value.indexOf("://") + 3;
+  const authorityEnd = value.slice(authorityStart).search(/[/?#]/);
+  const suffix = authorityEnd < 0 ? "" : value.slice(authorityStart + authorityEnd);
+  if (/[\[\]]/.test(suffix)) return false;
+  const fragmentStart = value.indexOf("#");
+  if (fragmentStart !== value.lastIndexOf("#")) return false;
   try {
     const url = new URL(value);
     return (url.protocol === "https:" || url.protocol === "http:") && !url.username && !url.password;

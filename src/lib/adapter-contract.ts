@@ -1,5 +1,5 @@
 import { evaluateSourceUrlPolicy } from "./source-policy";
-import { isIsoDateTime } from "../../packages/decision-receipt/dist";
+import { isIsoDateTime, isSafePublicSourceUrl } from "../../packages/decision-receipt/dist";
 
 export const DECISION_RECEIPT_ADAPTER_CONTRACT_VERSION = "1.0.0" as const;
 
@@ -154,6 +154,9 @@ export function validateDecisionReceiptAdapterResult(value: unknown): AdapterCon
     if (nonEmpty(source.id)) {
       if (sourceIds.has(source.id)) errors.push(`${currentPath}/id: duplicate source id`);
       sourceIds.add(source.id);
+    }
+    if (nonEmpty(source.url) && !isSafePublicSourceUrl(source.url)) {
+      errors.push(currentPath + "/url: denied by source policy for malformed or credential-bearing URL");
     }
     if (nonEmpty(source.url)) {
       const policy = evaluateSourceUrlPolicy(source.url);
