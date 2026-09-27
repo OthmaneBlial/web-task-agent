@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -60,4 +60,13 @@ test("npm publication preflight preserves the tokenless OIDC and immutable-versi
   const publishingGuide = fs.readFileSync(path.join(process.cwd(), "PUBLISHING.md"), "utf8");
   assert.match(publishingGuide, /must already exist on the npm registry/i);
   assert.match(publishingGuide, /bump each package to a never-published version/i);
+});
+
+test("npm publication preflight rejects misspelled gates", () => {
+  const result = spawnSync(process.execPath, ["scripts/npm-publication-preflight.mjs", "--require-publc"], {
+    cwd: process.cwd(),
+    encoding: "utf8"
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /unknown option --require-publc/i);
 });

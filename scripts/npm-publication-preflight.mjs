@@ -5,6 +5,10 @@ import path from "node:path";
 
 const root = process.cwd();
 const args = new Set(process.argv.slice(2));
+const supportedArgs = new Set(["--json", "--live", "--require-public"]);
+for (const arg of args) {
+  if (!supportedArgs.has(arg)) throw new Error(`npm publication preflight failed: unknown option ${arg}`);
+}
 const workflowPath = path.join(root, ".github", "workflows", "publish-npm.yml");
 const workflow = fs.readFileSync(workflowPath, "utf8");
 const rootPackage = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
