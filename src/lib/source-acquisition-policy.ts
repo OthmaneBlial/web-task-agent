@@ -52,6 +52,7 @@ interface RobotsGroup {
 }
 
 const MAX_ROBOTS_BYTES = 512 * 1024;
+const HOSTNAME_LOOKUP_TIMEOUT_MS = 5_000;
 const ROBOTS_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 const ROBOTS_DENIAL_RETRY_MS = 60 * 1_000;
 
@@ -378,7 +379,18 @@ export class SourceAcquisitionPolicy {
 
   private async evaluateResolvedHostname(hostname: string): Promise<SourceAcquisitionDecision | null> {
     try {
-      const addresses = await this.resolveHostname(hostname);
+      let timeout: NodeJS.Timeout | undefined;
+      const addresses = await Promise.race([
+        this.resolveHostname(hostname),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error("hostname resolution timed out")),
+            HOSTNAME_LOOKUP_TIMEOUT_MS
+          );
+        })
+      ]).finally(() => {
+        if (timeout) clearTimeout(timeout);
+      });
       if (addresses.length === 0) {
         return {
           action: "deny",

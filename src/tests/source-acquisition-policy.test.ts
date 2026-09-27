@@ -464,3 +464,18 @@ test("source acquisition fails closed when hostname resolution is unavailable", 
   assert.equal(decision.action, "deny");
   assert.ok(decision.signals.includes("hostname_resolution_failed"));
 });
+
+test("source acquisition denies hostname lookups that exceed their deadline", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: () => new Promise(() => {})
+  });
+
+  const pending = policy.checkNetworkTarget("https://docs.example.com/research");
+  context.mock.timers.tick(5_000);
+  const decision = await pending;
+
+  assert.equal(decision.action, "deny");
+  assert.ok(decision.signals.includes("hostname_resolution_failed"));
+});
