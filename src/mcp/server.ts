@@ -2,7 +2,6 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import readline from "node:readline";
 
 import {
   compareDecisionReceipts,
@@ -263,13 +262,8 @@ async function handleRequest(request: JsonRpcRequest): Promise<void> {
   if (request.id !== undefined) error(id, -32601, `Method not found: ${request.method}`);
 }
 
-const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
-input.on("line", (line) => {
+function processLine(line: string): void {
   if (!line.trim()) return;
-  if (Buffer.byteLength(line, "utf8") > MAX_REQUEST_BYTES) {
-    error(null, -32600, "Request exceeds the 2 MB limit");
-    return;
-  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
@@ -289,4 +283,54 @@ input.on("line", (line) => {
   void handleRequest(request as JsonRpcRequest).catch((requestError) => {
     error(request.id ?? null, -32603, requestError instanceof Error ? requestError.message : String(requestError));
   });
+}
+
+let requestBuffer = Buffer.alloc(0);
+let requestBytes = 0;
+let discardingOversizedRequest = false;
+
+function appendRequestPart(part: Buffer): void {
+  if (part.length === 0) return;
+  const requiredBytes = requestBytes + part.length;
+  if (requiredBytes > requestBuffer.length) {
+    const capacity = Math.min(MAX_REQUEST_BYTES, Math.max(requiredBytes, requestBuffer.length * 2, 1_024));
+    const expanded = Buffer.allocUnsafe(capacity);
+    requestBuffer.copy(expanded, 0, 0, requestBytes);
+    requestBuffer = expanded;
+  }
+  part.copy(requestBuffer, requestBytes);
+  requestBytes = requiredBytes;
+}
+
+process.stdin.on("data", (chunk: Buffer) => {
+  let start = 0;
+  while (start < chunk.length) {
+    const newline = chunk.indexOf(0x0a, start);
+    const end = newline < 0 ? chunk.length : newline;
+    const part = chunk.subarray(start, end);
+
+    if (!discardingOversizedRequest) {
+      if (requestBytes + part.length > MAX_REQUEST_BYTES) {
+        requestBytes = 0;
+        discardingOversizedRequest = true;
+        error(null, -32600, "Request exceeds the 2 MB limit");
+      } else {
+        appendRequestPart(part);
+      }
+    }
+
+    if (newline < 0) return;
+    if (!discardingOversizedRequest) {
+      processLine(requestBuffer.toString("utf8", 0, requestBytes));
+    }
+    requestBytes = 0;
+    discardingOversizedRequest = false;
+    start = newline + 1;
+  }
+});
+
+process.stdin.on("end", () => {
+  if (!discardingOversizedRequest && requestBytes > 0) {
+    processLine(requestBuffer.toString("utf8", 0, requestBytes));
+  }
 });

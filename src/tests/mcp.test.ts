@@ -7,7 +7,7 @@ import readline from "node:readline";
 import test from "node:test";
 
 interface RpcResponse {
-  id: number;
+  id: number | null;
   result?: unknown;
   error?: { code: number; message: string };
 }
@@ -15,6 +15,8 @@ interface RpcResponse {
 class LocalMcpClient {
   private nextId = 1;
   private readonly waiting = new Map<number, { resolve: (value: RpcResponse) => void; reject: (error: Error) => void }>();
+  private readonly unsolicitedMessages: RpcResponse[] = [];
+  private unsolicitedWaiter: ((response: RpcResponse) => void) | null = null;
   readonly stderr: string[] = [];
   readonly child: ChildProcessWithoutNullStreams;
 
@@ -30,10 +32,14 @@ class LocalMcpClient {
     });
     readline.createInterface({ input: this.child.stdout, crlfDelay: Infinity }).on("line", (line) => {
       const response = JSON.parse(line) as RpcResponse;
-      const pending = this.waiting.get(response.id);
-      if (pending) {
+      const pending = response.id === null ? undefined : this.waiting.get(response.id);
+      if (response.id !== null && pending) {
         this.waiting.delete(response.id);
         pending.resolve(response);
+      } else if (this.unsolicitedWaiter) {
+        this.unsolicitedWaiter(response);
+      } else {
+        this.unsolicitedMessages.push(response);
       }
     });
     this.child.stderr.on("data", (chunk) => this.stderr.push(String(chunk)));
@@ -51,6 +57,22 @@ class LocalMcpClient {
     });
   }
 
+  waitForUnsolicitedMessage(timeoutMs = 1_000): Promise<RpcResponse> {
+    const message = this.unsolicitedMessages.shift();
+    if (message) return Promise.resolve(message);
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.unsolicitedWaiter = null;
+        reject(new Error("timed out waiting for an unsolicited MCP response"));
+      }, timeoutMs);
+      this.unsolicitedWaiter = (response) => {
+        clearTimeout(timeout);
+        this.unsolicitedWaiter = null;
+        resolve(response);
+      };
+    });
+  }
+
   notify(method: string, params?: unknown): void {
     this.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
   }
@@ -61,6 +83,31 @@ class LocalMcpClient {
     await new Promise<void>((resolve) => this.child.once("exit", () => resolve()));
   }
 }
+
+test("local MCP rejects an oversized request before its newline arrives", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-mcp-oversized-"));
+  const guard = path.join(root, "deny-network.cjs");
+  fs.writeFileSync(guard, [
+    'const net = require("node:net");',
+    'function deny() { throw new Error("unexpected MCP network access"); }',
+    'globalThis.fetch = deny;',
+    'net.connect = deny;',
+    'net.createConnection = deny;'
+  ].join("\n"), "utf8");
+  const client = new LocalMcpClient(root, guard);
+  try {
+    const responsePromise = client.waitForUnsolicitedMessage();
+    client.child.stdin.write(Buffer.alloc(2 * 1024 * 1024 + 1, 0x78));
+    const response = await responsePromise;
+    assert.equal(response.id, null);
+    assert.equal(response.error?.message, "Request exceeds the 2 MB limit");
+    client.child.stdin.write("\n");
+    assert.deepEqual(resultObject(await client.request("ping")), {});
+  } finally {
+    await client.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 function resultObject(response: RpcResponse): Record<string, unknown> {
   assert.equal(response.error, undefined);
