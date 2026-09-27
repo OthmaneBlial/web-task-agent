@@ -26,12 +26,12 @@ export function buildCachePath(task: string, runId: string, customDir?: string):
   return path.join(dir, `${task}_run_${runId}.json`);
 }
 
-export function writeJsonAtomic(filePath: string, payload: unknown): void {
+export function writeTextAtomic(filePath: string, contents: string): void {
   ensureDir(path.dirname(filePath));
   const tempPath = `${filePath}.${randomUUID()}.tmp`;
 
   try {
-    fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), { encoding: "utf8", flag: "wx" });
+    fs.writeFileSync(tempPath, contents, { encoding: "utf8", flag: "wx" });
     fs.renameSync(tempPath, filePath);
   } catch (error) {
     try {
@@ -41,6 +41,10 @@ export function writeJsonAtomic(filePath: string, payload: unknown): void {
     }
     throw error;
   }
+}
+
+export function writeJsonAtomic(filePath: string, payload: unknown): void {
+  writeTextAtomic(filePath, JSON.stringify(payload, null, 2));
 }
 
 export function saveTaskState<T extends { runId: string }>(

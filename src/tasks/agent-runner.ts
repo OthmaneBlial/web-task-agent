@@ -7,7 +7,8 @@ import {
   createRunId,
   ensureDir,
   saveTaskState,
-  writeJsonAtomic
+  writeJsonAtomic,
+  writeTextAtomic
 } from "../lib/cache";
 import { ensureDebuggerReady } from "../lib/cdp";
 import { loadAgentMemory } from "../lib/agent-memory";
@@ -553,8 +554,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
         "",
         `CTA: ${postDraft.callToAction}`
       ].join("\n");
-      ensureDir(path.dirname(state.outputs.postDraftPath));
-      fs.writeFileSync(state.outputs.postDraftPath, `${contents.trim()}\n`, "utf8");
+      writeTextAtomic(state.outputs.postDraftPath, `${contents.trim()}\n`);
     }
 
     if (commentsDraft && state.outputs.commentsDraftPath) {
@@ -562,8 +562,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       commentsDraft.comments.forEach((comment, index) => {
         lines.push(`${index + 1}. ${comment}`);
       });
-      ensureDir(path.dirname(state.outputs.commentsDraftPath));
-      fs.writeFileSync(state.outputs.commentsDraftPath, `${lines.join("\n").trim()}\n`, "utf8");
+      writeTextAtomic(state.outputs.commentsDraftPath, `${lines.join("\n").trim()}\n`);
     }
   }
 

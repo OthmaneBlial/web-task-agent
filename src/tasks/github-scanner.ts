@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { createOrResumeState, createRunId, ensureDir, saveTaskState } from "../lib/cache";
+import { createOrResumeState, createRunId, saveTaskState, writeTextAtomic } from "../lib/cache";
 import {
   captureScreenshot,
   closePageSession,
@@ -553,8 +553,7 @@ export class GitHubScannerTask extends BaseTask<GitHubScannerOptions, GitHubTask
         },
         async () => {
           const reportBody = this.renderReport(state, winners);
-          ensureDir(path.dirname(state.reportPath));
-          fs.writeFileSync(state.reportPath, reportBody, "utf8");
+          writeTextAtomic(state.reportPath, reportBody);
           return {
             reportPath: state.reportPath
           };

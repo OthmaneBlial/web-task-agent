@@ -4,7 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { createOrResumeState, loadTaskState, saveTaskState, writeJsonAtomic } from "../lib/cache";
+import {
+  createOrResumeState,
+  loadTaskState,
+  saveTaskState,
+  writeJsonAtomic,
+  writeTextAtomic
+} from "../lib/cache";
 
 test("atomic JSON writes do not follow a predictable temporary-file symlink", (context) => {
   if (process.platform === "win32") {
@@ -24,6 +30,23 @@ test("atomic JSON writes do not follow a predictable temporary-file symlink", (c
 
     assert.deepEqual(JSON.parse(fs.readFileSync(targetPath, "utf8")), { saved: true });
     assert.equal(fs.readFileSync(protectedPath, "utf8"), "keep this file");
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("atomic text write failure preserves the existing destination", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cache-text-"));
+  const targetPath = path.join(tempDir, "report.md");
+  const markerPath = path.join(targetPath, "preserved.txt");
+
+  try {
+    fs.mkdirSync(targetPath);
+    fs.writeFileSync(markerPath, "keep this file", "utf8");
+
+    assert.throws(() => writeTextAtomic(targetPath, "new report"));
+    assert.equal(fs.readFileSync(markerPath, "utf8"), "keep this file");
+    assert.deepEqual(fs.readdirSync(tempDir), ["report.md"]);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

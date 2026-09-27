@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { createOrResumeState, createRunId, ensureDir, saveTaskState } from "../lib/cache";
+import { createOrResumeState, createRunId, saveTaskState, writeTextAtomic } from "../lib/cache";
 import {
   captureScreenshot,
   closePageSession,
@@ -503,8 +503,7 @@ export class PlayStoreAnalyzerTask extends BaseTask<PlayStoreAnalyzerOptions, Pl
           }
         },
         async () => {
-          ensureDir(path.dirname(state.reportPath));
-          fs.writeFileSync(state.reportPath, renderReport(state.input.query, state, insights), "utf8");
+          writeTextAtomic(state.reportPath, renderReport(state.input.query, state, insights));
           return {
             reportPath: state.reportPath
           };

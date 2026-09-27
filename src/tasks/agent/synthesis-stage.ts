@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { writeTextAtomic } from "../../lib/cache";
 import { JobStore } from "../../lib/job-store";
 import { LlmService } from "../../lib/llm";
 import type {
@@ -1114,16 +1115,14 @@ export class AgentSynthesisStage {
   ): string {
     const outputPath =
       state.outputs.researchSummaryPath ?? path.join(state.artifactDir, "handoff", "research-summary.md");
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, `${renderResearchSummary(summary, evidence)}\n`, "utf8");
+    writeTextAtomic(outputPath, `${renderResearchSummary(summary, evidence)}\n`);
     state.outputs.researchSummaryPath = outputPath;
     return outputPath;
   }
 
   writeReportArtifact(state: AgentRunState, jobStore: JobStore): string {
     const evidence = jobStore.getAgentEvidenceBundle();
-    fs.mkdirSync(path.dirname(state.reportPath), { recursive: true });
-    fs.writeFileSync(state.reportPath, renderReport(state, evidence), "utf8");
+    writeTextAtomic(state.reportPath, renderReport(state, evidence));
     return state.reportPath;
   }
 }
