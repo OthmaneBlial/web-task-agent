@@ -40,7 +40,7 @@ function directoryFor(input: string): string {
 
 function readBundle(input: string): ReceiptBundle {
   const root = directoryFor(input);
-  const bundle: ReceiptBundle = {};
+  const bundle = Object.create(null) as ReceiptBundle;
   let files = 0;
   let total = 0;
   const visit = (directory: string): void => {

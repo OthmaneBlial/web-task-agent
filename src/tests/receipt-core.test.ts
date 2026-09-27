@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,7 +17,7 @@ import {
 } from "../../packages/decision-receipt/dist";
 
 function readBundle(directory: string): ReceiptBundle {
-  const bundle: ReceiptBundle = {};
+  const bundle = Object.create(null) as ReceiptBundle;
   const visit = (current: string): void => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const absolute = path.join(current, entry.name);
@@ -94,6 +95,39 @@ test("receipt bundle verification rejects inherited and aliased file paths", asy
   const aliased = await verifyReceiptBundle(aliasBundle);
   assert.equal(aliased.valid, false);
   assert.ok(aliased.issues.some((issue) => issue.code === "bundle_path_duplicate"));
+});
+
+test("receipt CLI preserves a bundle file named __proto__", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-prototype-path-"));
+  try {
+    const example = readBundle(path.join("packages", "decision-receipt", "examples", "minimal"));
+    for (const [filePath, contents] of Object.entries(example)) {
+      const destination = path.join(tempDir, filePath);
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      const data = typeof contents === "string" ? contents : new Uint8Array(contents);
+      fs.writeFileSync(destination, data);
+    }
+
+    const prototypeFile = Buffer.from("valid evidence under a prototype-named path");
+    fs.writeFileSync(path.join(tempDir, "__proto__"), prototypeFile);
+    const manifestPath = path.join(tempDir, "integrity-manifest.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      files: Array<{ path: string; sha256: string; bytes: number }>;
+    };
+    manifest.files.push({
+      path: "__proto__",
+      sha256: createHash("sha256").update(prototypeFile).digest("hex"),
+      bytes: prototypeFile.byteLength
+    });
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
+
+    const cliPath = path.resolve("packages", "decision-receipt", "dist", "cli.js");
+    const output = execFileSync(process.execPath, [cliPath, "verify", tempDir], { encoding: "utf8" });
+    assert.match(output, /integrity verified/i);
+    assert.match(output, /evidence is not proof|integrity is not proof/i);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("experimental schema-v1 receipts migrate once and unknown versions fail closed", () => {
