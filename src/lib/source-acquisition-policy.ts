@@ -5,6 +5,7 @@ import { evaluateSourceUrlPolicy, isPublicInternetAddress } from "./source-polic
 export interface RobotsFetchResponse {
   ok: boolean;
   status: number;
+  headers?: { get(name: string): string | null };
   text(): Promise<string>;
 }
 
@@ -15,6 +16,12 @@ export interface SourceAcquisitionDecision {
   waitedMs: number;
   domainRequestCount?: number | null;
   domainRequestLimit?: number | null;
+}
+
+interface RobotsResult {
+  text: string | null;
+  unavailable: boolean;
+  denial?: SourceAcquisitionDecision;
 }
 
 export interface SourceAcquisitionPolicyOptions {
@@ -194,7 +201,7 @@ export class SourceAcquisitionPolicy {
   private readonly resolveHostname: (hostname: string) => Promise<Array<{ address: string; family: number }>>;
   private readonly now: () => number;
   private readonly sleep: (milliseconds: number) => Promise<void>;
-  private readonly robotsByOrigin = new Map<string, Promise<{ text: string | null; unavailable: boolean }>>();
+  private readonly robotsByOrigin = new Map<string, Promise<RobotsResult>>();
   private readonly nextRequestAt = new Map<string, number>();
   private readonly requestsByDomain = new Map<string, number>();
 
@@ -216,22 +223,82 @@ export class SourceAcquisitionPolicy {
     this.sleep = options.sleep ?? defaultSleep;
   }
 
-  private getRobots(origin: string): Promise<{ text: string | null; unavailable: boolean }> {
+  private getRobots(origin: string): Promise<RobotsResult> {
     const cached = this.robotsByOrigin.get(origin);
     if (cached) return cached;
 
     const robotsRequest = (async () => {
-      try {
-        const response = await this.fetchRobots(`${origin}/robots.txt`, {
-          headers: { "user-agent": this.userAgent, accept: "text/plain,*/*;q=0.1" },
-          redirect: "manual",
-          signal: AbortSignal.timeout(5_000)
-        });
-        if (!response.ok) return { text: null, unavailable: true };
-        return { text: await response.text(), unavailable: false };
-      } catch {
-        return { text: null, unavailable: true };
+      const deny = (reason: string, signals: string[]): RobotsResult => ({
+        text: null,
+        unavailable: true,
+        denial: {
+          action: "deny",
+          reason,
+          signals,
+          waitedMs: 0,
+          domainRequestCount: null,
+          domainRequestLimit: this.maxRequestsPerDomain
+        }
+      });
+      const signal = AbortSignal.timeout(5_000);
+      let robotsUrl = `${origin}/robots.txt`;
+
+      for (let redirects = 0; redirects <= 5; redirects += 1) {
+        const targetDecision = await this.checkNetworkTarget(robotsUrl);
+        if (targetDecision.action === "deny") {
+          return deny(
+            `source acquisition denied robots.txt target: ${targetDecision.reason}`,
+            ["robots_redirect_target_denied", ...targetDecision.signals]
+          );
+        }
+
+        let response: RobotsFetchResponse;
+        try {
+          response = await this.fetchRobots(robotsUrl, {
+            headers: { "user-agent": this.userAgent, accept: "text/plain,*/*;q=0.1" },
+            redirect: "manual",
+            signal
+          });
+        } catch {
+          return deny("source acquisition denied source because robots.txt is unreachable", ["robots_unreachable", "human_review_required"]);
+        }
+
+        if (response.status >= 300 && response.status < 400) {
+          if (redirects === 5) {
+            return deny("source acquisition denied source because robots.txt exceeded five redirects", ["robots_redirect_limit", "human_review_required"]);
+          }
+          const location = response.headers?.get("location")?.trim();
+          if (!location) {
+            return deny("source acquisition denied source because robots.txt redirect omitted Location", ["robots_redirect_invalid", "human_review_required"]);
+          }
+          try {
+            robotsUrl = new URL(location, robotsUrl).toString();
+          } catch {
+            return deny("source acquisition denied source because robots.txt redirect URL is malformed", ["robots_redirect_invalid", "human_review_required"]);
+          }
+          continue;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          return deny("source acquisition denied source because robots.txt access was refused", ["robots_access_denied", "human_review_required"]);
+        }
+        if (response.status === 429) {
+          return deny("source acquisition denied source because robots.txt was rate limited", ["robots_rate_limited", "human_review_required"]);
+        }
+        if (response.status >= 400 && response.status < 500) {
+          return { text: null, unavailable: true };
+        }
+        if (response.status >= 200 && response.status < 300 && response.ok) {
+          try {
+            return { text: await response.text(), unavailable: false };
+          } catch {
+            return deny("source acquisition denied source because robots.txt could not be read", ["robots_unreachable", "human_review_required"]);
+          }
+        }
+        return deny(`source acquisition denied source because robots.txt returned HTTP ${response.status}`, ["robots_unreachable", "human_review_required"]);
       }
+
+      return deny("source acquisition denied source because robots.txt redirect limit was reached", ["robots_redirect_limit", "human_review_required"]);
     })();
     this.robotsByOrigin.set(origin, robotsRequest);
     return robotsRequest;
@@ -342,6 +409,13 @@ export class SourceAcquisitionPolicy {
     const hostname = normalizeDomain(parsed.hostname);
 
     const robots = await this.getRobots(parsed.origin);
+    if (robots.denial) {
+      return {
+        ...robots.denial,
+        domainRequestCount: this.requestsByDomain.get(hostname) ?? 0,
+        domainRequestLimit: this.maxRequestsPerDomain
+      };
+    }
     if (robots.text !== null) {
       const robotsDecision = evaluateRobotsText({
         robotsText: robots.text,

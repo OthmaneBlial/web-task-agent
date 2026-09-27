@@ -131,12 +131,111 @@ test("source acquisition denies known robots exclusions and records unavailable 
   });
   const unavailablePolicy = new SourceAcquisitionPolicy({
     minDomainDelayMs: 0,
-    fetchRobots: async () => ({ ok: false, status: 503, text: async () => "" }),
+    fetchRobots: async () => ({ ok: false, status: 404, text: async () => "" }),
     resolveHostname: resolvePublicHostname
   });
 
   assert.equal((await denyPolicy.prepare("https://docs.example.com/private/audit")).action, "deny");
   assert.ok((await unavailablePolicy.prepare("https://docs.example.com/guide")).signals.includes("robots_unavailable"));
+});
+
+test("source acquisition follows safe robots redirects and applies rules to the original origin", async () => {
+  const requestedUrls: string[] = [];
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: resolvePublicHostname,
+    fetchRobots: async (url, init) => {
+      requestedUrls.push(url);
+      assert.equal(init.redirect, "manual");
+      if (url === "https://docs.example.com/robots.txt") {
+        return {
+          ok: false,
+          status: 302,
+          headers: { get: () => "https://policy.example.net/robots.txt" },
+          text: async () => ""
+        };
+      }
+      return { ok: true, status: 200, text: async () => "User-agent: *\nDisallow: /private\n" };
+    }
+  });
+
+  const decision = await policy.prepare("https://docs.example.com/private/report");
+
+  assert.equal(decision.action, "deny");
+  assert.ok(decision.signals.includes("robots_disallow"));
+  assert.deepEqual(requestedUrls, [
+    "https://docs.example.com/robots.txt",
+    "https://policy.example.net/robots.txt"
+  ]);
+});
+
+test("robots redirect targets are rechecked before redirected fetches", async () => {
+  let robotsCalls = 0;
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: resolvePublicHostname,
+    fetchRobots: async () => {
+      robotsCalls += 1;
+      return {
+        ok: false,
+        status: 302,
+        headers: { get: () => "http://127.0.0.1/robots.txt" },
+        text: async () => ""
+      };
+    }
+  });
+
+  const decision = await policy.prepare("https://docs.example.com/guide");
+
+  assert.equal(decision.action, "deny");
+  assert.ok(decision.signals.includes("robots_redirect_target_denied"));
+  assert.ok(decision.signals.includes("private_network"));
+  assert.equal(robotsCalls, 1);
+});
+
+test("robots redirect chains stop after five follow-ups", async () => {
+  let robotsCalls = 0;
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: resolvePublicHostname,
+    fetchRobots: async (url) => {
+      robotsCalls += 1;
+      return { ok: false, status: 302, headers: { get: () => url }, text: async () => "" };
+    }
+  });
+
+  const decision = await policy.prepare("https://docs.example.com/guide");
+
+  assert.equal(decision.action, "deny");
+  assert.ok(decision.signals.includes("robots_redirect_limit"));
+  assert.equal(robotsCalls, 6);
+});
+
+test("robots server errors, access denial, and network failures deny source acquisition", async () => {
+  const failedResponses = [
+    { ok: false, status: 503, signal: "robots_unreachable" },
+    { ok: false, status: 403, signal: "robots_access_denied" },
+    { ok: false, status: 429, signal: "robots_rate_limited" }
+  ];
+  for (const { ok, status, signal } of failedResponses) {
+    const policy = new SourceAcquisitionPolicy({
+      minDomainDelayMs: 0,
+      resolveHostname: resolvePublicHostname,
+      fetchRobots: async () => ({ ok, status, text: async () => "" })
+    });
+    const decision = await policy.prepare("https://docs.example.com/guide");
+    assert.equal(decision.action, "deny", String(status));
+    assert.ok(decision.signals.includes(signal), String(status));
+  }
+
+  const offlinePolicy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: resolvePublicHostname,
+    fetchRobots: async () => { throw new Error("network unavailable"); }
+  });
+  const offlineDecision = await offlinePolicy.prepare("https://docs.example.com/guide");
+  assert.equal(offlineDecision.action, "deny");
+  assert.ok(offlineDecision.signals.includes("robots_unreachable"));
 });
 
 test("source acquisition enforces a per-domain budget and leaves sensitive domains for human review", async () => {
