@@ -39,6 +39,18 @@
       "expectedCode": "integrity_hash_mismatch"
     },
     {
+      "id": "manifest-receipt-omitted",
+      "mutation": "remove-receipt-from-manifest",
+      "expectedValid": false,
+      "expectedCode": "manifest_receipt_missing"
+    },
+    {
+      "id": "manifest-snapshot-omitted",
+      "mutation": "remove-snapshot-from-manifest",
+      "expectedValid": false,
+      "expectedCode": "manifest_snapshot_missing"
+    },
+    {
       "id": "signature-mismatch",
       "mutation": "signature-mismatch",
       "expectedValid": false,

@@ -161,6 +161,19 @@ export async function verifyReceiptBundle(input: ReceiptBundle): Promise<Receipt
         issue(issues, `/files/${entry.path}`, "integrity_hash_mismatch", `SHA-256 mismatch: ${entry.path}.`);
       }
     }
+    if (!seen.has("receipt.json")) {
+      issue(issues, "/integrity-manifest.json/files", "manifest_receipt_missing", "Integrity manifest does not cover receipt.json.");
+    }
+    for (const source of receipt?.sources ?? []) {
+      if (source.snapshotPath && !seen.has(source.snapshotPath)) {
+        issue(
+          issues,
+          "/integrity-manifest.json/files",
+          "manifest_snapshot_missing",
+          `Integrity manifest does not cover source snapshot ${source.snapshotPath}.`
+        );
+      }
+    }
   }
 
   if (receipt) {

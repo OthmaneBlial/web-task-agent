@@ -876,6 +876,7 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
       if (!Array.isArray(manifest.files)) {
         errors.push("integrity manifest files must be an array");
       } else {
+        const manifestPaths = new Set<string>();
         for (const entry of manifest.files) {
           const relative = String(entry?.path ?? "");
           checkedFiles += 1;
@@ -883,6 +884,7 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
             errors.push(`integrity manifest path escapes package root: ${relative}`);
             continue;
           }
+          manifestPaths.add(relative);
           const contents = readReceiptFile(rootDir, relative);
           if (!contents) {
             errors.push(`integrity manifest file is missing, unsafe, symlinked, or not a regular file: ${relative}`);
@@ -893,6 +895,14 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
           }
           if (contents.byteLength !== entry.bytes) {
             errors.push(`integrity byte count mismatch: ${relative}`);
+          }
+        }
+        if (!manifestPaths.has("receipt.json")) {
+          errors.push("integrity manifest does not cover receipt.json");
+        }
+        for (const source of receipt?.sources ?? []) {
+          if (source.snapshotPath && !manifestPaths.has(source.snapshotPath)) {
+            errors.push(`integrity manifest does not cover source snapshot: ${source.snapshotPath}`);
           }
         }
       }

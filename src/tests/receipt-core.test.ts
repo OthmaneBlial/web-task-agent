@@ -51,6 +51,28 @@ test("standalone core verifies every public example and identifies the falsified
   assert.ok(malformed.issues.some((issue) => issue.code === "manifest_file_invalid"));
 });
 
+test("receipt manifest covers receipt.json and every referenced source snapshot", async () => {
+  const original = readBundle(path.join("packages", "decision-receipt", "examples", "minimal"));
+  const receipt = JSON.parse(String(original["receipt.json"])) as DecisionReceipt;
+  const missingEntries = [
+    ["receipt.json", "manifest_receipt_missing"],
+    [receipt.sources[0]!.snapshotPath!, "manifest_snapshot_missing"]
+  ] as const;
+
+  for (const [missingPath, expectedCode] of missingEntries) {
+    const bundle = { ...original };
+    const manifest = JSON.parse(String(bundle["integrity-manifest.json"])) as {
+      files: Array<{ path: string; sha256: string; bytes: number }>;
+    };
+    manifest.files = manifest.files.filter((entry) => entry.path !== missingPath);
+    bundle["integrity-manifest.json"] = `${JSON.stringify(manifest)}\n`;
+
+    const verification = await verifyReceiptBundle(bundle);
+    assert.equal(verification.valid, false);
+    assert.ok(verification.issues.some((issue) => issue.code === expectedCode), verification.errors.join("; "));
+  }
+});
+
 test("experimental schema-v1 receipts migrate once and unknown versions fail closed", () => {
   const legacy = exampleReceipt("minimal") as unknown as Record<string, unknown>;
   delete legacy.specVersion;

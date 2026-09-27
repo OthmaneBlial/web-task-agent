@@ -38,7 +38,7 @@ The signature marker is `canonical-receipt-without-signature`. Earlier experimen
 
 ## Integrity and truth boundary
 
-`integrity-manifest.json` declares SHA-256 and byte counts for receipt files. Verification checks available file bytes, snapshot hashes, evidence excerpts, and optional signatures.
+`integrity-manifest.json` declares SHA-256 and byte counts for receipt files. It must cover `receipt.json` and every source snapshot referenced by the receipt. Verification checks those required files, all other listed file bytes, snapshot hashes, evidence excerpts, and optional signatures.
 
 Successful verification does **not** prove that a source or claim is true, complete, authorized, representative, or fresh. It proves only that the checked contract and bytes were internally consistent.
 

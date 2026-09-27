@@ -106,9 +106,12 @@ async function bundleFor(mutation) {
     "receipt.json": `${JSON.stringify(receipt, null, 2)}\n`,
     "evidence/source.md": snapshot
   };
+  const manifestFiles = { ...files };
+  if (mutation === "remove-receipt-from-manifest") delete manifestFiles["receipt.json"];
+  if (mutation === "remove-snapshot-from-manifest") delete manifestFiles["evidence/source.md"];
   const bundle = {
     ...files,
-    "integrity-manifest.json": `${JSON.stringify(makeManifest(files), null, 2)}\n`
+    "integrity-manifest.json": `${JSON.stringify(makeManifest(manifestFiles), null, 2)}\n`
   };
   if (mutation === "tamper-after-manifest") bundle["evidence/source.md"] += "Tampered.\n";
   return bundle;

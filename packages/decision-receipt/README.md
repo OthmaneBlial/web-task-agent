@@ -24,7 +24,7 @@ const verification = await verifyReceiptBundle({
 });
 ```
 
-`valid: true` means the structure, internal references, available snapshots, declared hashes, byte counts, and optional signature were consistent. It does not mean that a source or decision is true, complete, authorized, or fresh.
+`valid: true` means the structure and internal references are valid, the manifest covers `receipt.json` and every referenced source snapshot, declared hashes and byte counts match, and any optional signature verifies. It does not mean that a source or decision is true, complete, authorized, or fresh.
 
 ## No-key CLI
 

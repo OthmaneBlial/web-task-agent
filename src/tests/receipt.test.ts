@@ -85,6 +85,32 @@ test("receipt verification refuses symlinked package files", { skip: process.pla
   }
 });
 
+test("receipt directory verification requires manifest coverage for the receipt and snapshots", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-manifest-coverage-"));
+  try {
+    for (const [index, omitted] of (["receipt.json", "snapshot"] as const).entries()) {
+      const bundle = path.join(root, `bundle-${index}`);
+      writeDemoPackage({ id: "local-first-risk-review", outputDir: bundle });
+      const receipt = JSON.parse(fs.readFileSync(path.join(bundle, "receipt.json"), "utf8")) as {
+        sources: Array<{ snapshotPath: string | null }>;
+      };
+      const missingPath = omitted === "snapshot" ? receipt.sources[0]!.snapshotPath! : omitted;
+      const manifestPath = path.join(bundle, "integrity-manifest.json");
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+        files: Array<{ path: string; sha256: string; bytes: number }>;
+      };
+      manifest.files = manifest.files.filter((entry) => entry.path !== missingPath);
+      fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+      const result = verifyReceiptDirectory(bundle);
+      assert.equal(result.valid, false);
+      assert.ok(result.errors.some((error) => error.includes(`does not cover ${omitted === "snapshot" ? "source snapshot" : "receipt.json"}`)), result.errors.join("; "));
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("decision receipt comparison explains source, claim, and decision changes", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-diff-"));
   try {

@@ -26,6 +26,7 @@
       "evidence": [
         { "path": "src/tests/web-verifier.test.ts", "marker": "actual browser bundle streams a rooted ZIP and rejects path traversal" },
         { "path": "src/tests/receipt.test.ts", "marker": "receipt verification refuses symlinked package files" },
+        { "path": "src/tests/receipt-core.test.ts", "marker": "receipt manifest covers receipt.json and every referenced source snapshot" },
         { "path": "packages/decision-receipt/src/verify.ts", "marker": "manifest_path_unsafe" },
         { "path": "src/tests/mcp.test.ts", "marker": "escapes DECISION_RECEIPT_ROOT" }
       ]

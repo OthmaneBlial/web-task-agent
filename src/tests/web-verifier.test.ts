@@ -94,6 +94,16 @@ test("actual browser bundle streams a rooted ZIP and rejects path traversal", as
   const verification = await verifier.verifyReceiptBundle(unpacked);
   assert.equal(verification.valid, true, verification.errors.join("; "));
 
+  const missingReceiptCoverage = { ...unpacked };
+  const manifest = JSON.parse(new TextDecoder().decode(missingReceiptCoverage["integrity-manifest.json"] as Uint8Array)) as {
+    files: Array<{ path: string; sha256: string; bytes: number }>;
+  };
+  manifest.files = manifest.files.filter((entry) => entry.path !== "receipt.json");
+  missingReceiptCoverage["integrity-manifest.json"] = strToU8(JSON.stringify(manifest));
+  const incomplete = await verifier.verifyReceiptBundle(missingReceiptCoverage);
+  assert.equal(incomplete.valid, false);
+  assert.ok(incomplete.issues.some((issue) => issue.code === "manifest_receipt_missing"));
+
   const magicPathArchive = zipSync({ "payload99": strToU8("preserved") });
   const oldName = strToU8("payload99");
   const magicName = strToU8("__proto__");
