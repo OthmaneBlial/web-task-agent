@@ -40,6 +40,7 @@
       "title": "Unsafe URLs and provider-neutral imports",
       "evidence": [
         { "path": "src/tests/source-policy.test.ts", "marker": "source policy allows public HTTPS and rejects unsafe URL targets" },
+        { "path": "src/tests/source-acquisition-policy.test.ts", "marker": "robots matching combines case-insensitive product-token substring groups" },
         { "path": "src/tests/source-acquisition-policy.test.ts", "marker": "robots matching supports wildcard, end-anchor, and encoded paths" },
         { "path": "src/tests/source-acquisition-policy.test.ts", "marker": "robots blank lines do not end a group before its access rules" },
         { "path": "src/tests/source-acquisition-policy.test.ts", "marker": "source acquisition follows safe robots redirects and applies rules to the original origin" },

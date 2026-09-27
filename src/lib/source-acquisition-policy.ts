@@ -114,7 +114,7 @@ async function defaultResolveHostname(hostname: string): Promise<Array<{ address
 }
 
 function normalizeAgent(value: string): string {
-  return value.trim().toLowerCase().split(/[\s/]/, 1)[0] ?? "web-task-agent";
+  return value.trim().toLowerCase();
 }
 
 function parseRobots(content: string): RobotsGroup[] {
@@ -205,7 +205,9 @@ export function evaluateRobotsText(input: {
 }): { allowed: boolean; reason: string } {
   const agent = normalizeAgent(input.userAgent);
   const groups = parseRobots(input.robotsText);
-  const specificGroups = groups.filter((group) => group.agents.includes(agent));
+  const specificGroups = groups.filter((group) =>
+    group.agents.some((candidate) => candidate !== "*" && candidate.length > 0 && agent.includes(candidate))
+  );
   const matchingGroups = specificGroups.length > 0
     ? specificGroups
     : groups.filter((group) => group.agents.includes("*"));

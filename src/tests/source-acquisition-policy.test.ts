@@ -29,6 +29,21 @@ test("robots policy honors the most specific matching rule and user agent group"
   );
 });
 
+test("robots matching combines case-insensitive product-token substring groups", () => {
+  const robotsText = [
+    "User-agent: WEB-TASK",
+    "Disallow: /short",
+    "User-agent: agent",
+    "Disallow: /suffix",
+    "User-agent: *",
+    "Allow: /"
+  ].join("\n");
+
+  assert.equal(evaluateRobotsText({ robotsText, userAgent: "web-task-agent/0.2", pathname: "/short/report" }).allowed, false);
+  assert.equal(evaluateRobotsText({ robotsText, userAgent: "web-task-agent/0.2", pathname: "/suffix/report" }).allowed, false);
+  assert.equal(evaluateRobotsText({ robotsText, userAgent: "web-task-agent/0.2", pathname: "/public/report" }).allowed, true);
+});
+
 test("robots blank lines do not end a group before its access rules", () => {
   const robotsText = [
     "User-agent: *",
