@@ -5,7 +5,7 @@
     "kind": "deterministic-fixtures",
     "path": "examples/receipts",
     "cases": 8,
-    "adversarialCases": 4
+    "adversarialCases": 5
   },
   "totals": {
     "claims": 8,

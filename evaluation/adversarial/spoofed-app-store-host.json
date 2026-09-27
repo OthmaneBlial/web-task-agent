@@ -1,0 +1,8 @@
+{
+  "id": "spoofed-app-store-host",
+  "input": "https://play.google.com.attacker.example/store/apps/details?id=com.example.app",
+  "resolvedAddress": "127.0.0.1",
+  "expectedGate": "deny",
+  "reason": "A lookalike host is not a trusted app-store link; its private DNS answer must be denied before robots or browser access.",
+  "test": "src/tests/evaluation.test.ts"
+}

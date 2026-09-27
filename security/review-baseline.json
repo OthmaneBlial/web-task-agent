@@ -35,6 +35,7 @@
       "evidence": [
         { "path": "src/tests/source-policy.test.ts", "marker": "source policy allows public HTTPS and rejects unsafe URL targets" },
         { "path": "src/tests/direct-source.test.ts", "marker": "direct app URLs require the official HTTPS store hosts" },
+        { "path": "src/tests/evaluation.test.ts", "marker": "spoofed app-store URL falls back to DNS policy before robots or navigation" },
         { "path": "src/tests/interop.test.ts", "marker": "adapter contract rejects provider-private fields and unlabeled inference" },
         { "path": "scripts/run-schema-conformance.mjs", "marker": "schema-credential-url" }
       ]

@@ -1,6 +1,6 @@
 # Receipt evaluation scorecard
 
-**Gate: PASS** — 8 deterministic receipts, 4 adversarial policy cases, 80 files checked.
+**Gate: PASS** — 8 deterministic receipts, 5 adversarial policy cases, 80 files checked.
 
 This is a structural regression scorecard, not a benchmark of model intelligence or web truth.
 

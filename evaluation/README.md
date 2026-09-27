@@ -22,6 +22,7 @@ The `adversarial/` fixtures describe hostile inputs that must stay inside the ex
 - unsafe source protocols and credential-bearing URLs are denied;
 - prompt-injection text is flagged as evidence, never executed as an instruction;
 - private or documentation-range DNS answers are denied before browser navigation;
+- a lookalike Play Store hostname is treated as an ordinary source, then denied if DNS resolves to a private address;
 - stale or incomplete evidence keeps an explicit limitation instead of being promoted to certainty.
 
 Each case names its expected gate and the corresponding test. Add a minimal fixture and a regression test before changing a policy rule.

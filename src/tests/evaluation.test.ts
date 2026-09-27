@@ -10,13 +10,15 @@ import {
 } from "../lib/source-policy";
 import { SourceAcquisitionPolicy } from "../lib/source-acquisition-policy";
 import { verifyReceiptDirectory } from "../lib/receipt";
+import { isDirectAppUrl } from "../tasks/agent/direct-source";
 
-test("adversarial evaluation corpus stays versioned and covers four trust gates", () => {
+test("adversarial evaluation corpus stays versioned and covers five trust gates", () => {
   const directory = path.join(process.cwd(), "evaluation", "adversarial");
   const fixtures = fs.readdirSync(directory).filter((file) => file.endsWith(".json")).sort();
   assert.deepEqual(fixtures, [
     "private-dns-answer.json",
     "prompt-injection-override.json",
+    "spoofed-app-store-host.json",
     "stale-source-limit.json",
     "unsafe-source-url.json"
   ]);
@@ -26,6 +28,27 @@ test("adversarial evaluation corpus stays versioned and covers four trust gates"
     assert.equal(typeof parsed.expectedGate, "string");
     assert.equal(parsed.test, "src/tests/evaluation.test.ts");
   }
+});
+
+test("spoofed app-store URL falls back to DNS policy before robots or navigation", async () => {
+  const fixture = JSON.parse(fs.readFileSync(
+    path.join(process.cwd(), "evaluation", "adversarial", "spoofed-app-store-host.json"),
+    "utf8"
+  )) as { input: string; resolvedAddress: string; expectedGate: string };
+  let robotsCalls = 0;
+  const policy = new SourceAcquisitionPolicy({
+    resolveHostname: async () => [{ address: fixture.resolvedAddress, family: 4 }],
+    fetchRobots: async () => {
+      robotsCalls += 1;
+      throw new Error("robots must not be fetched after a private DNS answer");
+    }
+  });
+
+  assert.equal(isDirectAppUrl(fixture.input), false);
+  const decision = await policy.prepare(fixture.input);
+  assert.equal(decision.action, fixture.expectedGate);
+  assert.ok(decision.signals.includes("resolved_private_network"));
+  assert.equal(robotsCalls, 0);
 });
 
 test("unsafe URLs and injection text are rejected or flagged without execution", () => {
