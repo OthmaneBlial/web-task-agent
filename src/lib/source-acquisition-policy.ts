@@ -250,7 +250,7 @@ export class SourceAcquisitionPolicy {
     return null;
   }
 
-  async prepare(rawUrl: string): Promise<SourceAcquisitionDecision> {
+  async checkNetworkTarget(rawUrl: string): Promise<SourceAcquisitionDecision> {
     const sourceDecision = evaluateSourceUrlPolicy(rawUrl);
     if (sourceDecision.action === "deny") {
       return { ...sourceDecision, waitedMs: 0, domainRequestCount: null, domainRequestLimit: this.maxRequestsPerDomain };
@@ -272,6 +272,25 @@ export class SourceAcquisitionPolicy {
         domainRequestLimit: this.maxRequestsPerDomain
       };
     }
+
+    return {
+      action: "allow",
+      reason: "source acquisition allowed a public network target",
+      signals: ["public_http_url"],
+      waitedMs: 0,
+      domainRequestCount: this.requestsByDomain.get(hostname) ?? 0,
+      domainRequestLimit: this.maxRequestsPerDomain
+    };
+  }
+
+  async prepare(rawUrl: string): Promise<SourceAcquisitionDecision> {
+    const targetDecision = await this.checkNetworkTarget(rawUrl);
+    if (targetDecision.action === "deny") {
+      return targetDecision;
+    }
+
+    const parsed = new URL(rawUrl);
+    const hostname = normalizeDomain(parsed.hostname);
 
     const robots = await this.getRobots(parsed.origin);
     if (robots.text !== null) {

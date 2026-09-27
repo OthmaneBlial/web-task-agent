@@ -125,6 +125,25 @@ test("source acquisition denies DNS answers that point at private networks befor
   assert.equal(robotsCalls, 0);
 });
 
+test("network target checks reject private redirect destinations without robots fetches or delays", async () => {
+  let robotsCalls = 0;
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 60_000,
+    resolveHostname: async () => [{ address: "10.0.0.7", family: 4 }],
+    fetchRobots: async () => {
+      robotsCalls += 1;
+      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+    }
+  });
+
+  const decision = await policy.checkNetworkTarget("https://redirect.example.com/private");
+
+  assert.equal(decision.action, "deny");
+  assert.ok(decision.signals.includes("resolved_private_network"));
+  assert.equal(decision.waitedMs, 0);
+  assert.equal(robotsCalls, 0);
+});
+
 test("source acquisition resolves the exact requested hostname before browser navigation", async () => {
   let resolvedHostname = "";
   let robotsCalls = 0;
