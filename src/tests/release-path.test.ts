@@ -13,7 +13,7 @@ test("public release path is tag-only and includes first-success evidence", () =
   assert.match(workflow, /npm run release:check/);
   assert.match(workflow, /scripts\/first-success\.mjs/);
   assert.match(workflow, /SHA256SUMS/);
-  assert.match(workflow, /actions\/attest-build-provenance@v2/);
+  assert.match(workflow, /actions\/attest-build-provenance@v4/);
 });
 
 test("first-success script does not require model or browser credentials", () => {
