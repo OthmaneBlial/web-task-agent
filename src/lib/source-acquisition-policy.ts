@@ -87,7 +87,6 @@ function parseRobots(content: string): RobotsGroup[] {
   for (const rawLine of content.replace(/^\uFEFF/, "").split(/\r?\n/)) {
     const line = rawLine.replace(/#.*/, "").trim();
     if (!line) {
-      current = null;
       continue;
     }
     const match = line.match(/^([a-z-]+)\s*:\s*(.*)$/i);

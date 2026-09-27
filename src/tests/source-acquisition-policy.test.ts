@@ -29,6 +29,25 @@ test("robots policy honors the most specific matching rule and user agent group"
   );
 });
 
+test("robots blank lines do not end a group before its access rules", () => {
+  const robotsText = [
+    "User-agent: *",
+    "",
+    "Disallow: /private",
+    "",
+    "Allow: /private/public"
+  ].join("\n");
+
+  assert.equal(
+    evaluateRobotsText({ robotsText, userAgent: "web-task-agent", pathname: "/private/draft" }).allowed,
+    false
+  );
+  assert.equal(
+    evaluateRobotsText({ robotsText, userAgent: "web-task-agent", pathname: "/private/public/report" }).allowed,
+    true
+  );
+});
+
 test("source acquisition caches robots decisions and paces repeated domains", async () => {
   let now = 1_000;
   let robotsCalls = 0;
