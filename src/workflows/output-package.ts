@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { ensureDir, writeJsonAtomic } from "../lib/cache";
+import { writeJsonAtomic, writeTextAtomic } from "../lib/cache";
 import type {
   AgentEvidenceBundle,
   AgentResearchReferenceItem,
@@ -483,12 +483,9 @@ export function writeWorkflowPackageArtifacts(
   }
 
   const outputPaths = applyAgentOutputPaths(state);
-  ensureDir(path.dirname(outputPaths.workflowBriefPath));
-  ensureDir(path.dirname(outputPaths.packageManifestPath));
-  ensureDir(path.dirname(outputPaths.receiptPath));
 
   const workflowBrief = renderWorkflowBrief(template, state, evidence);
-  fs.writeFileSync(outputPaths.workflowBriefPath, `${workflowBrief.trim()}\n`, "utf8");
+  writeTextAtomic(outputPaths.workflowBriefPath, `${workflowBrief.trim()}\n`);
 
   const receipt = buildAgentDecisionReceipt({
     state,
@@ -498,7 +495,7 @@ export function writeWorkflowPackageArtifacts(
   writeJsonAtomic(outputPaths.receiptPath, receipt);
 
   const packageReadme = renderWorkflowPackageReadme(template, state, evidence, outputPaths);
-  fs.writeFileSync(outputPaths.packageReadmePath, `${packageReadme.trim()}\n`, "utf8");
+  writeTextAtomic(outputPaths.packageReadmePath, `${packageReadme.trim()}\n`);
 
   const manifest = {
     generatedAt: state.updatedAt,
