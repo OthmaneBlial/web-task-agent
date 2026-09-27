@@ -108,6 +108,41 @@ test("source acquisition caches robots decisions and paces repeated domains", as
   assert.ok(second.signals.includes("domain_rate_limited"));
 });
 
+test("invalid numeric options retain configured source acquisition bounds", async () => {
+  const previousDelay = process.env.WEB_TASK_AGENT_DOMAIN_MIN_DELAY_MS;
+  const previousLimit = process.env.WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS;
+  process.env.WEB_TASK_AGENT_DOMAIN_MIN_DELAY_MS = "37";
+  process.env.WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS = "2";
+
+  try {
+    const waits: number[] = [];
+    const policy = new SourceAcquisitionPolicy({
+      minDomainDelayMs: Number.NaN,
+      maxRequestsPerDomain: Number.NaN,
+      now: () => 1_000,
+      sleep: async (milliseconds) => { waits.push(milliseconds); },
+      resolveHostname: resolvePublicHostname,
+      fetchRobots: async () => ({ ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" })
+    });
+
+    const first = await policy.prepare("https://docs.example.com/one");
+    const second = await policy.prepare("https://docs.example.com/two");
+    const exhausted = await policy.prepare("https://docs.example.com/three");
+
+    assert.equal(first.action, "allow");
+    assert.equal(second.action, "allow");
+    assert.equal(second.waitedMs, 37);
+    assert.deepEqual(waits, [37]);
+    assert.equal(exhausted.action, "deny");
+    assert.equal(exhausted.domainRequestCount, 2);
+  } finally {
+    if (previousDelay === undefined) delete process.env.WEB_TASK_AGENT_DOMAIN_MIN_DELAY_MS;
+    else process.env.WEB_TASK_AGENT_DOMAIN_MIN_DELAY_MS = previousDelay;
+    if (previousLimit === undefined) delete process.env.WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS;
+    else process.env.WEB_TASK_AGENT_DOMAIN_MAX_REQUESTS = previousLimit;
+  }
+});
+
 test("source acquisition refreshes cached robots rules after 24 hours", async () => {
   let now = 1_000;
   let robotsCalls = 0;

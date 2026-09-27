@@ -246,8 +246,11 @@ export class SourceAcquisitionPolicy {
 
   constructor(options: SourceAcquisitionPolicyOptions = {}) {
     this.userAgent = options.userAgent?.trim() || process.env.WEB_TASK_AGENT_USER_AGENT?.trim() || "web-task-agent (+https://github.com/OthmaneBlial/web-task-agent)";
-    this.minDomainDelayMs = options.minDomainDelayMs ?? configuredDelay();
-    this.maxRequestsPerDomain = options.maxRequestsPerDomain === undefined
+    this.minDomainDelayMs = options.minDomainDelayMs === undefined || !Number.isFinite(options.minDomainDelayMs)
+      ? configuredDelay()
+      : Math.max(0, Math.min(60_000, Math.round(options.minDomainDelayMs)));
+    this.maxRequestsPerDomain = options.maxRequestsPerDomain === undefined ||
+      (options.maxRequestsPerDomain !== null && !Number.isFinite(options.maxRequestsPerDomain))
       ? configuredDomainRequestLimit()
       : options.maxRequestsPerDomain === null || options.maxRequestsPerDomain <= 0
         ? null
