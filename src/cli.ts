@@ -365,6 +365,10 @@ Use "web-task-agent <command> --help" for the full option list.
           `New sources: ${comparison.newSources.length}`,
           `Sources no longer present: ${comparison.disappearedSources.length}`,
           `Existing source URLs changed: ${comparison.changedSources.length}`,
+          `Changed claims: ${comparison.changedClaims.length}`,
+          `Changed contradictions: ${comparison.changedContradictions.length}`,
+          `Limitations added/removed: ${comparison.addedLimitations.length}/${comparison.removedLimitations.length}`,
+          `Next validation changed: ${comparison.changes.nextValidation ? "yes" : "no"}`,
           `Decision changed: ${comparison.decisionChanged ? "yes" : "no"}`
         ]
       });

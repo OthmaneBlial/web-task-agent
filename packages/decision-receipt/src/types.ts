@@ -141,9 +141,20 @@ export interface DecisionReceiptComparison {
     earlier: DecisionReceiptClaim | null;
     later: DecisionReceiptClaim | null;
   }>;
+  changedContradictions: Array<{
+    id: string;
+    earlier: DecisionReceipt["contradictions"][number] | null;
+    later: DecisionReceipt["contradictions"][number] | null;
+  }>;
+  addedLimitations: string[];
+  removedLimitations: string[];
+  nextValidationChange: { earlier: string; later: string } | null;
   changes: {
     sources: boolean;
     claims: boolean;
+    contradictions: boolean;
+    limitations: boolean;
+    nextValidation: boolean;
     policy: boolean;
     model: boolean;
     prompt: boolean;

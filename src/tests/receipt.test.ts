@@ -231,7 +231,7 @@ test("decision receipt comparison explains source, claim, and decision changes",
     assert.equal(comparison.newSources.length, 3);
     assert.equal(comparison.disappearedSources.length, 3);
     assert.ok(comparison.changedBecause.length >= 3);
-    assert.match(renderDecisionReceiptComparison(comparison), /Decision changed because/);
+    assert.match(renderDecisionReceiptComparison(comparison), /Changes detected/);
 
     const renamed = structuredClone(earlier.receipt!);
     renamed.decision.title = `${renamed.decision.title} (revised)`;

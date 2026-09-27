@@ -190,7 +190,11 @@ async function callTool(paramsValue: unknown): Promise<Record<string, unknown>> 
       newSources: comparison.newSources.length,
       disappearedSources: comparison.disappearedSources.length,
       changedSources: comparison.changedSources.length,
-      changedClaimIds: comparison.changedClaims.map((claim) => claim.id)
+      changedClaimIds: comparison.changedClaims.map((claim) => claim.id),
+      changedContradictionIds: comparison.changedContradictions.map((item) => item.id),
+      addedLimitations: comparison.addedLimitations.length,
+      removedLimitations: comparison.removedLimitations.length,
+      nextValidationChanged: comparison.changes.nextValidation
     };
   } else if (params.name === "import_result") {
     const inputPath = localPath(stringArgument(args, "input_path"));

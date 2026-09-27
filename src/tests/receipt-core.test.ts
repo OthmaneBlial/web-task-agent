@@ -159,6 +159,9 @@ test("core diff separates source, policy, model, prompt, claim, and decision cha
   assert.deepEqual(comparison.changes, {
     sources: true,
     claims: true,
+    contradictions: false,
+    limitations: false,
+    nextValidation: false,
     policy: true,
     model: true,
     prompt: true,
@@ -169,6 +172,81 @@ test("core diff separates source, policy, model, prompt, claim, and decision cha
   assert.match(markdown, /Policy changed: yes/);
   assert.match(markdown, /Model changed: yes/);
   assert.match(markdown, /Prompt contract changed: yes/);
+});
+
+test("core diff reports contradictions, limitations, and next validation changes", () => {
+  const earlier = exampleReceipt("contradicted");
+  const later = structuredClone(earlier);
+  later.contradictions[0]!.note = "The contradictory evidence needs another review.";
+  later.limitations = ["A newly discovered limitation."];
+  later.nextValidation = "Recheck the cited source after its next update.";
+
+  const comparison = compareDecisionReceipts(earlier, later);
+  assert.equal(comparison.changes.contradictions, true);
+  assert.equal(comparison.changes.limitations, true);
+  assert.equal(comparison.changes.nextValidation, true);
+  assert.deepEqual(comparison.changedContradictions.map((item) => item.id), ["contradiction-1"]);
+  assert.deepEqual(comparison.addedLimitations, ["A newly discovered limitation."]);
+  assert.deepEqual(comparison.removedLimitations, ["This fixture demonstrates the contract; it does not establish source truth."]);
+  assert.deepEqual(comparison.nextValidationChange, {
+    earlier: earlier.nextValidation,
+    later: later.nextValidation
+  });
+
+  const markdown = renderDecisionReceiptComparison(comparison);
+  assert.match(markdown, /Changed contradictions/);
+  assert.match(markdown, /Limitations added/);
+  assert.match(markdown, /Limitations removed/);
+  assert.match(markdown, /Next validation changed/);
+  assert.match(markdown, /A newly discovered limitation\./);
+});
+
+test("core diff ignores object-key and evidence-order changes", () => {
+  const earlier = exampleReceipt("full");
+  const later = structuredClone(earlier);
+  const earlierClaim = earlier.claims[0]!;
+  const extraEvidence = { ...earlierClaim.evidence[0]!, id: "evidence-2" };
+  earlierClaim.evidence.push(extraEvidence);
+  const laterClaim = later.claims[0]!;
+  laterClaim.evidence.push(extraEvidence);
+  later.claims[0] = {
+    limitation: laterClaim.limitation,
+    evidence: laterClaim.evidence.reverse(),
+    text: laterClaim.text,
+    id: laterClaim.id,
+    status: laterClaim.status
+  };
+  earlier.limitations = ["Second limitation.", "First limitation."];
+  later.limitations = ["First limitation.", "Second limitation."];
+
+  const comparison = compareDecisionReceipts(earlier, later);
+  assert.equal(comparison.changes.claims, false);
+  assert.equal(comparison.changes.limitations, false);
+  assert.deepEqual(comparison.changedClaims, []);
+  assert.deepEqual(comparison.addedLimitations, []);
+  assert.deepEqual(comparison.removedLimitations, []);
+});
+
+test("core diff explains changed evidence references", () => {
+  const earlier = exampleReceipt("full");
+  const later = structuredClone(earlier);
+  later.claims[0]!.evidence[0]!.excerpt = "The exported evidence was replaced.";
+
+  const comparison = compareDecisionReceipts(earlier, later);
+  assert.deepEqual(comparison.changedClaims.map((item) => item.id), [earlier.claims[0]!.id]);
+  const markdown = renderDecisionReceiptComparison(comparison);
+  assert.match(markdown, /Evidence `evidence-1`/);
+  assert.match(markdown, /The evidence remains inspectable after export/);
+  assert.match(markdown, /The exported evidence was replaced/);
+});
+
+test("core Markdown keeps untrusted evidence markup inside code spans", () => {
+  const earlier = exampleReceipt("full");
+  const later = structuredClone(earlier);
+  later.claims[0]!.evidence[0]!.excerpt = "Read `this` ![pixel](https://example.invalid/track)";
+
+  const markdown = renderDecisionReceiptComparison(compareDecisionReceipts(earlier, later));
+  assert.match(markdown, /``"Read `this` !\[pixel\]\(https:\/\/example\.invalid\/track\)"``/);
 });
 
 test("core diff reports changed source snapshots at an existing URL", () => {
