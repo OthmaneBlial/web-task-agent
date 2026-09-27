@@ -79,8 +79,22 @@ test("job export renders local source data in Markdown, JSON, and CSV with redac
     const data = buildJobExportData(createDetail({ id: "job_export", cachePath, reportPath }), "2026-08-26T10:02:00.000Z");
     assert.equal(data.sources.length, 1);
     assert.match(renderJobExport(data, "markdown"), /Use evidence receipts before launch/);
+    assert.match(renderJobExport(data, "markdown"), /<https:\/\/docs\.example\.com\/guide>/);
     assert.match(renderJobExport(data, "csv"), /https:\/\/docs\.example\.com\/guide/);
     assert.doesNotMatch(renderJobExport(data, "json", true), /ghp_abcdefghijklmnop/);
+
+    const hostile = structuredClone(data);
+    const title = "![pixel](https://example.invalid/track) ``title``";
+    const excerpt = "![pixel](https://example.invalid/track) ``decision``";
+    hostile.sources[0]!.title = title;
+    hostile.sources[0]!.url = "javascript:alert(1)";
+    hostile.decisionExcerpt = excerpt;
+    const markdown = renderJobExport(hostile, "markdown");
+    const wideFence = "```";
+    assert.ok(markdown.includes(`${wideFence}${JSON.stringify(title)}${wideFence}`));
+    assert.ok(markdown.includes(`${wideFence}${JSON.stringify(excerpt)}${wideFence}`));
+    assert.ok(markdown.includes('`"javascript:alert(1)"`'));
+    assert.doesNotMatch(markdown, /\]\(javascript:/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -105,7 +119,15 @@ test("job comparison reports new and disappeared sources plus decision changes",
     assert.equal(comparison.newSources[0]?.title, "New source");
     assert.equal(comparison.disappearedSources[0]?.title, "Old source");
     assert.equal(comparison.decisionChanged, true);
-    assert.match(renderJobComparison(comparison, "markdown"), /Sources no longer present/);
+    const title = "![pixel](https://example.invalid/track) ``title``";
+    const excerpt = "![pixel](https://example.invalid/track) ``decision``";
+    comparison.newSources[0]!.title = title;
+    comparison.leftDecisionExcerpt = excerpt;
+    const markdown = renderJobComparison(comparison, "markdown");
+    const wideFence = "```";
+    assert.ok(markdown.includes(`${wideFence}${JSON.stringify(title)}${wideFence}`));
+    assert.ok(markdown.includes(`${wideFence}${JSON.stringify(excerpt)}${wideFence}`));
+    assert.match(markdown, /Sources no longer present/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

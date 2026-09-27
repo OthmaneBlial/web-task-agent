@@ -3,6 +3,7 @@ import fs from "node:fs";
 
 import type { StoredJobDetail } from "./job-store";
 import { redactSensitiveValue } from "./redaction";
+import { isSafePublicSourceUrl } from "../../packages/decision-receipt/dist";
 
 export type JobExportFormat = "markdown" | "json" | "csv";
 
@@ -98,6 +99,18 @@ function extractDecisionExcerpt(report: string | null): string | null {
   return excerpt ? excerpt.slice(0, 800) : null;
 }
 
+function inlineCode(value: string): string {
+  const longestBacktick = Math.max(0, ...(value.match(/`+/g) ?? []).map((run) => run.length));
+  const delimiter = "`".repeat(longestBacktick + 1);
+  return `${delimiter}${value}${delimiter}`;
+}
+
+function renderSourceLine(source: Pick<ExportedResearchSource, "title" | "url" | "collectedAt">): string {
+  const url = isSafePublicSourceUrl(source.url) ? `<${source.url}>` : inlineCode(JSON.stringify(source.url));
+  const collectedAt = source.collectedAt ? ` — collected ${inlineCode(JSON.stringify(source.collectedAt))}` : "";
+  return `- ${url} · ${inlineCode(JSON.stringify(source.title))}${collectedAt}`;
+}
+
 export function collectCachedResearchSources(cachePath: string | null): ExportedResearchSource[] {
   const cached = readJson(cachePath);
   const research = cached && typeof cached === "object" && Array.isArray((cached as { research?: unknown }).research)
@@ -186,17 +199,17 @@ function escapeCsv(value: unknown): string {
 
 function renderMarkdown(data: JobExportData): string {
   const lines = [
-    `# Shareable research export — ${data.job.title}`,
+    `# Shareable research export — ${inlineCode(JSON.stringify(data.job.title))}`,
     "",
-    `- Job: \`${data.job.id}\``,
-    `- Workflow: ${data.job.workflow ?? "free-form agent"}`,
-    `- Status: ${data.job.status}`,
-    `- Exported: ${data.exportedAt}`,
+    `- Job: ${inlineCode(JSON.stringify(data.job.id))}`,
+    `- Workflow: ${inlineCode(JSON.stringify(data.job.workflow ?? "free-form agent"))}`,
+    `- Status: ${inlineCode(JSON.stringify(data.job.status))}`,
+    `- Exported: ${inlineCode(JSON.stringify(data.exportedAt))}`,
     `- Evidence graph: ${data.evidence.nodes} nodes, ${data.evidence.edges} edges`,
     "",
     "## Decision excerpt",
     "",
-    data.decisionExcerpt ?? "No report excerpt is available for this job.",
+    inlineCode(JSON.stringify(data.decisionExcerpt ?? "No report excerpt is available for this job.")),
     "",
     "## Sources",
     ""
@@ -206,7 +219,7 @@ function renderMarkdown(data: JobExportData): string {
     lines.push("No source snapshot was available in the local job cache.");
   } else {
     for (const source of data.sources) {
-      lines.push(`- [${source.title}](${source.url})${source.collectedAt ? ` — collected ${source.collectedAt}` : ""}`);
+      lines.push(renderSourceLine(source));
     }
   }
 
@@ -284,7 +297,7 @@ export function renderJobComparison(comparison: JobComparison, format: "markdown
     return `${JSON.stringify(safeComparison, null, 2)}\n`;
   }
   const lines = [
-    `# Job comparison — ${safeComparison.leftJobId} → ${safeComparison.rightJobId}`,
+    `# Job comparison — ${inlineCode(JSON.stringify(safeComparison.leftJobId))} → ${inlineCode(JSON.stringify(safeComparison.rightJobId))}`,
     "",
     `- Report changed: ${safeComparison.reportChanged ? "yes" : "no"}`,
     `- Decision excerpt changed: ${safeComparison.decisionChanged ? "yes" : "no"}`,
@@ -295,16 +308,16 @@ export function renderJobComparison(comparison: JobComparison, format: "markdown
     "",
     "## New sources",
     "",
-    ...(safeComparison.newSources.length > 0 ? safeComparison.newSources.map((source) => `- [${source.title}](${source.url})`) : ["None."]),
+    ...(safeComparison.newSources.length > 0 ? safeComparison.newSources.map(renderSourceLine) : ["None."]),
     "",
     "## Sources no longer present",
     "",
-    ...(safeComparison.disappearedSources.length > 0 ? safeComparison.disappearedSources.map((source) => `- [${source.title}](${source.url})`) : ["None."]),
+    ...(safeComparison.disappearedSources.length > 0 ? safeComparison.disappearedSources.map(renderSourceLine) : ["None."]),
     "",
     "## Decision excerpts",
     "",
-    `- Earlier: ${safeComparison.leftDecisionExcerpt ?? "not available"}`,
-    `- Later: ${safeComparison.rightDecisionExcerpt ?? "not available"}`
+    `- Earlier: ${inlineCode(JSON.stringify(safeComparison.leftDecisionExcerpt ?? "not available"))}`,
+    `- Later: ${inlineCode(JSON.stringify(safeComparison.rightDecisionExcerpt ?? "not available"))}`
   ];
   return `${lines.join("\n")}\n`;
 }
