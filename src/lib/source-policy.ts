@@ -12,7 +12,7 @@ export interface SourcePolicyOptions {
 }
 
 function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/^\.+/, "").replace(/^www\./, "");
+  return value.trim().toLowerCase().replace(/^\.+/, "").replace(/\.$/, "").replace(/^www\./, "");
 }
 
 function isDomainMatch(hostname: string, domain: string): boolean {

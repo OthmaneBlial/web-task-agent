@@ -128,6 +128,25 @@ test("source policy supports explicit allow and block domain controls", () => {
   );
 });
 
+test("source policy normalizes absolute DNS names before local and domain checks", () => {
+  for (const url of [
+    "http://localhost./",
+    "http://service.local./",
+    "http://service.localhost./"
+  ]) {
+    assert.equal(evaluateSourceUrlPolicy(url).action, "deny", url);
+  }
+
+  assert.equal(
+    evaluateSourceUrlPolicy("https://blocked.example.com./", { blockedDomains: ["example.com"] }).action,
+    "deny"
+  );
+  assert.equal(
+    evaluateSourceUrlPolicy("https://docs.example.com./", { allowedDomains: ["example.com"] }).action,
+    "allow"
+  );
+});
+
 test("redirect policy quarantines unsafe final targets and flags cross-origin redirects", () => {
   assert.equal(
     evaluateRedirectTargetPolicy({

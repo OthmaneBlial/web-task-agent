@@ -53,7 +53,7 @@ function configuredDomainRequestLimit(): number | null {
 }
 
 function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/^\.+/, "").replace(/^www\./, "");
+  return value.trim().toLowerCase().replace(/^\.+/, "").replace(/\.$/, "").replace(/^www\./, "");
 }
 
 function configuredDomains(value: string | undefined): string[] {

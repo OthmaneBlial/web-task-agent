@@ -91,6 +91,7 @@ test("source acquisition enforces a per-domain budget and leaves sensitive domai
   const second = await policy.prepare("https://docs.example.com/two");
   const exhausted = await policy.prepare("https://docs.example.com/three");
   const sensitive = await policy.prepare("https://sensitive.example.com/brief");
+  const sensitiveWithRootDot = await policy.prepare("https://sensitive.example.com./brief");
 
   assert.equal(first.action, "allow");
   assert.equal(second.domainRequestCount, 2);
@@ -100,6 +101,8 @@ test("source acquisition enforces a per-domain budget and leaves sensitive domai
   assert.ok(exhausted.signals.includes("human_review_required"));
   assert.equal(sensitive.action, "deny");
   assert.ok(sensitive.signals.includes("review_domain"));
+  assert.equal(sensitiveWithRootDot.action, "deny");
+  assert.ok(sensitiveWithRootDot.signals.includes("review_domain"));
   assert.equal(robotsCalls, 1);
 });
 
