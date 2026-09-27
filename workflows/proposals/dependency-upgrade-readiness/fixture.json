@@ -1,0 +1,37 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "notice": "Fictional package and release details for deterministic workflow review; no real dependency claim."
+  },
+  "input": {
+    "package": "fictional-parser",
+    "currentVersion": "3.4.2",
+    "candidateVersion": "4.0.0",
+    "packageManager": "npm",
+    "applicationRuntime": "Node.js 20",
+    "releaseDeadline": "before the next application release"
+  },
+  "sources": [
+    {
+      "title": "Fictional parser 4.0 release notes",
+      "url": "https://fictional-parser.invalid/releases/4.0.0",
+      "role": "synthetic first-party release notes state that parseLegacy was removed and Node.js 22 is required",
+      "provenance": "synthetic"
+    },
+    {
+      "title": "Fictional application dependency inventory",
+      "url": "https://application.invalid/dependency-inventory",
+      "role": "synthetic application inventory shows parseLegacy is still called and the deployment runtime is Node.js 20",
+      "provenance": "synthetic"
+    }
+  ],
+  "expected": {
+    "decision": "hold",
+    "rationale": "The candidate removes an API still used by the application and requires a newer runtime than the deployment currently uses.",
+    "limitations": [
+      "No local installation, build, or test was run.",
+      "The fixture does not establish the real support policy of any package."
+    ],
+    "nextValidation": "Migrate the removed call and test the candidate under the intended runtime before changing the lockfile for release."
+  }
+}

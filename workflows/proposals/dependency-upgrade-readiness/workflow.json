@@ -1,0 +1,43 @@
+{
+  "id": "dependency-upgrade-readiness",
+  "title": "Dependency Upgrade Readiness",
+  "category": "Release Safety",
+  "decision": "For a named dependency and candidate version, decide whether to adopt, hold, or replace it before a release. Report exact-version compatibility evidence, required migration work, support status, security advisories, contradictions, and the smallest local verification plan; never claim the project passed tests that were not run.",
+  "sourcePolicy": {
+    "preferred": [
+      "the dependency maintainer's versioned release notes, migration guides, and compatibility matrix",
+      "official runtime and platform support schedules",
+      "package registry metadata and the dependency's first-party repository releases",
+      "authoritative security advisories for affected and fixed version ranges"
+    ],
+    "excluded": [
+      "credential-bearing or authenticated pages",
+      "unlinked SEO summaries and unofficial fork releases",
+      "access-control bypasses or executing package code during research"
+    ]
+  },
+  "deliverables": [
+    "adopt, hold, or replace decision with evidence-backed rationale",
+    "compatibility matrix naming current and candidate versions plus supported runtimes",
+    "migration steps, affected APIs, support dates, and unresolved contradictions",
+    "smallest local build, test, and rollback checks still required"
+  ],
+  "queries": [
+    "<package> <candidate version> official release notes breaking changes runtime support",
+    "<package> <candidate version> migration guide deprecation security advisory"
+  ],
+  "freshness": {
+    "maxAgeDays": 90,
+    "rationale": "Check current support and advisory status from dated official sources; versioned changelogs remain useful for historical changes but cannot prove current support on their own."
+  },
+  "cost": {
+    "maxQueries": 8,
+    "maxCandidates": 40,
+    "maxRuntimeMinutes": 20
+  },
+  "risks": [
+    "Upstream compatibility statements do not prove this application builds or behaves correctly; local verification remains required.",
+    "Transitive resolution and peer constraints can change the effective dependency graph; state the resolved graph as unknown until the operator installs and inspects it.",
+    "Advisory severity alone does not settle upgrade priority; preserve affected ranges, fixed versions, and conflicting guidance."
+  ]
+}
