@@ -8,32 +8,31 @@ function read(relativePath: string): string {
   return fs.readFileSync(path.join(process.cwd(), relativePath), "utf8");
 }
 
-test("public positioning leads with Decision Receipt verification", () => {
+test("public positioning explains source-backed research in plain language", () => {
   const readme = read("README.md");
   const homepage = read("docs/index.html");
 
   assert.match(readme, /The verification layer for AI research/);
   assert.match(readme, /verify, challenge, and compare offline/);
-  assert.match(homepage, /Verify the decision, not just the answer/);
-  assert.match(homepage, /Verify your receipt locally/);
-  assert.match(homepage, /Take the 60-second challenge/);
+  assert.match(homepage, /Research\. Check the sources\./);
+  assert.match(homepage, /keeps the sources with the result/);
+  assert.match(homepage, /Open the sample/);
+  assert.match(homepage, /Get started/);
+  assert.match(homepage, /Try the challenge/);
   assert.match(homepage, /href="challenge\.html"/);
   assert.match(homepage, /href="verify\.html"/);
-  assert.match(homepage, /Integrity checked/);
-  assert.match(homepage, /Contradictions explicit/);
+  assert.doesNotMatch(homepage, /Long-running research jobs|Management API|Execution Model/);
   assert.doesNotMatch(homepage, /<strong>243<\/strong>/);
 });
 
-test("homepage first run is public, versioned, and accessible without a source checkout", () => {
+test("homepage leads with a no-setup sample and clearly states verifier limits", () => {
   const homepage = read("docs/index.html");
   const styles = read("docs/styles.css");
 
-  assert.match(homepage, /PUBLIC FIRST RUN · v0\.5\.1/);
-  assert.match(homepage, /releases\/download\/v0\.5\.1/);
-  assert.match(homepage, /receipt verify/);
-  assert.doesNotMatch(homepage, /<code class="language-bash">npm ci/);
-  assert.match(homepage, /aria-label="Decision receipt verification sequence"/);
-  assert.match(homepage, /Read the animation transcript/);
+  assert.match(homepage, /The bundled example works without setup/);
+  assert.match(homepage, /A verifier checks file integrity\. It cannot prove that a source or conclusion is true\./);
+  assert.match(homepage, /aria-label="What you can review"/);
+  assert.doesNotMatch(homepage, /PUBLIC FIRST RUN|curl -fsSLO|npm install -g/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 

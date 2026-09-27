@@ -258,7 +258,7 @@ export class SourceAcquisitionPolicy {
 
     const parsed = new URL(rawUrl);
     const hostname = normalizeDomain(parsed.hostname);
-    const resolvedHostnameDecision = await this.evaluateResolvedHostname(hostname);
+    const resolvedHostnameDecision = await this.evaluateResolvedHostname(parsed.hostname);
     if (resolvedHostnameDecision) {
       return resolvedHostnameDecision;
     }

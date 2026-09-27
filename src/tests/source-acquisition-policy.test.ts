@@ -125,6 +125,31 @@ test("source acquisition denies DNS answers that point at private networks befor
   assert.equal(robotsCalls, 0);
 });
 
+test("source acquisition resolves the exact requested hostname before browser navigation", async () => {
+  let resolvedHostname = "";
+  let robotsCalls = 0;
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: async (hostname) => {
+      resolvedHostname = hostname;
+      return hostname === "www.public-looking.example"
+        ? [{ address: "10.0.0.7", family: 4 }]
+        : [{ address: "93.184.216.34", family: 4 }];
+    },
+    fetchRobots: async () => {
+      robotsCalls += 1;
+      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+    }
+  });
+
+  const decision = await policy.prepare("https://www.public-looking.example/research");
+
+  assert.equal(resolvedHostname, "www.public-looking.example");
+  assert.equal(decision.action, "deny");
+  assert.ok(decision.signals.includes("resolved_private_network"));
+  assert.equal(robotsCalls, 0);
+});
+
 test("source acquisition fails closed when hostname resolution is unavailable", async () => {
   const policy = new SourceAcquisitionPolicy({
     minDomainDelayMs: 0,
