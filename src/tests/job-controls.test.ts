@@ -17,7 +17,16 @@ import {
 } from "../lib/job-queue";
 import { JobStore, listJobRunEvents } from "../lib/job-store";
 
-function createAgentJobStore(databasePath: string, jobId: string, status: "running" | "paused") {
+function createAgentJobStore(
+  databasePath: string,
+  jobId: string,
+  status: "running" | "paused",
+  workflowInputs: Record<string, string | null> = {
+    topic: "job controls",
+    audience: null,
+    context: null
+  }
+) {
   return new JobStore({
     databasePath,
     jobId,
@@ -41,11 +50,7 @@ function createAgentJobStore(databasePath: string, jobId: string, status: "runni
       workflowName: "article-research",
       workflowPresetId: "standard",
       workflowTemplateId: "article-research",
-      workflowInputs: {
-        topic: "job controls",
-        audience: null,
-        context: null
-      },
+      workflowInputs,
       jobTitle: "Job Controls Test"
     },
     budget: {
@@ -59,6 +64,24 @@ function createAgentJobStore(databasePath: string, jobId: string, status: "runni
     output: {}
   });
 }
+
+test("job rerun preserves prototype-named workflow inputs", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-job-prototype-input-"));
+  try {
+    const databasePath = path.join(tempDir, "jobs.sqlite");
+    const workflowInputs = JSON.parse('{"__proto__":"preserved"}') as Record<string, string | null>;
+    createAgentJobStore(databasePath, "job_proto", "running", workflowInputs);
+
+    const rerun = rerunAgentJob({ databasePath, jobId: "job_proto" });
+    const queue = getQueuedJob({ databasePath, queueId: rerun.queueId });
+    assert.ok(queue);
+    assert.ok(queue.payload.options.workflowInputs);
+    assert.equal(Object.hasOwn(queue.payload.options.workflowInputs, "__proto__"), true);
+    assert.equal(queue.payload.options.workflowInputs.__proto__, "preserved");
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
 
 test("job controls can pause, resume a paused queue, and rerun from stored config", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-job-controls-"));

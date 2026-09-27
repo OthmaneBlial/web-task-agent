@@ -26,7 +26,7 @@ function recordOfStringsOrNull(
     return undefined;
   }
 
-  const output: Record<string, string | null> = {};
+  const output = Object.create(null) as Record<string, string | null>;
   for (const [key, entry] of Object.entries(value)) {
     output[key] = entry === null ? null : stringOrNull(entry);
   }
