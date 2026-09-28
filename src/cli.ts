@@ -433,7 +433,7 @@ Use "web-task-agent <command> --help" for the full option list.
       }
       const receiptPath = signReceiptDirectory({
         directory: String(directory),
-        privateKey: fs.readFileSync(privateKeyPath, "utf8"),
+        privateKey: readBoundedTextFileSync(privateKeyPath, "private key"),
         keyId: String(options.keyId)
       });
       const verification = verifyReceiptDirectory(String(directory));

@@ -78,6 +78,33 @@ test("receipt import rejects oversized JSON input before creating a package", ()
   }
 });
 
+test("receipt signing rejects an oversized key without changing the package", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-sign-limit-"));
+  const packageDir = path.join(tempDir, "receipt");
+  const receiptPath = path.join(packageDir, "receipt.json");
+  const manifestPath = path.join(packageDir, "integrity-manifest.json");
+  const keyPath = path.join(tempDir, "private-key.pem");
+
+  try {
+    fs.cpSync(path.resolve("examples", "receipt-spec", "minimal"), packageDir, { recursive: true });
+    const receiptBefore = fs.readFileSync(receiptPath);
+    const manifestBefore = fs.readFileSync(manifestPath);
+    fs.writeFileSync(keyPath, Buffer.alloc(2 * 1024 * 1024 + 1, 0x20));
+    const result = spawnSync(
+      process.execPath,
+      [path.join(process.cwd(), "dist", "cli.js"), "receipt", "sign", packageDir, "--private-key", keyPath, "--key-id", "test"],
+      { encoding: "utf8" }
+    );
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /private key exceeds the 2 MB limit/);
+    assert.deepEqual(fs.readFileSync(receiptPath), receiptBefore);
+    assert.deepEqual(fs.readFileSync(manifestPath), manifestBefore);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("job report command prints a recovery recommendation for paused jobs", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cli-report-"));
   const databasePath = path.join(tempDir, "jobs.sqlite");

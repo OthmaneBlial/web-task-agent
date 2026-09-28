@@ -51,7 +51,7 @@ web-task-agent server run --port 4317
 - `receipt verify` when you want to validate a package offline. It checks schema, claim-to-source references, excerpts, snapshot hashes, and exported file hashes. It does not prove that a source is true, complete, authorized, or fresh.
 - `receipt compare` when you have two verified packages for the same decision. It shows source, claim, contradiction, limitation, and next-validation changes, while ignoring irrelevant evidence ordering.
 - `receipt import <result.json>` when you have a provider-neutral result from another research tool. It applies the local source policy, writes snapshots, and verifies the imported package without importing a browser session or provider runtime.
-- `receipt sign <directory> --private-key <pem> --key-id <id>` when an operator needs a detached Ed25519 attestation. The signature proves control of the key and package bytes, not the truth of the decision.
+- `receipt sign <directory> --private-key <pem> --key-id <id>` when an operator needs a detached Ed25519 attestation. Key files are read locally and capped at 2 MB. The signature proves control of the key and package bytes, not the truth of the decision.
 - `browser status` when you want to confirm the local CDP backend without starting, restarting, or attaching to a browser.
 - `workflow list --category` or `--search` when you want to find one of the 240 catalog workflows. Start with the three curated paths in `examples/golden-paths/` when you need a decision-shaped entry point.
 - `workflow preview` when you need to inspect one workflow's source strategy, queries, outputs, and budgets before doing work.
