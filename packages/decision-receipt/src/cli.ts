@@ -145,7 +145,7 @@ function migrateCommand(inputPath: string, outputPath: string): number {
   const migration = migrateDecisionReceipt(input);
   const target = path.resolve(outputPath);
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, `${JSON.stringify(migration.receipt, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+  fs.writeFileSync(target, `${JSON.stringify(migration.receipt, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
   process.stdout.write(`migrated ${migration.from} → ${migration.to}: ${target}\n`);
   for (const warning of migration.warnings) process.stdout.write(`warning: ${warning}\n`);
   return 0;

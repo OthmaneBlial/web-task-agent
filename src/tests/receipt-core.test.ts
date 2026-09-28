@@ -145,6 +145,25 @@ test("standalone CLI rejects oversized migration input before parsing or writing
   }
 });
 
+test("standalone CLI writes migrated receipts with private permissions", { skip: process.platform === "win32" }, () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-migration-private-"));
+  try {
+    const inputPath = path.join(tempDir, "legacy-receipt.json");
+    const outputPath = path.join(tempDir, "migrated-receipt.json");
+    const legacy = exampleReceipt("minimal") as unknown as Record<string, unknown>;
+    delete legacy.specVersion;
+    delete legacy.profile;
+    fs.writeFileSync(inputPath, JSON.stringify(legacy));
+
+    const cliPath = path.resolve("packages", "decision-receipt", "dist", "cli.js");
+    const result = spawnSync(process.execPath, [cliPath, "migrate", inputPath, "--out", outputPath], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.statSync(outputPath).mode & 0o777, 0o600);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("receipt manifest covers receipt.json and every referenced source snapshot", async () => {
   const original = readBundle(path.join("packages", "decision-receipt", "examples", "minimal"));
   const receipt = JSON.parse(String(original["receipt.json"])) as DecisionReceipt;
