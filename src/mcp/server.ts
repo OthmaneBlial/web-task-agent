@@ -17,6 +17,8 @@ const SERVER_VERSION = "0.1.0";
 const PROTOCOL_VERSION = "2025-11-25";
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
 const MAX_RESULT_BYTES = 2 * 1024 * 1024;
+const MAX_CONCURRENT_REQUESTS = 2;
+const MAX_PENDING_REQUESTS = 4;
 
 type JsonRpcId = string | number;
 type JsonRpcResponseId = JsonRpcId | null;
@@ -300,9 +302,36 @@ function processLine(line: string): void {
     return;
   }
   const validRequest = request as JsonRpcRequest;
-  void handleRequest(validRequest).catch((requestError) => {
-    error(validRequest.id, -32603, requestError instanceof Error ? requestError.message : String(requestError));
+  enqueueRequest(validRequest);
+}
+
+let activeRequests = 0;
+const pendingRequests: JsonRpcRequest[] = [];
+
+function startRequest(request: JsonRpcRequest): void {
+  void handleRequest(request).catch((requestError) => {
+    error(request.id, -32603, requestError instanceof Error ? requestError.message : String(requestError));
+  }).finally(() => {
+    const next = pendingRequests.shift();
+    if (next) {
+      startRequest(next);
+    } else {
+      activeRequests -= 1;
+    }
   });
+}
+
+function enqueueRequest(request: JsonRpcRequest): void {
+  if (activeRequests < MAX_CONCURRENT_REQUESTS) {
+    activeRequests += 1;
+    startRequest(request);
+    return;
+  }
+  if (pendingRequests.length >= MAX_PENDING_REQUESTS) {
+    error(request.id, -32000, "MCP server is busy; retry this request.");
+    return;
+  }
+  pendingRequests.push(request);
 }
 
 let requestBuffer = Buffer.alloc(0);

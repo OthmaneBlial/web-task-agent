@@ -57,6 +57,18 @@ class LocalMcpClient {
     });
   }
 
+  requestBatch(method: string, params: unknown, count: number): Promise<RpcResponse[]> {
+    const requests = Array.from({ length: count }, () => {
+      const id = this.nextId++;
+      const response = new Promise<RpcResponse>((resolve, reject) => {
+        this.waiting.set(id, { resolve, reject });
+      });
+      return { id, response };
+    });
+    this.child.stdin.write(requests.map(({ id }) => JSON.stringify({ jsonrpc: "2.0", id, method, params })).join("\n") + "\n");
+    return Promise.all(requests.map(({ response }) => response));
+  }
+
   waitForUnsolicitedMessage(timeoutMs = 1_000): Promise<RpcResponse> {
     const message = this.unsolicitedMessages.shift();
     if (message) return Promise.resolve(message);
@@ -170,6 +182,39 @@ test("local MCP rejects null and non-integer request IDs", async () => {
     const invalidNotification = await notificationWithId;
     assert.equal(invalidNotification.id, 99);
     assert.equal(invalidNotification.error?.code, -32600);
+  } finally {
+    await client.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("local MCP bounds concurrent tool calls and rejects an oversized pending queue", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-mcp-request-limit-"));
+  const receiptRoot = path.join(root, "receipts", "minimal");
+  fs.mkdirSync(path.dirname(receiptRoot), { recursive: true });
+  fs.cpSync(path.resolve("examples", "receipt-spec", "minimal"), receiptRoot, { recursive: true });
+  const guard = path.join(root, "deny-network.cjs");
+  fs.writeFileSync(guard, [
+    'const net = require("node:net");',
+    'function deny() { throw new Error("unexpected MCP network access"); }',
+    'globalThis.fetch = deny;',
+    'net.connect = deny;',
+    'net.createConnection = deny;'
+  ].join("\n"), "utf8");
+  const client = new LocalMcpClient(root, guard);
+  try {
+    await client.request("initialize", {});
+    const responses = await client.requestBatch("tools/call", {
+      name: "verify_receipt",
+      arguments: { path: "receipts/minimal" }
+    }, 7);
+
+    assert.equal(responses.filter((response) => response.error?.code === -32000).length, 1);
+    assert.equal(responses.filter((response) => response.result !== undefined).length, 6);
+    assert.ok(responses.filter((response) => response.result !== undefined).every((response) => {
+      const result = resultObject(response);
+      return result.isError === false && (result.structuredContent as { valid: boolean }).valid;
+    }));
   } finally {
     await client.close();
     fs.rmSync(root, { recursive: true, force: true });
