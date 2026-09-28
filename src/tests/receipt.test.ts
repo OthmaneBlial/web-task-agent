@@ -60,7 +60,19 @@ test("manifest writer refuses missing package artifacts without replacing a vali
         files: [...files, path.join(root, "handoff", "missing.md")],
         generatedAt: manifest.generatedAt
       }),
-      /receipt artifact is missing, unsafe, or not a regular file/
+      /receipt artifact is missing, unsafe, or exceeds receipt verification limits/
+    );
+    assert.deepEqual(fs.readFileSync(manifestPath), originalManifest);
+    const oversizedFile = path.join(root, "oversized.bin");
+    fs.closeSync(fs.openSync(oversizedFile, "w"));
+    fs.truncateSync(oversizedFile, 10 * 1024 * 1024 + 1);
+    assert.throws(
+      () => writeReceiptIntegrityManifest({
+        rootDir: root,
+        files: [...files, oversizedFile],
+        generatedAt: manifest.generatedAt
+      }),
+      /receipt verification limits/
     );
     assert.deepEqual(fs.readFileSync(manifestPath), originalManifest);
     assert.equal(verifyReceiptDirectory(written.outputDir).valid, true);
@@ -118,7 +130,7 @@ test("receipt signing refuses incomplete packages before replacing receipt bytes
 
     assert.throws(
       () => signReceiptDirectory({ directory: root, privateKey: keyPair.privateKey, keyId: "test-key" }),
-      /receipt artifact is missing, unsafe, or not a regular file/
+      /receipt artifact is missing, unsafe, or exceeds receipt verification limits/
     );
     assert.deepEqual(fs.readFileSync(receiptJsonPath), originalReceipt);
   } finally {
@@ -271,7 +283,7 @@ test("receipt verification bounds file count, file size, and total bytes", () =>
     };
     oversizedManifest.files = Array.from({ length: 501 }, () => oversizedManifest.files[0]!);
     fs.writeFileSync(oversizedManifestPath, `${JSON.stringify(oversizedManifest)}\n`);
-    assert.match(verifyReceiptDirectory(oversizedManifestDir).errors.join("; "), /500-file verification limit/);
+    assert.match(verifyReceiptDirectory(oversizedManifestDir).errors.join("; "), /499-file verification limit/);
 
     const oversizedTotalDir = path.join(root, "oversized-total");
     writeDemoPackage({ id: "local-first-risk-review", outputDir: oversizedTotalDir });

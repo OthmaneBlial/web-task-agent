@@ -137,8 +137,14 @@ export interface ReceiptVerificationResult {
 }
 
 const MAX_RECEIPT_FILES = 500;
+const MAX_RECEIPT_MANIFEST_FILES = MAX_RECEIPT_FILES - 1;
 const MAX_RECEIPT_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_RECEIPT_TOTAL_BYTES = 50 * 1024 * 1024;
+
+interface ReceiptFileReader {
+  read(relativePath: string): Buffer | null;
+  readonly totalBytes: number;
+}
 
 export interface DecisionReceiptComparison {
   earlierTitle: string;
@@ -199,7 +205,7 @@ export function renderDecisionReceiptComparison(
   return renderCoreDecisionReceiptComparison(comparison, format);
 }
 
-function readReceiptFile(rootDir: string, relativePath: string, maxBytes = Number.POSITIVE_INFINITY): Buffer | null {
+function readReceiptFile(rootDir: string, relativePath: string, maxBytes = MAX_RECEIPT_FILE_BYTES): Buffer | null {
   if (!isSafeRelativeReceiptPath(relativePath)) return null;
   let candidatePath = rootDir;
   try {
@@ -227,6 +233,27 @@ function readReceiptFile(rootDir: string, relativePath: string, maxBytes = Numbe
   } catch {
     return null;
   }
+}
+
+function createReceiptFileReader(rootDir: string): ReceiptFileReader {
+  const files = new Map<string, Buffer | null>();
+  let totalBytes = 0;
+  return {
+    read(relativePath) {
+      if (files.has(relativePath)) return files.get(relativePath) ?? null;
+      if (files.size >= MAX_RECEIPT_FILES) return null;
+      const remainingBytes = MAX_RECEIPT_TOTAL_BYTES - totalBytes;
+      const contents = remainingBytes < 0
+        ? null
+        : readReceiptFile(rootDir, relativePath, Math.min(MAX_RECEIPT_FILE_BYTES, remainingBytes));
+      files.set(relativePath, contents);
+      if (contents) totalBytes += contents.byteLength;
+      return contents;
+    },
+    get totalBytes() {
+      return totalBytes;
+    }
+  };
 }
 
 function ensureImportSnapshotDirectory(rootDir: string, directoryParts: string[]): string {
@@ -717,8 +744,9 @@ export function signReceiptDirectory(input: {
 }): string {
   const rootDir = path.resolve(input.directory);
   const receiptPath = path.join(rootDir, "receipt.json");
-  const receiptBytes = readReceiptFile(rootDir, "receipt.json");
-  if (!receiptBytes) throw new Error("receipt.json is missing, unsafe, or not a regular file");
+  const readFile = createReceiptFileReader(rootDir);
+  const receiptBytes = readFile.read("receipt.json");
+  if (!receiptBytes) throw new Error("receipt.json is missing, unsafe, or exceeds receipt verification limits");
   const parsedReceipt: unknown = JSON.parse(receiptBytes.toString("utf8"));
   const validation = validateDecisionReceipt(parsedReceipt);
   if (!validation.valid || !validation.receipt) {
@@ -726,7 +754,7 @@ export function signReceiptDirectory(input: {
   }
   const receipt = validation.receipt;
   const receiptErrors: string[] = [];
-  if (!validateReceiptShape(receipt, rootDir, receiptErrors)) {
+  if (!validateReceiptShape(receipt, rootDir, receiptErrors, readFile)) {
     throw new Error(`cannot sign a receipt with invalid package evidence: ${receiptErrors.join("; ")}`);
   }
   if (!input.keyId.trim()) throw new Error("signature keyId is required");
@@ -735,13 +763,15 @@ export function signReceiptDirectory(input: {
 
   const manifestPath = path.join(rootDir, "integrity-manifest.json");
   let existingManifest: Partial<ReceiptIntegrityManifest> | null = null;
+  let existingManifestBytes = 0;
   try {
     const manifestStats = fs.lstatSync(manifestPath);
     if (manifestStats.isSymbolicLink() || !manifestStats.isFile()) {
       throw new Error("integrity-manifest.json must be a regular package file");
     }
-    const manifestBytes = readReceiptFile(rootDir, "integrity-manifest.json");
-    if (!manifestBytes) throw new Error("integrity-manifest.json is missing or unsafe");
+    const manifestBytes = readFile.read("integrity-manifest.json");
+    if (!manifestBytes) throw new Error("integrity-manifest.json is missing, unsafe, or exceeds receipt verification limits");
+    existingManifestBytes = manifestBytes.byteLength;
     const parsedManifest: unknown = JSON.parse(manifestBytes.toString("utf8"));
     if (!parsedManifest || typeof parsedManifest !== "object" || Array.isArray(parsedManifest)) {
       throw new Error("integrity-manifest.json must contain an object");
@@ -754,13 +784,16 @@ export function signReceiptDirectory(input: {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
 
+  if ((existingManifest?.files?.length ?? 0) > MAX_RECEIPT_MANIFEST_FILES) {
+    throw new Error(`integrity manifest exceeds the ${MAX_RECEIPT_MANIFEST_FILES}-file limit`);
+  }
   const existingFiles = (existingManifest?.files ?? []).map((entry) => {
     const relative = String(entry?.path ?? "");
     if (!isSafeRelativeReceiptPath(relative)) throw new Error(`integrity manifest path is unsafe: ${relative}`);
     return path.join(rootDir, relative);
   });
   const files = [receiptPath, ...existingFiles, ...receipt.sources.flatMap((source) => source.snapshotPath ? [path.join(rootDir, source.snapshotPath)] : [])];
-  integrityFiles(rootDir, files);
+  const manifestFiles = integrityFiles(rootDir, files, readFile);
   const generatedAt = existingManifest?.generatedAt || receipt.generatedAt;
   if (!isIsoDateTime(generatedAt)) {
     throw new Error("integrity manifest generatedAt must be a valid timestamp");
@@ -778,6 +811,24 @@ export function signReceiptDirectory(input: {
       signedBytes: "canonical-receipt-without-signature"
     }
   };
+  const signedReceiptBytes = Buffer.from(JSON.stringify(signedReceipt, null, 2));
+  const signedManifest: ReceiptIntegrityManifest = {
+    schemaVersion: DECISION_RECEIPT_SCHEMA_VERSION,
+    specVersion: DECISION_RECEIPT_SPEC_VERSION,
+    type: "receipt-integrity-manifest",
+    algorithm: RECEIPT_HASH_ALGORITHM,
+    receiptPath: "receipt.json",
+    generatedAt,
+    files: manifestFiles.map((entry) => entry.path === "receipt.json"
+      ? { path: entry.path, sha256: sha256(signedReceiptBytes), bytes: signedReceiptBytes.byteLength }
+      : entry)
+  };
+  const signedManifestBytes = Buffer.byteLength(JSON.stringify(signedManifest, null, 2));
+  const outputBytes = readFile.totalBytes - receiptBytes.byteLength - existingManifestBytes
+    + signedReceiptBytes.byteLength + signedManifestBytes;
+  if (signedReceiptBytes.byteLength > MAX_RECEIPT_FILE_BYTES || signedManifestBytes > MAX_RECEIPT_FILE_BYTES || outputBytes > MAX_RECEIPT_TOTAL_BYTES) {
+    throw new Error("signed receipt package exceeds verification limits");
+  }
   writeJsonAtomic(receiptPath, signedReceipt);
   writeReceiptIntegrityManifest({ rootDir, files, generatedAt });
   return receiptPath;
@@ -826,13 +877,23 @@ function validateHttpsUrl(value: string): boolean {
   }
 }
 
-function integrityFiles(rootDir: string, paths: string[]): ReceiptIntegrityManifestFile[] {
+function integrityFiles(
+  rootDir: string,
+  paths: string[],
+  readFile: ReceiptFileReader = createReceiptFileReader(rootDir)
+): ReceiptIntegrityManifestFile[] {
+  if (paths.length > MAX_RECEIPT_FILES * 2) {
+    throw new Error(`receipt package exceeds the ${MAX_RECEIPT_FILES}-file processing limit`);
+  }
   const contentsByPath = new Map<string, Buffer>();
   for (const filePath of paths) {
     const relative = safeRelativePath(rootDir, path.resolve(filePath));
     if (contentsByPath.has(relative)) continue;
-    const contents = readReceiptFile(rootDir, relative);
-    if (!contents) throw new Error(`receipt artifact is missing, unsafe, or not a regular file: ${relative}`);
+    if (contentsByPath.size >= MAX_RECEIPT_MANIFEST_FILES) {
+      throw new Error(`receipt package exceeds the ${MAX_RECEIPT_MANIFEST_FILES}-file manifest limit`);
+    }
+    const contents = readFile.read(relative);
+    if (!contents) throw new Error(`receipt artifact is missing, unsafe, or exceeds receipt verification limits: ${relative}`);
     contentsByPath.set(relative, contents);
   }
   return [...contentsByPath.entries()]
@@ -856,13 +917,14 @@ export function writeReceiptIntegrityManifest(input: {
     throw new Error("integrity manifest generatedAt must be a valid timestamp");
   }
   ensureDir(rootDir);
-  const receiptBytes = readReceiptFile(rootDir, "receipt.json");
-  if (!receiptBytes) throw new Error("receipt.json must exist as a regular package file before writing its integrity manifest");
+  const readFile = createReceiptFileReader(rootDir);
+  const receiptBytes = readFile.read("receipt.json");
+  if (!receiptBytes) throw new Error("receipt.json must exist and fit receipt verification limits before writing its integrity manifest");
   const validation = validateDecisionReceipt(JSON.parse(receiptBytes.toString("utf8")));
   if (!validation.valid || !validation.receipt) {
     throw new Error(`cannot write an integrity manifest for an invalid receipt: ${validation.errors.join("; ")}`);
   }
-  const files = integrityFiles(rootDir, input.files.filter((filePath) => path.resolve(filePath) !== manifestPath));
+  const files = integrityFiles(rootDir, input.files.filter((filePath) => path.resolve(filePath) !== manifestPath), readFile);
   const includedPaths = new Set(files.map((entry) => entry.path));
   const requiredPaths = ["receipt.json", ...validation.receipt.sources.flatMap((source) => source.snapshotPath ? [source.snapshotPath] : [])];
   const missingPaths = requiredPaths.filter((filePath) => !includedPaths.has(filePath));
@@ -878,6 +940,9 @@ export function writeReceiptIntegrityManifest(input: {
     generatedAt,
     files
   };
+  if (readFile.totalBytes + Buffer.byteLength(JSON.stringify(manifest, null, 2)) > MAX_RECEIPT_TOTAL_BYTES) {
+    throw new Error("receipt package exceeds the 50 MB total verification limit");
+  }
   writeJsonAtomic(manifestPath, manifest);
   return manifestPath;
 }
@@ -886,7 +951,7 @@ function validateReceiptShape(
   receipt: unknown,
   rootDir: string,
   errors: string[],
-  readFile: (relativePath: string) => Buffer | null = (relativePath) => readReceiptFile(rootDir, relativePath)
+  readFile: ReceiptFileReader = createReceiptFileReader(rootDir)
 ): receipt is DecisionReceipt {
   const coreValidation = validateDecisionReceipt(receipt);
   for (const issue of coreValidation.issues) {
@@ -946,7 +1011,7 @@ function validateReceiptShape(
       }
     }
     if (typed.snapshotPath) {
-      const snapshot = readFile(typed.snapshotPath);
+      const snapshot = readFile.read(typed.snapshotPath);
       if (!snapshot) {
         errors.push(`source snapshot is missing, unsafe, symlinked, not a regular file, or exceeds verification limits for ${typed.id}: ${typed.snapshotPath}`);
       } else if (typed.snapshotSha256 && createHash("sha256").update(snapshot).digest("hex") !== typed.snapshotSha256) {
@@ -993,7 +1058,7 @@ function validateReceiptShape(
       }
       const source = sources.find((item) => item && typeof item === "object" && (item as DecisionReceiptSource).id === reference.sourceId) as DecisionReceiptSource | undefined;
       if (source?.snapshotPath) {
-        const snapshot = readFile(source.snapshotPath);
+        const snapshot = readFile.read(source.snapshotPath);
         if (snapshot && !snapshot.toString("utf8").includes(reference.excerpt)) {
           errors.push(`evidence excerpt ${reference.id} is absent from ${source.snapshotPath}`);
         }
@@ -1027,21 +1092,9 @@ function validateReceiptSignature(receipt: DecisionReceipt, errors: string[]): v
 export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationResult {
   const rootDir = path.resolve(inputDir);
   const errors: string[] = [];
-  const files = new Map<string, Buffer | null>();
-  let totalBytes = 0;
-  const readFile = (relativePath: string): Buffer | null => {
-    if (files.has(relativePath)) return files.get(relativePath) ?? null;
-    if (files.size >= MAX_RECEIPT_FILES) return null;
-    const remainingBytes = MAX_RECEIPT_TOTAL_BYTES - totalBytes;
-    const contents = remainingBytes < 0
-      ? null
-      : readReceiptFile(rootDir, relativePath, Math.min(MAX_RECEIPT_FILE_BYTES, remainingBytes));
-    files.set(relativePath, contents);
-    if (contents) totalBytes += contents.byteLength;
-    return contents;
-  };
-  const receiptBytes = readFile("receipt.json");
-  const manifestBytes = readFile("integrity-manifest.json");
+  const readFile = createReceiptFileReader(rootDir);
+  const receiptBytes = readFile.read("receipt.json");
+  const manifestBytes = readFile.read("integrity-manifest.json");
   let receipt: DecisionReceipt | null = null;
   let checkedFiles = 0;
 
@@ -1079,8 +1132,8 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
       }
       if (!Array.isArray(manifest.files)) {
         errors.push("integrity manifest files must be an array");
-      } else if (manifest.files.length > MAX_RECEIPT_FILES) {
-        errors.push(`integrity manifest exceeds the ${MAX_RECEIPT_FILES}-file verification limit`);
+      } else if (manifest.files.length > MAX_RECEIPT_MANIFEST_FILES) {
+        errors.push(`integrity manifest exceeds the ${MAX_RECEIPT_MANIFEST_FILES}-file verification limit`);
       } else {
         const manifestPaths = new Set<string>();
         for (const entry of manifest.files) {
@@ -1095,7 +1148,7 @@ export function verifyReceiptDirectory(inputDir: string): ReceiptVerificationRes
             continue;
           }
           manifestPaths.add(relative);
-          const contents = readFile(relative);
+          const contents = readFile.read(relative);
           if (!contents) {
             errors.push(`integrity manifest file is missing, unsafe, symlinked, not a regular file, or exceeds verification limits: ${relative}`);
             continue;
