@@ -1,4 +1,7 @@
 import { lookup } from "node:dns/promises";
+import * as http from "node:http";
+import * as https from "node:https";
+import { Readable } from "node:stream";
 
 import { evaluateSourceUrlPolicy, isPublicInternetAddress } from "./source-policy";
 
@@ -30,12 +33,14 @@ interface RobotsCacheEntry {
   expiresAt: number;
 }
 
+type ResolvedHostnameAddress = { address: string; family: number };
+
 export interface SourceAcquisitionPolicyOptions {
   userAgent?: string;
   minDomainDelayMs?: number;
   maxRequestsPerDomain?: number | null;
   reviewDomains?: readonly string[];
-  fetchRobots?: (url: string, init: RequestInit) => Promise<RobotsFetchResponse>;
+  fetchRobots?: (url: string, init: RequestInit, addresses: readonly ResolvedHostnameAddress[]) => Promise<RobotsFetchResponse>;
   resolveHostname?: (hostname: string) => Promise<Array<{ address: string; family: number }>>;
   now?: () => number;
   sleep?: (milliseconds: number) => Promise<void>;
@@ -112,8 +117,77 @@ function defaultSleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function defaultFetchRobots(url: string, init: RequestInit): Promise<RobotsFetchResponse> {
-  return fetch(url, init);
+function defaultFetchRobots(
+  url: string,
+  init: RequestInit,
+  addresses: readonly ResolvedHostnameAddress[]
+): Promise<RobotsFetchResponse> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    if (addresses.length === 0) {
+      reject(new Error("robots.txt target has no validated DNS addresses"));
+      return;
+    }
+
+    const pinnedLookup: NonNullable<http.RequestOptions["lookup"]> = (_hostname, options, callback) => {
+      const candidates = options.family
+        ? addresses.filter((candidate) => candidate.family === options.family)
+        : addresses;
+      if (candidates.length === 0) {
+        const error = Object.assign(new Error("no validated DNS address matches the requested family"), { code: "ENOTFOUND" });
+        callback(error, "");
+        return;
+      }
+      if (options.all) {
+        callback(null, candidates.map(({ address, family }) => ({ address, family })));
+        return;
+      }
+      callback(null, candidates[0]!.address, candidates[0]!.family);
+    };
+    const transport = parsed.protocol === "https:" ? https : parsed.protocol === "http:" ? http : null;
+    if (!transport) {
+      reject(new Error("robots.txt target must use HTTP or HTTPS"));
+      return;
+    }
+
+    const request = transport.request(parsed, {
+      method: "GET",
+      headers: {
+        ...Object.fromEntries(new Headers(init.headers).entries()),
+        "accept-encoding": "identity"
+      },
+      signal: init.signal ?? undefined,
+      agent: false,
+      lookup: pinnedLookup
+    }, (response) => {
+      const status = response.statusCode ?? 502;
+      const encoding = response.headers["content-encoding"];
+      const unsupportedEncoding = encoding !== undefined &&
+        (Array.isArray(encoding) ? encoding.join(",") : encoding).trim().toLowerCase() !== "identity";
+      const headers = {
+        get(name: string): string | null {
+          const value = response.headers[name.toLowerCase()];
+          return Array.isArray(value) ? value.join(", ") : value ?? null;
+        }
+      };
+      resolve({
+        ok: status >= 200 && status < 300,
+        status,
+        headers,
+        body: unsupportedEncoding || status === 204 || status === 205 || status === 304
+          ? null
+          : Readable.toWeb(response) as ReadableStream<Uint8Array>,
+        text: async () => {
+          if (unsupportedEncoding) throw new Error("robots.txt used an unsupported content encoding");
+          const chunks: Buffer[] = [];
+          for await (const chunk of response) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          return Buffer.concat(chunks).toString("utf8");
+        }
+      });
+    });
+    request.on("error", reject);
+    request.end();
+  });
 }
 
 async function defaultResolveHostname(hostname: string): Promise<Array<{ address: string; family: number }>> {
@@ -236,7 +310,7 @@ export class SourceAcquisitionPolicy {
   readonly minDomainDelayMs: number;
   readonly maxRequestsPerDomain: number | null;
   readonly reviewDomains: readonly string[];
-  private readonly fetchRobots: (url: string, init: RequestInit) => Promise<RobotsFetchResponse>;
+  private readonly fetchRobots: (url: string, init: RequestInit, addresses: readonly ResolvedHostnameAddress[]) => Promise<RobotsFetchResponse>;
   private readonly resolveHostname: (hostname: string) => Promise<Array<{ address: string; family: number }>>;
   private readonly now: () => number;
   private readonly sleep: (milliseconds: number) => Promise<void>;
@@ -287,7 +361,8 @@ export class SourceAcquisitionPolicy {
       let robotsUrl = `${origin}/robots.txt`;
 
       for (let redirects = 0; redirects <= 5; redirects += 1) {
-        const targetDecision = await this.checkNetworkTarget(robotsUrl);
+        const target = await this.inspectNetworkTarget(robotsUrl);
+        const targetDecision = target.decision;
         if (targetDecision.action === "deny") {
           return deny(
             `source acquisition denied robots.txt target: ${targetDecision.reason}`,
@@ -301,7 +376,7 @@ export class SourceAcquisitionPolicy {
             headers: { "user-agent": this.userAgent, accept: "text/plain,*/*;q=0.1" },
             redirect: "manual",
             signal
-          });
+          }, target.addresses ?? []);
         } catch {
           return deny("source acquisition denied source because robots.txt is unreachable", ["robots_unreachable", "human_review_required"]);
         }
@@ -376,7 +451,11 @@ export class SourceAcquisitionPolicy {
     return { allowed: true, count, limit: this.maxRequestsPerDomain };
   }
 
-  private async evaluateResolvedHostname(hostname: string): Promise<SourceAcquisitionDecision | null> {
+  private async resolvePublicHostname(hostname: string): Promise<{
+    addresses: ResolvedHostnameAddress[];
+  } | {
+    decision: SourceAcquisitionDecision;
+  }> {
     try {
       let timeout: NodeJS.Timeout | undefined;
       const addresses = await Promise.race([
@@ -392,73 +471,94 @@ export class SourceAcquisitionPolicy {
       });
       if (addresses.length === 0) {
         return {
-          action: "deny",
-          reason: "source acquisition denied hostname with no DNS answers; review the URL before trying again",
-          signals: ["hostname_resolution_empty", "human_review_required"],
-          waitedMs: 0,
-          domainRequestCount: null,
-          domainRequestLimit: this.maxRequestsPerDomain
+          decision: {
+            action: "deny",
+            reason: "source acquisition denied hostname with no DNS answers; review the URL before trying again",
+            signals: ["hostname_resolution_empty", "human_review_required"],
+            waitedMs: 0,
+            domainRequestCount: null,
+            domainRequestLimit: this.maxRequestsPerDomain
+          }
         };
       }
 
       if (addresses.some(({ address }) => !isPublicInternetAddress(address))) {
         return {
+          decision: {
+            action: "deny",
+            reason: "source acquisition denied hostname that resolves to a private or reserved network address",
+            signals: ["resolved_private_network", "human_review_required"],
+            waitedMs: 0,
+            domainRequestCount: null,
+            domainRequestLimit: this.maxRequestsPerDomain
+          }
+        };
+      }
+      return { addresses };
+    } catch {
+      return {
+        decision: {
           action: "deny",
-          reason: "source acquisition denied hostname that resolves to a private or reserved network address",
-          signals: ["resolved_private_network", "human_review_required"],
+          reason: "source acquisition could not resolve hostname safely; review the URL or retry when DNS is available",
+          signals: ["hostname_resolution_failed", "human_review_required"],
           waitedMs: 0,
           domainRequestCount: null,
           domainRequestLimit: this.maxRequestsPerDomain
-        };
-      }
-    } catch {
+        }
+      };
+    }
+  }
+
+  private async inspectNetworkTarget(
+    rawUrl: string,
+    options?: { ignoreConfiguredAllowlist?: boolean }
+  ): Promise<{ decision: SourceAcquisitionDecision; addresses: readonly ResolvedHostnameAddress[] | null }> {
+    const sourceDecision = evaluateSourceUrlPolicy(rawUrl, options);
+    if (sourceDecision.action === "deny") {
       return {
-        action: "deny",
-        reason: "source acquisition could not resolve hostname safely; review the URL or retry when DNS is available",
-        signals: ["hostname_resolution_failed", "human_review_required"],
-        waitedMs: 0,
-        domainRequestCount: null,
-        domainRequestLimit: this.maxRequestsPerDomain
+        decision: { ...sourceDecision, waitedMs: 0, domainRequestCount: null, domainRequestLimit: this.maxRequestsPerDomain },
+        addresses: null
       };
     }
 
-    return null;
+    const parsed = new URL(rawUrl);
+    const hostname = normalizeDomain(parsed.hostname);
+    const resolvedHostname = await this.resolvePublicHostname(parsed.hostname);
+    if ("decision" in resolvedHostname) {
+      return { decision: resolvedHostname.decision, addresses: null };
+    }
+    if (this.reviewDomains.some((domain) => isDomainMatch(hostname, domain))) {
+      return {
+        decision: {
+          action: "deny",
+          reason: "acquisition policy requires human review for this configured sensitive domain before browser navigation",
+          signals: ["human_review_required", "review_domain"],
+          waitedMs: 0,
+          domainRequestCount: this.requestsByDomain.get(hostname) ?? 0,
+          domainRequestLimit: this.maxRequestsPerDomain
+        },
+        addresses: null
+      };
+    }
+
+    return {
+      decision: {
+        action: "allow",
+        reason: "source acquisition allowed a public network target",
+        signals: ["public_http_url"],
+        waitedMs: 0,
+        domainRequestCount: this.requestsByDomain.get(hostname) ?? 0,
+        domainRequestLimit: this.maxRequestsPerDomain
+      },
+      addresses: resolvedHostname.addresses
+    };
   }
 
   async checkNetworkTarget(
     rawUrl: string,
     options?: { ignoreConfiguredAllowlist?: boolean }
   ): Promise<SourceAcquisitionDecision> {
-    const sourceDecision = evaluateSourceUrlPolicy(rawUrl, options);
-    if (sourceDecision.action === "deny") {
-      return { ...sourceDecision, waitedMs: 0, domainRequestCount: null, domainRequestLimit: this.maxRequestsPerDomain };
-    }
-
-    const parsed = new URL(rawUrl);
-    const hostname = normalizeDomain(parsed.hostname);
-    const resolvedHostnameDecision = await this.evaluateResolvedHostname(parsed.hostname);
-    if (resolvedHostnameDecision) {
-      return resolvedHostnameDecision;
-    }
-    if (this.reviewDomains.some((domain) => isDomainMatch(hostname, domain))) {
-      return {
-        action: "deny",
-        reason: "acquisition policy requires human review for this configured sensitive domain before browser navigation",
-        signals: ["human_review_required", "review_domain"],
-        waitedMs: 0,
-        domainRequestCount: this.requestsByDomain.get(hostname) ?? 0,
-        domainRequestLimit: this.maxRequestsPerDomain
-      };
-    }
-
-    return {
-      action: "allow",
-      reason: "source acquisition allowed a public network target",
-      signals: ["public_http_url"],
-      waitedMs: 0,
-      domainRequestCount: this.requestsByDomain.get(hostname) ?? 0,
-      domainRequestLimit: this.maxRequestsPerDomain
-    };
+    return (await this.inspectNetworkTarget(rawUrl, options)).decision;
   }
 
   async prepare(rawUrl: string): Promise<SourceAcquisitionDecision> {

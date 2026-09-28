@@ -6,7 +6,7 @@ Web Task Agent is designed to make a research decision inspectable. It does not 
 
 | Layer | Evidence produced | What it does not prove |
 | --- | --- | --- |
-| Acquisition policy | HTTPS-only targets, public-address checks, robots signals, redirect quarantine, domain pacing, and prompt-injection flags | That a publisher is honest or that a page is complete |
+| Acquisition policy | HTTPS-only targets, public-address checks, robots requests pinned to validated addresses, redirect quarantine, domain pacing, and prompt-injection flags | That a publisher is honest or that a page is complete |
 | Evidence linkage | Claims point to source IDs and excerpts; source records include canonical URL, role, and collection time | That the claim follows logically from the source |
 | Artifact integrity | `integrity-manifest.json` stores SHA-256 hashes for exported files and snapshots | That the source content was correct before collection |
 | Decision receipt | Decision summary, claim statuses, limitations, contradictions, and next validation are versioned in `receipt.json` | A standardized overall confidence value or suitability for every operator or context |

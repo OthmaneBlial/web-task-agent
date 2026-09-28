@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
+import type { ClientRequest, IncomingMessage } from "node:http";
+import type { RequestOptions } from "node:https";
 import test from "node:test";
 
 import { evaluateRobotsText, SourceAcquisitionPolicy, type RobotsFetchResponse } from "../lib/source-acquisition-policy";
@@ -473,6 +477,70 @@ test("source acquisition resolves the exact requested hostname before browser na
   assert.equal(decision.action, "deny");
   assert.ok(decision.signals.includes("resolved_private_network"));
   assert.equal(robotsCalls, 0);
+});
+
+test("default robots fetch connects to the validated IP and keeps the source hostname", async (context) => {
+  const validatedAddresses = [
+    { address: "93.184.216.34", family: 4 },
+    { address: "151.101.1.69", family: 4 }
+  ];
+  let hostnameResolutions = 0;
+  let requestedUrl: URL | undefined;
+  let requestOptions: RequestOptions | undefined;
+  let responseEncoding: string | undefined;
+  context.mock.method(require("node:https"), "request", ((input: string | URL, options: RequestOptions, callback: (response: IncomingMessage) => void) => {
+    requestedUrl = input instanceof URL ? input : new URL(input);
+    requestOptions = options;
+    const request = new EventEmitter() as unknown as ClientRequest;
+    request.end = (() => {
+      const responseStream = new PassThrough();
+      Object.defineProperties(responseStream, {
+        statusCode: { value: 200 },
+        headers: { value: { "content-type": "text/plain", ...(responseEncoding ? { "content-encoding": responseEncoding } : {}) } }
+      });
+      callback(responseStream as unknown as IncomingMessage);
+      responseStream.end("User-agent: *\nAllow: /\n");
+      return request;
+    }) as ClientRequest["end"];
+    return request;
+  }) as unknown as typeof import("node:https")["request"]);
+
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: async () => {
+      const address = validatedAddresses[Math.min(hostnameResolutions, validatedAddresses.length - 1)]!;
+      hostnameResolutions += 1;
+      return [address];
+    }
+  });
+  const decision = await policy.prepare("https://docs.example.com/guide");
+
+  assert.equal(decision.action, "allow");
+  assert.equal(hostnameResolutions, 2);
+  assert.equal(requestedUrl?.hostname, "docs.example.com");
+  assert.equal(requestOptions?.agent, false);
+  assert.equal(new Headers(requestOptions?.headers as HeadersInit).get("accept-encoding"), "identity");
+  assert.ok(requestOptions?.lookup);
+  const connectedAddress = await new Promise<{ address: string; family: number }>((resolve, reject) => {
+    const lookup = requestOptions!.lookup as unknown as (
+      hostname: string,
+      options: { family: number; all?: false },
+      callback: (error: NodeJS.ErrnoException | null, address: string, family?: number) => void
+    ) => void;
+    lookup("docs.example.com", { family: 0, all: false }, (error, address, family) => {
+      if (error) reject(error);
+      else resolve({ address, family: family ?? 0 });
+    });
+  });
+  assert.deepEqual(connectedAddress, validatedAddresses[1]);
+
+  responseEncoding = "gzip";
+  const encodedDecision = await new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: async () => [validatedAddresses[1]!]
+  }).prepare("https://docs.example.com/guide");
+  assert.equal(encodedDecision.action, "deny");
+  assert.ok(encodedDecision.signals.includes("robots_unreachable"));
 });
 
 test("source acquisition fails closed when hostname resolution is unavailable", async () => {
