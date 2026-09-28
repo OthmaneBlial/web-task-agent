@@ -1075,13 +1075,20 @@ export function createManagementServer(options?: ManagementServerOptions): http.
         const jobId = decodePathSegment(
           parsedUrl.pathname.replace("/api/jobs/", "").replace("/events", "")
         );
+        const rawLimit = parsedUrl.searchParams.get("limit");
+        let limit: number | undefined;
+        if (rawLimit !== null) {
+          const parsedLimit = Number(rawLimit);
+          if (!/^\d+$/.test(rawLimit) || !Number.isSafeInteger(parsedLimit) || parsedLimit <= 0) {
+            throw new ManagementRequestError(400, "invalid_event_limit", "Event limit must be a positive integer");
+          }
+          limit = parsedLimit;
+        }
         sendJson(res, 200, listJobRunEvents({
           databasePath: options?.databasePath,
           jobId,
           afterCreatedAt: parsedUrl.searchParams.get("after"),
-          limit: parsedUrl.searchParams.get("limit")
-            ? Number(parsedUrl.searchParams.get("limit"))
-            : undefined
+          limit
         }));
         return;
       }

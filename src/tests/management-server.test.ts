@@ -96,6 +96,14 @@ test("management server exposes controls and log endpoints", async () => {
     assert.ok(Array.isArray(events));
     assert.ok(events.some((event) => event.message === "server test boot"));
 
+    for (const invalidLimit of ["not-a-number", "", "1.5", "9007199254740992"]) {
+      const invalidEventsResponse = await fetch(
+        `${baseUrl}/api/jobs/job_server/events?limit=${invalidLimit}`
+      );
+      assert.equal(invalidEventsResponse.status, 400);
+      assert.equal((await invalidEventsResponse.json()).error, "invalid_event_limit");
+    }
+
     const invalidQueueControl = await fetch(`${baseUrl}/api/queue/${queued.queueId}/control`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
