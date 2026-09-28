@@ -104,6 +104,29 @@ test("management server exposes controls and log endpoints", async () => {
       assert.equal((await invalidEventsResponse.json()).error, "invalid_event_limit");
     }
 
+    job.appendRunEvent("log", "server test same timestamp cursor");
+    const cursorDb = new DatabaseSync(databasePath);
+    let firstEventId: string;
+    try {
+      const firstEvent = cursorDb.prepare(
+        "SELECT id FROM job_run_events WHERE job_id = ? AND message = ?"
+      ).get("job_server", "server test boot") as { id: string } | undefined;
+      assert.ok(firstEvent);
+      firstEventId = firstEvent.id;
+      cursorDb.prepare("UPDATE job_run_events SET created_at = ? WHERE job_id = ?")
+        .run("2026-03-20T10:00:00.000Z", "job_server");
+    } finally {
+      cursorDb.close();
+    }
+    const cursorResponse = await fetch(
+      `${baseUrl}/api/jobs/job_server/events?afterId=${encodeURIComponent(firstEventId)}`
+    );
+    assert.equal(cursorResponse.status, 200);
+    const eventsAfterCursor = await cursorResponse.json();
+    assert.ok(eventsAfterCursor.some((event: { message: string }) =>
+      event.message === "server test same timestamp cursor"
+    ));
+
     const invalidQueueControl = await fetch(`${baseUrl}/api/queue/${queued.queueId}/control`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

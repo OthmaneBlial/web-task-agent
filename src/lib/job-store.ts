@@ -1830,10 +1830,24 @@ export function listJobRunEvents(options: {
   databasePath?: string;
   jobId: string;
   afterCreatedAt?: string | null;
+  afterId?: string | null;
   limit?: number;
 }): JobRunEventRecord[] {
   const { db } = getDatabase(options.databasePath);
   const limit = Math.max(1, Math.min(1000, options.limit ?? 200));
+  if (options.afterId != null) {
+    const rows = db.prepare(`
+        SELECT id, event_type, message, metadata_json, created_at
+        FROM job_run_events
+        WHERE job_id = ? AND rowid > (
+          SELECT rowid FROM job_run_events WHERE job_id = ? AND id = ?
+        )
+        ORDER BY rowid ASC
+        LIMIT ?
+      `).all(options.jobId, options.jobId, options.afterId, limit) as Array<Record<string, unknown>>;
+    return rows.map(mapJobRunEvent);
+  }
+
   const rows = options.afterCreatedAt == null
     ? (db.prepare(`
         SELECT id, event_type, message, metadata_json, created_at
