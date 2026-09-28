@@ -47,12 +47,14 @@ function browserVerifier(): {
 function browserVerifierUi(): {
   dropZone: { listeners: Map<string, (event: unknown) => unknown> };
   announcer: { textContent: string };
+  folderInput: { listeners: Map<string, (event: unknown) => unknown>; value: string; files?: unknown };
 } {
   type Listener = (event: unknown) => unknown;
   const elements = new Map<string, {
     listeners: Map<string, Listener>;
     textContent: string;
     value: string;
+    files?: unknown;
     classList: { add(value: string): void; remove(value: string): void };
     addEventListener(type: string, listener: Listener): void;
   }>();
@@ -63,6 +65,7 @@ function browserVerifierUi(): {
         listeners: new Map(),
         textContent: "",
         value: "",
+        files: undefined,
         classList: { add() {}, remove() {} },
         addEventListener(type, listener) { this.listeners.set(type, listener); }
       };
@@ -81,7 +84,11 @@ function browserVerifierUi(): {
     window: { location: { search: "" } }
   };
   vm.runInNewContext(fs.readFileSync("docs/verifier.js", "utf8"), context);
-  return { dropZone: getElement("receipt-drop-zone"), announcer: getElement("verifier-announcer") };
+  return {
+    dropZone: getElement("receipt-drop-zone"),
+    announcer: getElement("verifier-announcer"),
+    folderInput: getElement("primary-folder-input")
+  };
 }
 
 test("local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe report controls", () => {
@@ -258,6 +265,53 @@ test("browser folder drops reject duplicate paths instead of overwriting files",
     dataTransfer: { items: Array.from({ length: 2 }, () => ({ webkitGetAsEntry: () => fileEntry })) }
   });
   assert.match(ui.announcer.textContent, /Folder contains a duplicate path: same\.txt/);
+});
+
+test("browser folder inputs reject excess files before copying the FileList", async () => {
+  const ui = browserVerifierUi();
+  ui.folderInput.value = "selected";
+  ui.folderInput.files = {
+    length: 501,
+    [Symbol.iterator]() { throw new Error("oversized FileList should not be copied"); }
+  };
+  const change = ui.folderInput.listeners.get("change");
+  assert.ok(change);
+  await change({ currentTarget: ui.folderInput });
+  assert.match(ui.announcer.textContent, /Folder exceeds the 500-file limit/);
+  assert.equal(ui.folderInput.value, "");
+});
+
+test("browser drop item lists are bounded before copying them", async () => {
+  const ui = browserVerifierUi();
+  const drop = ui.dropZone.listeners.get("drop");
+  assert.ok(drop);
+  await drop({
+    preventDefault() {},
+    dataTransfer: {
+      items: {
+        length: 2_001,
+        [Symbol.iterator]() { throw new Error("oversized item list should not be copied"); }
+      }
+    }
+  });
+  assert.match(ui.announcer.textContent, /Folder drop exceeds the 2000-entry limit/);
+});
+
+test("browser drop fallback rejects excess files before copying the FileList", async () => {
+  const ui = browserVerifierUi();
+  const drop = ui.dropZone.listeners.get("drop");
+  assert.ok(drop);
+  await drop({
+    preventDefault() {},
+    dataTransfer: {
+      items: [],
+      files: {
+        length: 501,
+        [Symbol.iterator]() { throw new Error("oversized fallback FileList should not be copied"); }
+      }
+    }
+  });
+  assert.match(ui.announcer.textContent, /Folder exceeds the 500-file limit/);
 });
 
 test("browser rejects an oversized ZIP before reading it into memory", async () => {
