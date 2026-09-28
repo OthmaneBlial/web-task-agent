@@ -66,6 +66,19 @@ test("atomic binary writes preserve byte contents", () => {
   }
 });
 
+test("saved resumable task state uses private file permissions", () => {
+  if (process.platform === "win32") return;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cache-private-"));
+  const cachePath = path.join(tempDir, "state.json");
+
+  try {
+    saveTaskState("agent", cachePath, { runId: "private-run" });
+    assert.equal(fs.statSync(cachePath).mode & 0o777, 0o600);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("cache loading rejects invalid envelopes and keeps raw legacy states readable", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cache-envelope-"));
   const cachePath = path.join(tempDir, "state.json");

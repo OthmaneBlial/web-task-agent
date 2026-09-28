@@ -67,7 +67,7 @@ export function saveTaskState<T extends { runId: string }>(
     savedAt: new Date().toISOString(),
     state
   };
-  writeJsonAtomic(filePath, envelope);
+  writeTextAtomic(filePath, JSON.stringify(envelope, null, 2), { mode: 0o600 });
   return filePath;
 }
 
