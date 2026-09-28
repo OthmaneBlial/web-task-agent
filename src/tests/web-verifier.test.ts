@@ -240,6 +240,24 @@ test("browser folder drops bound empty directory entries", async () => {
   assert.match(ui.announcer.textContent, /Folder drop exceeds the 2000-entry limit/);
 });
 
+test("browser folder drops reject duplicate paths instead of overwriting files", async () => {
+  const ui = browserVerifierUi();
+  const fileEntry = {
+    name: "same.txt",
+    isFile: true,
+    file(callback: (file: { name: string; size: number; arrayBuffer(): Promise<ArrayBuffer> }) => void) {
+      callback({ name: "same.txt", size: 1, arrayBuffer: async () => new ArrayBuffer(1) });
+    }
+  };
+  const drop = ui.dropZone.listeners.get("drop");
+  assert.ok(drop);
+  await drop({
+    preventDefault() {},
+    dataTransfer: { items: Array.from({ length: 2 }, () => ({ webkitGetAsEntry: () => fileEntry })) }
+  });
+  assert.match(ui.announcer.textContent, /Folder contains a duplicate path: same\.txt/);
+});
+
 test("browser verifier reports a changed snapshot when its source URL stays the same", () => {
   const fixture = embeddedFixtures().valid!;
   const receipt = JSON.parse(fixture.files["receipt.json"]!) as DecisionReceipt;
