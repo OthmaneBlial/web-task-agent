@@ -66,6 +66,22 @@ test("standalone CLI redacts local home paths in errors", () => {
   assert.equal(result.stderr.includes(os.homedir()), false);
 });
 
+test("standalone CLI bounds total filesystem entries", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-entry-limit-"));
+  try {
+    for (let index = 0; index <= 2_000; index += 1) {
+      fs.mkdirSync(path.join(tempDir, "dir-" + index));
+    }
+    const cliPath = path.resolve("packages", "decision-receipt", "dist", "cli.js");
+    const result = spawnSync(process.execPath, [cliPath, "verify", tempDir], { encoding: "utf8" });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /2000 filesystem entries/);
+    assert.doesNotMatch(result.stdout, /integrity verified/i);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("receipt manifest covers receipt.json and every referenced source snapshot", async () => {
   const original = readBundle(path.join("packages", "decision-receipt", "examples", "minimal"));
   const receipt = JSON.parse(String(original["receipt.json"])) as DecisionReceipt;

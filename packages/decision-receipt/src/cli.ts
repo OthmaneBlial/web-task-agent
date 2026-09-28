@@ -14,6 +14,7 @@ import { redactSensitiveText } from "./redaction";
 import type { ReceiptBundle } from "./types";
 
 const MAX_FILES = 500;
+const MAX_ENTRIES = 2_000;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
 
@@ -44,26 +45,51 @@ function readBundle(input: string): ReceiptBundle {
   const root = directoryFor(input);
   const bundle = Object.create(null) as ReceiptBundle;
   let files = 0;
+  let entries = 0;
   let total = 0;
-  const visit = (directory: string): void => {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      const absolute = path.join(directory, entry.name);
-      if (entry.isSymbolicLink()) continue;
-      if (entry.isDirectory()) {
-        visit(absolute);
-        continue;
+  const directories = [root];
+
+  while (directories.length > 0) {
+    const directory = directories.pop()!;
+    const handle = fs.opendirSync(directory);
+    try {
+      let entry = handle.readSync();
+      while (entry) {
+        entries += 1;
+        if (entries > MAX_ENTRIES) throw new Error("Bundle exceeds " + MAX_ENTRIES + " filesystem entries.");
+        const absolute = path.join(directory, entry.name);
+        if (entry.isSymbolicLink()) {
+          entry = handle.readSync();
+          continue;
+        }
+        if (entry.isDirectory()) {
+          directories.push(absolute);
+          entry = handle.readSync();
+          continue;
+        }
+        if (!entry.isFile()) {
+          entry = handle.readSync();
+          continue;
+        }
+        files += 1;
+        if (files > MAX_FILES) throw new Error("Bundle exceeds the " + MAX_FILES + "-file limit.");
+        const descriptor = fs.openSync(absolute, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+        try {
+          const stat = fs.fstatSync(descriptor);
+          if (!stat.isFile()) throw new Error("Bundle entries must be regular files.");
+          if (stat.size > MAX_FILE_BYTES) throw new Error("Bundle file exceeds 10 MB.");
+          total += stat.size;
+          if (total > MAX_TOTAL_BYTES) throw new Error("Bundle exceeds the 50 MB total limit.");
+          bundle[path.relative(root, absolute).split(path.sep).join("/")] = fs.readFileSync(descriptor);
+        } finally {
+          fs.closeSync(descriptor);
+        }
+        entry = handle.readSync();
       }
-      if (!entry.isFile()) continue;
-      files += 1;
-      if (files > MAX_FILES) throw new Error(`Bundle exceeds the ${MAX_FILES}-file limit.`);
-      const stat = fs.statSync(absolute);
-      if (stat.size > MAX_FILE_BYTES) throw new Error(`Bundle file exceeds 10 MB: ${absolute}.`);
-      total += stat.size;
-      if (total > MAX_TOTAL_BYTES) throw new Error("Bundle exceeds the 50 MB total limit.");
-      bundle[path.relative(root, absolute).split(path.sep).join("/")] = fs.readFileSync(absolute);
+    } finally {
+      handle.closeSync();
     }
-  };
-  visit(root);
+  }
   return bundle;
 }
 
