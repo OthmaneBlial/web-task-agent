@@ -19,6 +19,7 @@ import type {
 export const DEBUG_PORT = Number(process.env.CDP_PORT ?? process.env.CHROME_PORT ?? "9222");
 const execFileAsync = promisify(execFile);
 const LIGHTPANDA_START_SCRIPT = path.resolve(__dirname, "../../scripts/start-lightpanda.sh");
+const CDP_COMMAND_TIMEOUT_MS = 30_000;
 
 type CdpEventListener = (...args: unknown[]) => void;
 
@@ -42,6 +43,23 @@ type NetworkActivity = {
 
 const networkActivityByClient = new WeakMap<CDPClient, NetworkActivity>();
 
+export function waitForCdpCommand<T>(
+  command: Promise<T>,
+  method: string,
+  timeoutMs: number = CDP_COMMAND_TIMEOUT_MS
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`timed out waiting for CDP command ${method} after ${timeoutMs}ms`)),
+      timeoutMs
+    );
+  });
+  return Promise.race([command, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 function sendSessionCommand(
   client: CDP.Client,
   method: string,
@@ -50,7 +68,7 @@ function sendSessionCommand(
 ): Promise<unknown> {
   // CRI types `send` with generated command names; this session proxy receives a dynamic name.
   const send = client.send as unknown as SessionCommandSender;
-  return send.call(client, method, params, sessionId);
+  return waitForCdpCommand(send.call(client, method, params, sessionId), method);
 }
 
 export type CdpBackendKind = "lightpanda" | "chrome" | "unknown" | "unavailable";
@@ -244,6 +262,7 @@ export function isRecoverableCdpError(error: unknown): boolean {
     /target closed/i,
     /session closed/i,
     /inspector\.detached/i,
+    /timed out waiting for cdp command/i,
     /socket hang up/i,
     /econnrefused/i,
     /econnreset/i,
@@ -405,14 +424,17 @@ export async function closePageSessionResources(
   }
   if (targetId) {
     try {
-      await client.Target.closeTarget({ targetId });
+      await waitForCdpCommand(client.Target.closeTarget({ targetId }), "Target.closeTarget");
     } catch {
       // Continue disposing the context if the target already closed.
     }
   }
   if (browserContextId) {
     try {
-      await client.Target.disposeBrowserContext({ browserContextId });
+      await waitForCdpCommand(
+        client.Target.disposeBrowserContext({ browserContextId }),
+        "Target.disposeBrowserContext"
+      );
     } catch {
       // The browser may already have disposed the context.
     }
@@ -479,19 +501,28 @@ export async function createPageSession(url?: string, options?: CreatePageSessio
   let proxyClient: CDPClient;
   try {
     // Create a new independent browser context and target.
-    const context = await rootClient.Target.createBrowserContext();
+    const context = await waitForCdpCommand(
+      rootClient.Target.createBrowserContext(),
+      "Target.createBrowserContext"
+    );
     browserContextId = context.browserContextId;
-    const target = await rootClient.Target.createTarget({
-      url: "about:blank",
-      browserContextId: context.browserContextId
-    });
+    const target = await waitForCdpCommand(
+      rootClient.Target.createTarget({
+        url: "about:blank",
+        browserContextId: context.browserContextId
+      }),
+      "Target.createTarget"
+    );
     targetId = target.targetId;
 
     // Attach to the new target using a flat session.
-    const { sessionId } = await rootClient.Target.attachToTarget({
-      targetId: target.targetId,
-      flatten: true
-    });
+    const { sessionId } = await waitForCdpCommand(
+      rootClient.Target.attachToTarget({
+        targetId: target.targetId,
+        flatten: true
+      }),
+      "Target.attachToTarget"
+    );
 
     // Create a Proxy over the root client that automatically injects the sessionId
     // into all domain commands, making it look like a regular per-target CDPClient.

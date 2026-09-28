@@ -4,8 +4,10 @@ import test from "node:test";
 
 import {
   closePageSessionResources,
+  isRecoverableCdpError,
   locateElement,
   trackNetworkActivity,
+  waitForCdpCommand,
   waitForNetworkIdle
 } from "../lib/cdp";
 import { humanClick } from "../lib/humanizer";
@@ -68,6 +70,19 @@ test("click reports ambiguous matches without scrolling the page", async () => {
 
   await assert.rejects(humanClick(client, "css=.target"), /matched 5001 elements/);
   assert.equal(evaluationCount(), 1);
+});
+
+test("CDP commands reject when the browser never replies", async () => {
+  await assert.rejects(
+    waitForCdpCommand(new Promise<never>(() => {}), "Page.navigate", 5),
+    (error) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /timed out waiting for CDP command Page\.navigate after 5ms/);
+      assert.equal(isRecoverableCdpError(error), true);
+      return true;
+    }
+  );
+  assert.equal(await waitForCdpCommand(Promise.resolve("ready"), "Page.enable", 5), "ready");
 });
 
 test("page session cleanup disposes its context even if target close fails", async () => {
