@@ -175,6 +175,7 @@ function writeLocalOutput(outputPath: string, content: string, force: boolean): 
   try {
     const stats = fs.fstatSync(descriptor);
     if (!stats.isFile() || stats.nlink > 1) throw new Error(`refusing unsafe output file: ${outputPath}`);
+    if (force && process.platform !== "win32") fs.fchmodSync(descriptor, 0o600);
     if (force) fs.ftruncateSync(descriptor, 0);
     fs.writeFileSync(descriptor, content, "utf8");
   } finally {

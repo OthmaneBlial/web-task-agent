@@ -255,11 +255,13 @@ test("CLI file outputs preserve existing files unless force is explicit", () => 
 
   try {
     fs.writeFileSync(planPath, "keep this plan", "utf8");
+    if (process.platform !== "win32") fs.chmodSync(planPath, 0o644);
     const planArgs = ["pack", "plan", "validate-an-idea", "--topic", "safe output", "--output", planPath];
     assert.throws(() => runCli(planArgs, env, tempDir));
     assert.equal(fs.readFileSync(planPath, "utf8"), "keep this plan");
     runCli([...planArgs, "--force"], env, tempDir);
     assert.match(fs.readFileSync(planPath, "utf8"), /Topic: safe output/);
+    if (process.platform !== "win32") assert.equal(fs.statSync(planPath).mode & 0o777, 0o600);
 
     createCompletedJob(databasePath, "job_logs").appendRunEvent("log", "keep the existing evidence");
     fs.writeFileSync(logsPath, "keep these logs", "utf8");
