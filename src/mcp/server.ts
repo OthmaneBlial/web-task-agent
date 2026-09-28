@@ -231,8 +231,10 @@ async function callTool(paramsValue: unknown): Promise<Record<string, unknown>> 
 function writeMessage(message: unknown): void {
   const line = `${JSON.stringify(message)}\n`;
   if (Buffer.byteLength(line, "utf8") > MAX_RESPONSE_BYTES) throw new Error("MCP response exceeds the 2 MB limit");
-  process.stdout.write(line);
+  if (!process.stdout.write(line)) process.stdin.pause();
 }
+
+process.stdout.on("drain", () => process.stdin.resume());
 
 function result(id: JsonRpcId, value: unknown): void {
   writeMessage({ jsonrpc: "2.0", id, result: value });

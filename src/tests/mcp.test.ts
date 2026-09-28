@@ -238,6 +238,40 @@ test("local MCP bounds concurrent tool calls and rejects an oversized pending qu
   }
 });
 
+test("local MCP pauses input while the client stops reading responses", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-mcp-backpressure-"));
+  const guard = path.join(root, "deny-network.cjs");
+  fs.writeFileSync(guard, [
+    'const net = require("node:net");',
+    'function deny() { throw new Error("unexpected MCP network access"); }',
+    'globalThis.fetch = deny;',
+    'net.connect = deny;',
+    'net.createConnection = deny;'
+  ].join("\n"), "utf8");
+  const client = new LocalMcpClient(root, guard);
+  try {
+    await client.request("initialize", {});
+    client.child.stdout.pause();
+    const drainPromise = new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => resolve(false), 500);
+      client.child.stdin.once("drain", () => {
+        clearTimeout(timeout);
+        resolve(true);
+      });
+    });
+    const responsesPromise = client.requestBatch("unsupported/method", {}, 20_000);
+
+    assert.equal(await drainPromise, false);
+    client.child.stdout.resume();
+    const responses = await responsesPromise;
+    assert.equal(responses.length, 20_000);
+    assert.ok(responses.every((response) => response.error));
+  } finally {
+    await client.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 function resultObject(response: RpcResponse): Record<string, unknown> {
   assert.equal(response.error, undefined);
   assert.ok(response.result && typeof response.result === "object");
