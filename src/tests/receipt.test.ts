@@ -69,6 +69,44 @@ test("manifest writer refuses missing package artifacts without replacing a vali
   }
 });
 
+test("manifest writer sorts paths independently of the machine locale", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-manifest-order-"));
+  try {
+    writeDemoPackage({ id: "local-first-risk-review", outputDir: root });
+    const manifestPath = path.join(root, "integrity-manifest.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      generatedAt: string;
+      files: Array<{ path: string }>;
+    };
+    const extraPaths = ["evidence/A.md", "evidence/a.md", "evidence/z.md", "evidence/ä.md"];
+    for (const relativePath of extraPaths) {
+      fs.writeFileSync(path.join(root, relativePath), relativePath, "utf8");
+    }
+
+    writeReceiptIntegrityManifest({
+      rootDir: root,
+      files: [
+        ...manifest.files.map((entry) => path.join(root, entry.path)),
+        ...extraPaths.map((relativePath) => path.join(root, relativePath))
+      ],
+      generatedAt: manifest.generatedAt
+    });
+
+    const updated = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      files: Array<{ path: string }>;
+    };
+    assert.deepEqual(updated.files.map((entry) => entry.path).filter((filePath) => extraPaths.includes(filePath)), [
+      "evidence/A.md",
+      "evidence/a.md",
+      "evidence/z.md",
+      "evidence/ä.md"
+    ]);
+    assert.equal(verifyReceiptDirectory(root).valid, true);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("receipt signing refuses incomplete packages before replacing receipt bytes", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-sign-incomplete-"));
   try {

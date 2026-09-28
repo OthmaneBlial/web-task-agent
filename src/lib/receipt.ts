@@ -829,7 +829,7 @@ function integrityFiles(rootDir: string, paths: string[]): ReceiptIntegrityManif
       sha256: sha256(contents),
       bytes: contents.byteLength
     }))
-    .sort((left, right) => left.path.localeCompare(right.path));
+    .sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
 }
 
 export function writeReceiptIntegrityManifest(input: {

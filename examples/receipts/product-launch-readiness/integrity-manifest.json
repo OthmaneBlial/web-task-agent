@@ -7,6 +7,11 @@
   "generatedAt": "2026-08-26T00:00:00.000Z",
   "files": [
     {
+      "path": "README.md",
+      "sha256": "a2f8820aacacebd59babde0348e1e783b552eaf848530eb4b0606d374a0590fe",
+      "bytes": 734
+    },
+    {
       "path": "evidence/snapshots/source-1.md",
       "sha256": "b8c4e042aa6144bcbc2da0433ad416381c0351deadc1c3e6f641f79ecc532b22",
       "bytes": 1541
@@ -35,11 +40,6 @@
       "path": "package-manifest.json",
       "sha256": "b8065282696816b25acb866da052b6f6736b458f2b5b1fa671aa746297c96b4d",
       "bytes": 615
-    },
-    {
-      "path": "README.md",
-      "sha256": "a2f8820aacacebd59babde0348e1e783b552eaf848530eb4b0606d374a0590fe",
-      "bytes": 734
     },
     {
       "path": "receipt.html",
