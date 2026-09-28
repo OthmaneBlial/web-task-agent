@@ -82,6 +82,23 @@ test("job logs accept repeated identical events within the same millisecond", ()
   }
 });
 
+test("job log listing returns the newest events in chronological order", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-job-recent-logs-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+
+  try {
+    const job = createAgentJobStore(databasePath, "job_recent_logs", "paused");
+    for (let index = 0; index < 10; index += 1) {
+      job.appendRunEvent("log", `event-${index}`);
+    }
+
+    const events = listJobRunEvents({ databasePath, jobId: "job_recent_logs", limit: 3 });
+    assert.deepEqual(events.map((event) => event.message), ["event-7", "event-8", "event-9"]);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("job rerun preserves prototype-named workflow inputs", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-job-prototype-input-"));
   try {

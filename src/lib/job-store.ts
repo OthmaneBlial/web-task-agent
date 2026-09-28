@@ -1833,19 +1833,22 @@ export function listJobRunEvents(options: {
   limit?: number;
 }): JobRunEventRecord[] {
   const { db } = getDatabase(options.databasePath);
-  const rows = db.prepare(`
-    SELECT id, event_type, message, metadata_json, created_at
-    FROM job_run_events
-    WHERE job_id = ?
-      AND (? IS NULL OR created_at > ?)
-    ORDER BY created_at ASC
-    LIMIT ?
-  `).all(
-    options.jobId,
-    options.afterCreatedAt ?? null,
-    options.afterCreatedAt ?? null,
-    Math.max(1, Math.min(1000, options.limit ?? 200))
-  ) as Array<Record<string, unknown>>;
+  const limit = Math.max(1, Math.min(1000, options.limit ?? 200));
+  const rows = options.afterCreatedAt == null
+    ? (db.prepare(`
+        SELECT id, event_type, message, metadata_json, created_at
+        FROM job_run_events
+        WHERE job_id = ?
+        ORDER BY rowid DESC
+        LIMIT ?
+      `).all(options.jobId, limit) as Array<Record<string, unknown>>).reverse()
+    : db.prepare(`
+        SELECT id, event_type, message, metadata_json, created_at
+        FROM job_run_events
+        WHERE job_id = ? AND created_at > ?
+        ORDER BY created_at ASC, rowid ASC
+        LIMIT ?
+      `).all(options.jobId, options.afterCreatedAt, limit) as Array<Record<string, unknown>>;
 
   return rows.map(mapJobRunEvent);
 }
