@@ -35,6 +35,13 @@ type SessionCommandSender = (
   sessionId: string
 ) => Promise<unknown>;
 
+type NetworkActivity = {
+  inFlight: Set<string>;
+  lastActivityAt: number;
+};
+
+const networkActivityByClient = new WeakMap<CDPClient, NetworkActivity>();
+
 function sendSessionCommand(
   client: CDP.Client,
   method: string,
@@ -436,10 +443,12 @@ export async function createPageSession(url?: string, options?: CreatePageSessio
 
   // Create a Proxy over the root client that automatically injects the sessionId
   // into all domain commands, making it look like a regular per-target CDPClient.
+  let stopTrackingNetworkActivity: () => void = () => undefined;
   const proxyClient = new Proxy(rootClient, {
     get(target, prop) {
       if (prop === 'close') {
         return async () => {
+          stopTrackingNetworkActivity();
           try {
             await target.Target.closeTarget({ targetId });
             await target.close();
@@ -491,6 +500,7 @@ export async function createPageSession(url?: string, options?: CreatePageSessio
   }) as CDPClient;
 
   await enableCoreDomains(proxyClient);
+  stopTrackingNetworkActivity = trackNetworkActivity(proxyClient);
 
   if (options?.userAgent) {
     await proxyClient.Network.setUserAgentOverride({ userAgent: options.userAgent });
@@ -871,6 +881,42 @@ function attachClientEvent(
   return () => undefined;
 }
 
+function readRequestId(params: unknown): string | undefined {
+  if (!params || typeof params !== "object" || !("requestId" in params)) return undefined;
+  return typeof params.requestId === "string" ? params.requestId : undefined;
+}
+
+export function trackNetworkActivity(client: CDPClient): () => void {
+  if (networkActivityByClient.has(client)) return () => undefined;
+
+  const activity: NetworkActivity = { inFlight: new Set(), lastActivityAt: Date.now() };
+  const markActivity = (): void => {
+    activity.lastActivityAt = Date.now();
+  };
+  const onRequest: CdpEventListener = (...args) => {
+    const requestId = readRequestId(args[0]);
+    if (requestId) activity.inFlight.add(requestId);
+    markActivity();
+  };
+  const onComplete: CdpEventListener = (...args) => {
+    const requestId = readRequestId(args[0]);
+    if (requestId) activity.inFlight.delete(requestId);
+    markActivity();
+  };
+
+  const detachRequest = attachClientEvent(client, "Network.requestWillBeSent", onRequest);
+  const detachFinished = attachClientEvent(client, "Network.loadingFinished", onComplete);
+  const detachFailed = attachClientEvent(client, "Network.loadingFailed", onComplete);
+  networkActivityByClient.set(client, activity);
+
+  return () => {
+    detachRequest();
+    detachFinished();
+    detachFailed();
+    networkActivityByClient.delete(client);
+  };
+}
+
 export async function waitForNetworkIdle(
   client: CDPClient,
   options?: NetworkIdleOptions
@@ -878,57 +924,26 @@ export async function waitForNetworkIdle(
   const idleTimeMs = options?.idleTimeMs ?? 1_000;
   const timeoutMs = options?.timeoutMs ?? 20_000;
   const maxInflightRequests = options?.maxInflightRequests ?? 0;
-  const inFlight = new Set<string>();
-  let lastActivityAt = Date.now();
-
-  await client.Network.enable();
-
-  const markActivity = (): void => {
-    lastActivityAt = Date.now();
-  };
-
-  const readRequestId = (params: unknown): string | undefined => {
-    if (!params || typeof params !== "object" || !("requestId" in params)) return undefined;
-    return typeof params.requestId === "string" ? params.requestId : undefined;
-  };
-
-  const onRequest: CdpEventListener = (...args) => {
-    const requestId = readRequestId(args[0]);
-    if (requestId) {
-      inFlight.add(requestId);
-    }
-    markActivity();
-  };
-
-  const onComplete: CdpEventListener = (...args) => {
-    const requestId = readRequestId(args[0]);
-    if (requestId) {
-      inFlight.delete(requestId);
-    }
-    markActivity();
-  };
-
-  const detachRequest = attachClientEvent(client, "Network.requestWillBeSent", onRequest);
-  const detachFinished = attachClientEvent(client, "Network.loadingFinished", onComplete);
-  const detachFailed = attachClientEvent(client, "Network.loadingFailed", onComplete);
+  const hasSessionTracking = networkActivityByClient.has(client);
+  const stopTemporaryTracking = hasSessionTracking ? undefined : trackNetworkActivity(client);
+  const activity = networkActivityByClient.get(client)!;
 
   try {
+    if (!hasSessionTracking) await client.Network.enable();
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-      const idleForMs = Date.now() - lastActivityAt;
-      if (inFlight.size <= maxInflightRequests && idleForMs >= idleTimeMs) {
+      const idleForMs = Date.now() - activity.lastActivityAt;
+      if (activity.inFlight.size <= maxInflightRequests && idleForMs >= idleTimeMs) {
         return;
       }
       await sleep(100, 0.04);
     }
 
     throw new Error(
-      `timed out waiting for network idle after ${timeoutMs}ms (inFlight=${inFlight.size})`
+      `timed out waiting for network idle after ${timeoutMs}ms (inFlight=${activity.inFlight.size})`
     );
   } finally {
-    detachRequest();
-    detachFinished();
-    detachFailed();
+    stopTemporaryTracking?.();
   }
 }
 
