@@ -387,6 +387,38 @@ export async function installRequestPolicy(
   return { mainFrameDenial: () => denial, blockedMainFrame };
 }
 
+export async function closePageSessionResources(
+  client: CDP.Client,
+  targetId: string | undefined,
+  browserContextId: string | undefined,
+  stopTrackingNetworkActivity: () => void
+): Promise<void> {
+  try {
+    stopTrackingNetworkActivity();
+  } catch {
+    // Continue closing browser resources if listener cleanup fails.
+  }
+  if (targetId) {
+    try {
+      await client.Target.closeTarget({ targetId });
+    } catch {
+      // Continue disposing the context if the target already closed.
+    }
+  }
+  if (browserContextId) {
+    try {
+      await client.Target.disposeBrowserContext({ browserContextId });
+    } catch {
+      // The browser may already have disposed the context.
+    }
+  }
+  try {
+    await client.close();
+  } catch {
+    // Ignore errors when closing an already-disconnected browser.
+  }
+}
+
 /**
  * Create a new CDP session by connecting directly to the Lightpanda WebSocket.
  * Each call creates an independent page context.
@@ -428,98 +460,108 @@ export async function createPageSession(url?: string, options?: CreatePageSessio
     local: true
   });
 
-  // Create a new independent browser context and target
-  const { browserContextId } = await rootClient.Target.createBrowserContext();
-  const { targetId } = await rootClient.Target.createTarget({
-    url: "about:blank",
-    browserContextId
-  });
-
-  // Attach to the new target using a flat session
-  const { sessionId } = await rootClient.Target.attachToTarget({
-    targetId,
-    flatten: true
-  });
-
-  // Create a Proxy over the root client that automatically injects the sessionId
-  // into all domain commands, making it look like a regular per-target CDPClient.
+  let browserContextId: string | undefined;
+  let targetId: string | undefined;
   let stopTrackingNetworkActivity: () => void = () => undefined;
-  const proxyClient = new Proxy(rootClient, {
-    get(target, prop) {
-      if (prop === 'close') {
-        return async () => {
-          stopTrackingNetworkActivity();
-          try {
-            await target.Target.closeTarget({ targetId });
-            await target.close();
-          } catch {
-            // ignore
-          }
-        };
-      }
-      if (prop === 'send') {
-        return (method: string, params?: object) => sendSessionCommand(target, method, params, sessionId);
-      }
-
-      // If accessing a Domain like 'Page', return a wrapped object
-      if (typeof prop === "string") {
-        const domain: unknown = Reflect.get(target, prop);
-        if (typeof domain === 'object' && domain !== null) {
-          return new Proxy(domain, {
-            get(domainTarget, domainProp) {
-              const domainMember: unknown = Reflect.get(domainTarget, domainProp);
-              if (typeof domainMember === 'function' && typeof domainProp === "string") {
-                // Intercept the domain method call (e.g., Page.navigate)
-                return (params?: object) => sendSessionCommand(target, `${prop}.${domainProp}`, params, sessionId);
-              }
-              return domainMember;
-            }
-          });
-        }
-      }
-
-      // If accessing an event binding, we need to bind event listeners specifying the sessionId
-      // actually CRI handles events automatically if flatten:true is used during CDP() creation.
-      // But we attached manually. CRI emits `${method}.${sessionId}` events.
-      if (prop === 'on') {
-        const eventTarget = target as CDP.Client & CdpEventEmitter;
-        return (event: string, listener: CdpEventListener) => eventTarget.on(`${event}.${sessionId}`, listener);
-      }
-      if (prop === 'once') {
-        const eventTarget = target as CDP.Client & CdpEventEmitter;
-        return (event: string, listener: CdpEventListener) => eventTarget.once(`${event}.${sessionId}`, listener);
-      }
-      if (prop === 'removeListener' || prop === 'off') {
-        const eventTarget = target as CDP.Client & CdpEventEmitter;
-        return (event: string, listener: CdpEventListener) =>
-          eventTarget.removeListener(`${event}.${sessionId}`, listener);
-      }
-
-      return Reflect.get(target, prop);
-    }
-  }) as CDPClient;
-
-  await enableCoreDomains(proxyClient);
-  stopTrackingNetworkActivity = trackNetworkActivity(proxyClient);
-
-  if (options?.userAgent) {
-    await proxyClient.Network.setUserAgentOverride({ userAgent: options.userAgent });
-  }
-
-  const acquisitionPolicy = options?.requestTargetPolicy ? null : new SourceAcquisitionPolicy();
-  await installRequestPolicy(
-    proxyClient,
-    options?.requestTargetPolicy ?? ((targetUrl) =>
-      acquisitionPolicy!.checkNetworkTarget(targetUrl, { ignoreConfiguredAllowlist: true })),
-    options?.onMainFrameBlocked
+  let closePromise: Promise<void> | undefined;
+  const closeSession = (): Promise<void> => closePromise ??= closePageSessionResources(
+    rootClient,
+    targetId,
+    browserContextId,
+    () => stopTrackingNetworkActivity()
   );
 
-  if (url) {
-    await proxyClient.Page.navigate({ url });
-    await waitForLoadEvent(proxyClient, 20_000);
+  let proxyClient: CDPClient;
+  try {
+    // Create a new independent browser context and target.
+    const context = await rootClient.Target.createBrowserContext();
+    browserContextId = context.browserContextId;
+    const target = await rootClient.Target.createTarget({
+      url: "about:blank",
+      browserContextId: context.browserContextId
+    });
+    targetId = target.targetId;
+
+    // Attach to the new target using a flat session.
+    const { sessionId } = await rootClient.Target.attachToTarget({
+      targetId: target.targetId,
+      flatten: true
+    });
+
+    // Create a Proxy over the root client that automatically injects the sessionId
+    // into all domain commands, making it look like a regular per-target CDPClient.
+    proxyClient = new Proxy(rootClient, {
+      get(targetClient, prop) {
+        if (prop === 'close') return closeSession;
+        if (prop === 'send') {
+          return (method: string, params?: object) => sendSessionCommand(targetClient, method, params, sessionId);
+        }
+
+        // If accessing a Domain like 'Page', return a wrapped object
+        if (typeof prop === "string") {
+          const domain: unknown = Reflect.get(targetClient, prop);
+          if (typeof domain === 'object' && domain !== null) {
+            return new Proxy(domain, {
+              get(domainTarget, domainProp) {
+                const domainMember: unknown = Reflect.get(domainTarget, domainProp);
+                if (typeof domainMember === 'function' && typeof domainProp === "string") {
+                  // Intercept the domain method call (e.g., Page.navigate)
+                  return (params?: object) => sendSessionCommand(targetClient, `${prop}.${domainProp}`, params, sessionId);
+                }
+                return domainMember;
+              }
+            });
+          }
+        }
+        // Flat-session events include the session ID in their event name.
+        if (prop === 'on') {
+          const eventTarget = targetClient as CDP.Client & CdpEventEmitter;
+          return (event: string, listener: CdpEventListener) => eventTarget.on(`${event}.${sessionId}`, listener);
+        }
+        if (prop === 'once') {
+          const eventTarget = targetClient as CDP.Client & CdpEventEmitter;
+          return (event: string, listener: CdpEventListener) => eventTarget.once(`${event}.${sessionId}`, listener);
+        }
+        if (prop === 'removeListener' || prop === 'off') {
+          const eventTarget = targetClient as CDP.Client & CdpEventEmitter;
+          return (event: string, listener: CdpEventListener) =>
+            eventTarget.removeListener(`${event}.${sessionId}`, listener);
+        }
+
+        return Reflect.get(targetClient, prop);
+      }
+    }) as CDPClient;
+  } catch (error) {
+    await closeSession();
+    throw error;
   }
 
-  return proxyClient;
+  try {
+    await enableCoreDomains(proxyClient);
+    stopTrackingNetworkActivity = trackNetworkActivity(proxyClient);
+
+    if (options?.userAgent) {
+      await proxyClient.Network.setUserAgentOverride({ userAgent: options.userAgent });
+    }
+
+    const acquisitionPolicy = options?.requestTargetPolicy ? null : new SourceAcquisitionPolicy();
+    await installRequestPolicy(
+      proxyClient,
+      options?.requestTargetPolicy ?? ((targetUrl) =>
+        acquisitionPolicy!.checkNetworkTarget(targetUrl, { ignoreConfiguredAllowlist: true })),
+      options?.onMainFrameBlocked
+    );
+
+    if (url) {
+      await proxyClient.Page.navigate({ url });
+      await waitForLoadEvent(proxyClient, 20_000);
+    }
+
+    return proxyClient;
+  } catch (error) {
+    await closeSession();
+    throw error;
+  }
 }
 
 /**

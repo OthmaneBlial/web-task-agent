@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import test from "node:test";
 
-import { locateElement, trackNetworkActivity, waitForNetworkIdle } from "../lib/cdp";
+import {
+  closePageSessionResources,
+  locateElement,
+  trackNetworkActivity,
+  waitForNetworkIdle
+} from "../lib/cdp";
 import { humanClick } from "../lib/humanizer";
 import type { CDPClient } from "../types";
 
@@ -63,6 +68,49 @@ test("click reports ambiguous matches without scrolling the page", async () => {
 
   await assert.rejects(humanClick(client, "css=.target"), /matched 5001 elements/);
   assert.equal(evaluationCount(), 1);
+});
+
+test("page session cleanup disposes its context even if target close fails", async () => {
+  const calls: string[] = [];
+  const client = {
+    Target: {
+      closeTarget: async ({ targetId }: { targetId: string }) => {
+        calls.push(`target:${targetId}`);
+        throw new Error("target already closed");
+      },
+      disposeBrowserContext: async ({ browserContextId }: { browserContextId: string }) => {
+        calls.push(`context:${browserContextId}`);
+      }
+    },
+    close: async () => calls.push("connection")
+  } as unknown as CDPClient;
+
+  await closePageSessionResources(client, "target-1", "context-1", () => calls.push("listeners"));
+
+  assert.deepEqual(calls, [
+    "listeners",
+    "target:target-1",
+    "context:context-1",
+    "connection"
+  ]);
+});
+
+test("page session cleanup disposes a partially-created context and closes the connection", async () => {
+  const calls: string[] = [];
+  const client = {
+    Target: {
+      closeTarget: async () => calls.push("unexpected target close"),
+      disposeBrowserContext: async ({ browserContextId }: { browserContextId: string }) => {
+        calls.push(`context:${browserContextId}`);
+        throw new Error("context already disposed");
+      }
+    },
+    close: async () => calls.push("connection")
+  } as unknown as CDPClient;
+
+  await closePageSessionResources(client, undefined, "context-2", () => calls.push("listeners"));
+
+  assert.deepEqual(calls, ["listeners", "context:context-2", "connection"]);
 });
 
 test("network idle ignores malformed request IDs and removes its listeners", async () => {
