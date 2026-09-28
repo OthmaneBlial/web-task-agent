@@ -416,7 +416,8 @@ export function listQueuedJobs(options?: {
         priority ASC,
         attempts ASC,
         run_after ASC,
-        created_at ASC
+        created_at ASC,
+        id ASC
       LIMIT ?
     `).all(
       options?.status ?? null,
@@ -700,7 +701,7 @@ export function claimNextQueuedJob(input: {
         FROM queued_jobs
         WHERE status = 'queued'
           AND run_after <= ?
-        ORDER BY priority ASC, created_at ASC
+        ORDER BY priority ASC, created_at ASC, id ASC
         LIMIT 1
       `).get(timestamp) as Record<string, unknown> | undefined;
 

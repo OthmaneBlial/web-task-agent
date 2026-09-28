@@ -15,6 +15,7 @@ import {
   getQueuedJob,
   getQueuedJobSummary,
   heartbeatQueuedJob,
+  listQueuedJobs,
   ownsQueuedJobLease,
   recoverStaleQueuedJobs
 } from "../lib/job-queue";
@@ -162,6 +163,39 @@ test("stale queue recovery preserves a pending pause for the replacement worker"
       leaseTtlSeconds: 60
     });
     assert.equal(reclaimed?.controlAction, "pause");
+  } finally {
+    db?.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("queue listing and claiming use a stable ID tie-breaker", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-order-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  let db: DatabaseSync | null = null;
+
+  try {
+    const queueIds = ["first", "second"].map((label) => enqueueQueuedAgentJob({
+      databasePath,
+      payload: {
+        taskType: "agent",
+        mode: "agent",
+        label,
+        options: { instruction: "Test stable queue ordering", resume: false }
+      }
+    }).queueId).sort();
+    db = new DatabaseSync(databasePath);
+    db.prepare("UPDATE queued_jobs SET created_at = ?, run_after = ?")
+      .run("2000-01-01T00:00:00.000Z", "2000-01-01T00:00:00.000Z");
+
+    assert.deepEqual(
+      listQueuedJobs({ databasePath }).map((job) => job.queueId),
+      queueIds
+    );
+    assert.equal(
+      claimNextQueuedJob({ databasePath, workerId: "worker-order", leaseTtlSeconds: 60 })?.queueId,
+      queueIds[0]
+    );
   } finally {
     db?.close();
     fs.rmSync(tempDir, { recursive: true, force: true });
