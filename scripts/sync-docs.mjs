@@ -46,7 +46,6 @@ for (const snapshot of repositorySnapshots) {
 }
 
 const sourceFiles = walk(sourceRoot);
-const sourceRelativePaths = new Set(sourceFiles.map((filePath) => path.relative(sourceRoot, filePath)));
 
 for (const sourcePath of sourceFiles) {
   const relativePath = path.relative(sourceRoot, sourcePath);
@@ -65,22 +64,9 @@ for (const sourcePath of sourceFiles) {
   }
 }
 
-if (fs.existsSync(targetRoot)) {
-  for (const targetPath of walk(targetRoot)) {
-    const relativePath = path.relative(targetRoot, targetPath);
-    if (sourceRelativePaths.has(relativePath)) {
-      continue;
-    }
-    differences.push(relativePath);
-    if (!checkOnly) {
-      fs.rmSync(targetPath);
-    }
-  }
-}
-
 if (checkOnly && differences.length > 0) {
   throw new Error(
-    `site/ is not the generated mirror of docs/. Run npm run generate:docs. Drifted files:\n${differences
+    `site/ documentation copies differ from docs/. Run npm run generate:docs. Drifted files:\n${differences
       .sort()
       .map((filePath) => `- ${filePath}`)
       .join("\n")}`
@@ -89,6 +75,6 @@ if (checkOnly && differences.length > 0) {
 
 console.log(
   differences.length === 0
-    ? "Documentation mirror is up to date."
-    : `Synchronized ${differences.length} documentation file(s) from docs/ to site/.`
+    ? "Documentation copies are up to date; site-only files were preserved."
+    : `Synchronized ${differences.length} documentation file(s) from docs/ to site/; site-only files were preserved.`
 );

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { webcrypto } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import vm from "node:vm";
 import test from "node:test";
 
@@ -120,6 +123,30 @@ test("local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe 
     "verifier.js"
   ]);
   assert.ok(fs.statSync("docs/assets/decision-receipt-verifier.js").size < 40_000);
+});
+
+test("documentation sync preserves site-only files", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-docs-sync-"));
+  try {
+    fs.mkdirSync(path.join(root, "docs", "content"), { recursive: true });
+    fs.mkdirSync(path.join(root, "site"), { recursive: true });
+    fs.writeFileSync(path.join(root, "README.md"), "readme\n");
+    fs.writeFileSync(path.join(root, "ROADMAP.md"), "roadmap\n");
+    fs.writeFileSync(path.join(root, "docs", "index.html"), "updated\n");
+    fs.writeFileSync(path.join(root, "site", "index.html"), "old\n");
+    fs.writeFileSync(path.join(root, "site", "custom.txt"), "keep\n");
+
+    const script = path.resolve("scripts/sync-docs.mjs");
+    const sync = spawnSync(process.execPath, [script], { cwd: root, encoding: "utf8" });
+    assert.equal(sync.status, 0, sync.stderr);
+    assert.equal(fs.readFileSync(path.join(root, "site", "index.html"), "utf8"), "updated\n");
+    assert.equal(fs.readFileSync(path.join(root, "site", "custom.txt"), "utf8"), "keep\n");
+
+    const check = spawnSync(process.execPath, [script, "--check"], { cwd: root, encoding: "utf8" });
+    assert.equal(check.status, 0, check.stderr);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("embedded valid, tampered, and changed fixtures preserve their promised outcomes", async () => {
