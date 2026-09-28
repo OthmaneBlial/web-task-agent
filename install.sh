@@ -351,7 +351,6 @@ install_app() {
     env_backup=""
   fi
 
-  rm -rf "${APP_DIR}"
   mkdir -p "${APP_DIR}"
   cp -R "${stage_dir}/." "${APP_DIR}/"
   rm -rf "${stage_dir}"
