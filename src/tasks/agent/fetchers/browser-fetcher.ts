@@ -77,25 +77,49 @@ export class BrowserPageFetcher implements AgentFetcher {
     return evaluateInBrowser<AgentPageDigest>(
       client,
       `() => {
-        const normalize = (value) => (value || "").replace(/\\s+/g, " ").trim();
-        const meta = (selector) => normalize(document.querySelector(selector)?.getAttribute("content")) || "";
+        const normalize = (value, maxChars = 1000) =>
+          (value || "").slice(0, maxChars).replace(/\\s+/g, " ").trim();
+        const meta = (selector, maxChars) =>
+          normalize(document.querySelector(selector)?.getAttribute("content"), maxChars) || "";
+        // ponytail: 100 elements per selector and 200 text nodes per field; raise if source fixtures show missed evidence.
+        const readText = (element, maxChars) => {
+          if (!element) return "";
+          const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+          let value = "";
+          let nodesRead = 0;
+          for (let node = walker.nextNode(); node && value.length < maxChars && nodesRead < 200; node = walker.nextNode()) {
+            nodesRead += 1;
+            value += (node.nodeValue || "").slice(0, maxChars - value.length);
+          }
+          return value;
+        };
+        const headings = [];
+        let headingNodesRead = 0;
+        for (const node of document.querySelectorAll("h2, h3")) {
+          if (headings.length >= 6 || headingNodesRead >= 100) break;
+          headingNodesRead += 1;
+          const text = normalize(readText(node, 500), 500);
+          if (text.length > 4) headings.push(text);
+        }
+        const paragraphs = [];
+        let paragraphNodesRead = 0;
+        for (const node of document.querySelectorAll("main p, article p, p")) {
+          if (paragraphs.length >= 4 || paragraphNodesRead >= 100) break;
+          paragraphNodesRead += 1;
+          const text = normalize(readText(node, 8000), 8000);
+          if (text.length >= 80) paragraphs.push(text);
+        }
 
         return {
-          title: normalize(document.title) || window.location.hostname,
+          title: normalize(document.title, 500) || window.location.hostname,
           url: window.location.href,
           description:
-            meta('meta[name="description"]') ||
-            meta('meta[property="og:description"]') ||
+            meta('meta[name="description"]', 1000) ||
+            meta('meta[property="og:description"]', 1000) ||
             "",
-          h1: normalize(document.querySelector("h1")?.textContent) || null,
-          headings: Array.from(document.querySelectorAll("h2, h3"))
-            .map((node) => normalize(node.textContent))
-            .filter((text) => text.length > 4)
-            .slice(0, 6),
-          paragraphs: Array.from(document.querySelectorAll("main p, article p, p"))
-            .map((node) => normalize(node.textContent))
-            .filter((text) => text.length >= 80)
-            .slice(0, 4),
+          h1: normalize(readText(document.querySelector("h1"), 500), 500) || null,
+          headings,
+          paragraphs,
           capturedAt: new Date().toISOString()
         };
       }`

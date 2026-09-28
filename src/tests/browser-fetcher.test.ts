@@ -1,10 +1,99 @@
 import assert from "node:assert/strict";
+import vm from "node:vm";
 import test from "node:test";
 
 import { SourceAcquisitionPolicy } from "../lib/source-acquisition-policy";
 import { BrowserPageFetcher } from "../tasks/agent/fetchers/browser-fetcher";
 
 const cdpModule = require("../lib/cdp") as typeof import("../lib/cdp");
+
+test("browser page digest bounds remote text and stops scanning after its limits", async () => {
+  const headingsRead = { count: 0 };
+  const paragraphsRead = { count: 0 };
+  const oversizedText = "Useful article evidence. ".repeat(10_000);
+  const textNodeReads = { count: 0 };
+  const elementWithText = (counter?: { count: number }) => {
+    const textNode = {
+      get nodeValue() {
+        textNodeReads.count += 1;
+        return oversizedText;
+      }
+    };
+    return {
+      get textContent() {
+        if (counter) counter.count += 1;
+        return oversizedText;
+      },
+      get textNode() {
+        if (counter) counter.count += 1;
+        return textNode;
+      }
+    };
+  };
+  const document = {
+    title: oversizedText,
+    querySelector(selector: string) {
+      if (selector.startsWith("meta[")) {
+        return { getAttribute: () => oversizedText };
+      }
+      return elementWithText();
+    },
+    querySelectorAll(selector: string) {
+      const size = 1_000;
+      if (selector === "h2, h3") {
+        return Array.from({ length: size }, () => elementWithText(headingsRead));
+      }
+      return Array.from({ length: size }, () => elementWithText(paragraphsRead));
+    },
+    createTreeWalker(element: { textNode: unknown }) {
+      let read = false;
+      return {
+        nextNode() {
+          if (read) return null;
+          read = true;
+          return element.textNode;
+        }
+      };
+    }
+  };
+  const client = {
+    Runtime: {
+      enable: async () => undefined,
+      evaluate: async ({ expression }: { expression: string }) => ({
+        result: {
+          value: await vm.runInNewContext(expression, {
+            document,
+            NodeFilter: { SHOW_TEXT: 4 },
+            window: { location: { href: "https://docs.example.com/article", hostname: "docs.example.com" } }
+          })
+        }
+      })
+    }
+  };
+  const fetcher = new BrowserPageFetcher(() => undefined);
+  const scrape = (fetcher as unknown as {
+    scrapePageDigest(value: unknown): Promise<{
+      title: string;
+      description: string;
+      h1: string | null;
+      headings: string[];
+      paragraphs: string[];
+    }>;
+  }).scrapePageDigest.bind(fetcher);
+
+  const page = await scrape(client);
+
+  assert.ok(page.title.length <= 500);
+  assert.ok(page.description.length <= 1000);
+  assert.ok((page.h1?.length ?? 0) <= 500);
+  assert.equal(page.headings.length, 6);
+  assert.ok(page.headings.every((heading) => heading.length <= 500));
+  assert.equal(headingsRead.count, 6);
+  assert.equal(page.paragraphs.length, 4);
+  assert.ok(page.paragraphs.every((paragraph) => paragraph.length <= 8000));
+  assert.equal(paragraphsRead.count, 4);
+  assert.equal(textNodeReads.count, 11);
+});
 
 test("browser fetcher records browser-session failures as error results", async () => {
   const events: string[] = [];
