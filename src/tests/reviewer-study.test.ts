@@ -106,3 +106,27 @@ test("reviewer study rejects assignment drift and documents the honest zero base
   assert.match(readme, /no superiority claim/);
   assert.match(readme, /Current real participant count: \*\*0\*\*/);
 });
+
+test("reviewer study generation preserves unrelated case files", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-reviewer-study-generation-"));
+  const packagePath = path.join(tempRoot, "packages", "decision-receipt");
+  const studyScriptCopy = path.join(tempRoot, "scripts", "generate-reviewer-study.mjs");
+  const nodeModulesLink = path.join(tempRoot, "node_modules");
+  const extraPath = path.join(tempRoot, "studies", "reviewer-value", "materials", "case-a", "operator-note.txt");
+  try {
+    fs.mkdirSync(path.dirname(studyScriptCopy), { recursive: true });
+    fs.mkdirSync(path.dirname(packagePath), { recursive: true });
+    fs.mkdirSync(path.dirname(extraPath), { recursive: true });
+    fs.cpSync(path.join(root, "packages", "decision-receipt", "dist"), path.join(packagePath, "dist"), { recursive: true });
+    fs.copyFileSync(path.join(root, "scripts", "generate-reviewer-study.mjs"), studyScriptCopy);
+    fs.symlinkSync(path.join(root, "node_modules"), nodeModulesLink, "dir");
+    fs.writeFileSync(extraPath, "keep this file\n", "utf8");
+
+    const generated = spawnSync(process.execPath, [studyScriptCopy], { cwd: tempRoot, encoding: "utf8" });
+    assert.equal(generated.status, 0, generated.stderr);
+    assert.equal(fs.readFileSync(extraPath, "utf8"), "keep this file\n");
+  } finally {
+    if (fs.existsSync(nodeModulesLink)) fs.unlinkSync(nodeModulesLink);
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});

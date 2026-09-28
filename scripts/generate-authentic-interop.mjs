@@ -31,8 +31,7 @@ for (const run of runs) {
   const result = requireDecisionReceiptAdapterResult(adapt(raw));
   fs.writeFileSync(path.join(runDir, "adapter-result.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
   const receiptDir = path.join(runDir, "receipt");
-  if (fs.existsSync(receiptDir)) fs.rmSync(receiptDir, { recursive: true });
-  importExternalDecisionResult({ result, outputDir: receiptDir });
+  importExternalDecisionResult({ result, outputDir: receiptDir, force: true });
   const verification = verifyReceiptDirectory(receiptDir);
   if (!verification.valid) throw new Error(`${run.id} receipt failed verification: ${verification.errors.join("; ")}`);
   process.stdout.write(`Generated and verified authentic ${run.id} receipt.\n`);

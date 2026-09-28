@@ -284,8 +284,6 @@ function zipBase64(files) {
 const publicCases = {};
 
 for (const studyCase of cases) {
-  const caseRoot = path.join(studyRoot, "materials", studyCase.id);
-  fs.rmSync(caseRoot, { recursive: true, force: true });
   write(`materials/${studyCase.id}/report.md`, markdownReport(studyCase));
   const bundle = bundleFiles(studyCase);
   for (const [filePath, content] of Object.entries(bundle.valid)) {

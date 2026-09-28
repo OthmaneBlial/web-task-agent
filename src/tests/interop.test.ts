@@ -73,6 +73,20 @@ test("invalid forced imports preserve the existing verified receipt package", ()
   }
 });
 
+test("forced receipt regeneration preserves unrelated files", () => {
+  const input = JSON.parse(fs.readFileSync(path.join(process.cwd(), "examples", "interop", "browser-use-result.json"), "utf8")) as DecisionReceiptAdapterResult;
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-interop-extra-file-"));
+  try {
+    const extraPath = path.join(outputDir, "operator-note.txt");
+    fs.writeFileSync(extraPath, "keep this file\n", "utf8");
+    importExternalDecisionResult({ result: input, outputDir, force: true });
+    assert.equal(fs.readFileSync(extraPath, "utf8"), "keep this file\n");
+    assert.equal(verifyReceiptDirectory(outputDir).valid, true);
+  } finally {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  }
+});
+
 test("interop adapter preserves the source boundary", () => {
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-interop-unsafe-"));
   try {
