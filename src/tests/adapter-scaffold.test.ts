@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -25,6 +25,12 @@ test("adapter generator creates a strict scaffold whose fixture passes the share
     assert.equal(validation.result?.producer.engineVersion, "1.2.3");
     assert.ok(validation.result?.sources.every((source) => source.origin.kind === "captured"));
     assert.ok(validation.result?.claims.every((claim) => claim.origin.kind === "imported"));
+    const oversizedInput = path.join(root, "oversized.json");
+    fs.writeFileSync(oversizedInput, Buffer.alloc(2 * 1024 * 1024 + 1, 0x20));
+    const oversized = spawnSync(process.execPath, [written.adapterPath, oversizedInput], { encoding: "utf8" });
+    assert.equal(oversized.status, 1);
+    assert.match(oversized.stderr, /raw result exceeds the 2 MB limit/);
+    assert.equal(oversized.stdout, "");
     assert.throws(() => createAdapterScaffold({
       id: "Sample Engine",
       engine: "Sample Engine",

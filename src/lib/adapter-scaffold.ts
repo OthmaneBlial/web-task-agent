@@ -97,8 +97,24 @@ export function adapt(raw) {
 if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   const inputPath = process.argv[2];
   if (!inputPath) throw new Error("usage: node adapter.mjs <raw-result.json>");
-  const raw = JSON.parse(fs.readFileSync(inputPath, "utf8"));
-  process.stdout.write(\`${"${JSON.stringify(adapt(raw), null, 2)}"}\\n\`);
+  const descriptor = fs.openSync(inputPath, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
+  try {
+    const stats = fs.fstatSync(descriptor);
+    if (!stats.isFile()) throw new Error("raw result must be a regular file");
+    if (stats.size > 2 * 1024 * 1024) throw new Error("raw result exceeds the 2 MB limit");
+    const bytes = Buffer.allocUnsafe(stats.size + 1);
+    let length = 0;
+    while (length < bytes.length) {
+      const count = fs.readSync(descriptor, bytes, length, bytes.length - length, null);
+      if (count === 0) break;
+      length += count;
+    }
+    if (length !== stats.size) throw new Error("raw result changed while reading");
+    const raw = JSON.parse(bytes.toString("utf8", 0, length));
+    process.stdout.write(\`${"${JSON.stringify(adapt(raw), null, 2)}"}\\n\`);
+  } finally {
+    fs.closeSync(descriptor);
+  }
 }
 `;
   const fixture = {
@@ -136,7 +152,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process
 4. Never accept cookies, sessions, credentials, authenticated URLs, provider prompts, executable instructions, or tool calls.
 5. Validate output with \`web-task-agent receipt adapter validate output.json\`, then import it and verify the resulting receipt.
 
-The generated raw fixture is synthetic. Replace it only with redistributable evidence and document the engine version, command, limitations, and consent boundary.
+The generated raw fixture is synthetic. Input files are limited to 2 MB. Replace it only with redistributable evidence and document the engine version, command, limitations, and consent boundary.
 `;
   writeTextAtomic(adapterPath, adapterSource);
   writeTextAtomic(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`);
