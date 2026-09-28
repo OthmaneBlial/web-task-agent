@@ -15,7 +15,9 @@ import {
 } from "../lib/job-store";
 import {
   claimNextQueuedJob,
+  controlQueuedJob,
   enqueueQueuedAgentJob,
+  getQueuedJob,
   ownsQueuedJobLease,
   recoverStaleQueuedJobs
 } from "../lib/job-queue";
@@ -534,6 +536,80 @@ function persistEvidenceFixture(databasePath: string, state: AgentRunState): voi
     ]
   });
 }
+
+test("agent runner honors queue pause requested before the job is linked", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-runner-early-pause-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const cachePath = path.join(tempDir, "agent-cache.json");
+  const reportPath = path.join(tempDir, "artifacts", "report.md");
+  const previousEnv = {
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    baseUrl: process.env.ANTHROPIC_BASE_URL,
+    databasePath: process.env.WEB_TASK_AGENT_DB_PATH
+  };
+
+  process.env.ANTHROPIC_API_KEY = "test-key";
+  process.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:1";
+  process.env.WEB_TASK_AGENT_DB_PATH = databasePath;
+
+  const restoreStubs = installRunnerTestStubs(() => {
+    assert.fail("runner started research despite the pending queue pause");
+  });
+
+  try {
+    const queued = enqueueQueuedAgentJob({
+      databasePath,
+      payload: {
+        taskType: "agent",
+        mode: "agent",
+        label: "Early pause test",
+        options: {
+          instruction: "Pause before the job ID is linked",
+          resume: true,
+          cachePath,
+          reportPath
+        }
+      }
+    });
+    assert.ok(claimNextQueuedJob({
+      databasePath,
+      workerId: "worker-early-pause",
+      leaseTtlSeconds: 60
+    }));
+    const pendingQueueJob = controlQueuedJob({
+      databasePath,
+      queueId: queued.queueId,
+      action: "pause"
+    });
+    assert.equal(pendingQueueJob?.jobId, null);
+    assert.equal(pendingQueueJob?.controlAction, "pause");
+
+    const state = createState({
+      runId: "job_early_queue_pause",
+      reportPath,
+      plan: createPlan({ researchQueries: ["must not start before pause"] })
+    });
+    saveTaskState("agent", cachePath, state);
+    const result = await createRunner(cachePath, reportPath, {
+      queuedJobId: queued.queueId,
+      queueWorkerId: "worker-early-pause",
+      queueDatabasePath: databasePath
+    }).run();
+    assert.equal(result.status, "paused");
+    assert.equal(loadTaskState<AgentRunState>(cachePath).status, "paused");
+    const linkedQueueJob = getQueuedJob({ databasePath, queueId: queued.queueId });
+    assert.equal(linkedQueueJob?.jobId, state.runId);
+    assert.equal(linkedQueueJob?.controlAction, "pause");
+    assert.equal(getStoredJobDetail({ databasePath, jobId: state.runId })?.job.status, "paused");
+  } finally {
+    restoreStubs();
+    closeSharedJobDatabase(databasePath);
+    process.env.ANTHROPIC_API_KEY = previousEnv.apiKey;
+    process.env.ANTHROPIC_BASE_URL = previousEnv.baseUrl;
+    process.env.WEB_TASK_AGENT_DB_PATH = previousEnv.databasePath;
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
 
 test("agent runner pauses cleanly during research checkpoints", async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-runner-pause-"));

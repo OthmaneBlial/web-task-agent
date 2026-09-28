@@ -15,7 +15,7 @@ import { loadAgentMemory } from "../lib/agent-memory";
 import { JobStore } from "../lib/job-store";
 import { LlmService } from "../lib/llm";
 import { createPromptTraceRecorder } from "../lib/prompt-trace";
-import { linkQueuedJobToJob, ownsQueuedJobLease } from "../lib/job-queue";
+import { getQueuedJob, linkQueuedJobToJob, ownsQueuedJobLease } from "../lib/job-queue";
 import type {
   AgentCommentsDraft,
   AgentEvidenceBundle,
@@ -599,18 +599,25 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
     this.assertQueueLeaseOwned();
     jobStore.assertExecutionLeaseOwned();
     const pending = jobStore.getPendingControlAction();
-    if (!pending) {
+    const queuedJob = this.options.queuedJobId
+      ? getQueuedJob({
+          databasePath: this.options.queueDatabasePath,
+          queueId: this.options.queuedJobId
+        })
+      : null;
+    const action = pending?.action ?? queuedJob?.controlAction;
+    if (!action) {
       return;
     }
 
     appendNote(
       state,
-      pending.action === "pause"
+      action === "pause"
         ? "Pause requested by operator. Saving progress and pausing the job."
         : "Cancel requested by operator. Saving progress and stopping the job."
     );
     this.saveState(cachePath, state);
-    throw new JobControlSignal(pending.action);
+    throw new JobControlSignal(action);
   }
 
   private syncArtifacts(jobStore: JobStore, state: AgentRunState): void {
