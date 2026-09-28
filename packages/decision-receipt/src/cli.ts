@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import {
@@ -128,6 +129,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  process.stderr.write(`decision-receipt: ${redactSensitiveText(error instanceof Error ? error.message : String(error))}\n`);
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  process.stderr.write("decision-receipt: " + redactSensitiveText(errorMessage, [os.homedir()]) + "\n");
   process.exitCode = 1;
 });

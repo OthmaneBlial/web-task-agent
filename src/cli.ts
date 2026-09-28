@@ -1245,7 +1245,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .description("Export a local job as shareable Markdown, JSON, or source CSV; no data leaves this machine")
     .option("--format <format>", "Export format: markdown, json, or csv", "markdown")
     .option("--output <path>", "Destination file path")
-    .option("--redact", "Redact recognized secrets before previewing or writing")
+    .option("--redact", "Redact credentials, emails, local paths, and secret environment values")
     .option("--dry-run", "Preview exactly what would be exported without writing")
     .option("--force", "Replace an existing export file")
     .action((jobId, options) => {
@@ -1277,7 +1277,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .description("Compare two local jobs for source and conclusion changes without sending data anywhere")
     .option("--format <format>", "Comparison format: markdown or json", "markdown")
     .option("--output <path>", "Destination file path")
-    .option("--redact", "Redact recognized secrets before previewing or writing")
+    .option("--redact", "Redact credentials, emails, local paths, and secret environment values")
     .option("--dry-run", "Preview the comparison export without writing")
     .option("--force", "Replace an existing comparison file")
     .action((leftJobId, rightJobId, options) => {

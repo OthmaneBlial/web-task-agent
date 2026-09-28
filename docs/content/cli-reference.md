@@ -151,7 +151,7 @@ web-task-agent job export <job-id> --format csv --output ./sources.csv
 web-task-agent job compare <earlier-job-id> <later-job-id> --redact --dry-run
 ```
 
-`--dry-run` previews the destination, source count, format, and redaction setting without writing a file. A comparison identifies new, disappeared, and changed cached sources, including metadata changes at an existing URL, plus report and decision-excerpt changes. CSV text that could start a spreadsheet formula gets a leading tab; that tab is part of the exported value. Redaction recognizes common API, GitHub, AWS, and bearer-token patterns; it is a safety aid, not a license to share data the operator has not reviewed.
+`--dry-run` previews the destination, source count, format, and redaction setting without writing a file. A comparison identifies new, disappeared, and changed cached sources, including metadata changes at an existing URL, plus report and decision-excerpt changes. CSV text that could start a spreadsheet formula gets a leading tab; that tab is part of the exported value. Redaction masks recognizable credentials, configured secret environment values, emails, and local paths. Review every export; detection is not complete.
 
 ## Failure Messages
 

@@ -47,14 +47,45 @@ test("redaction removes common API and GitHub tokens from text and nested log de
   );
   assert.match(redactSensitiveText("AWS_SECRET_ACCESS_KEY=example-aws-secret"), /\[REDACTED\]/);
 
+  const previousSecret = process.env.WEB_TASK_AGENT_API_KEY;
+  process.env.WEB_TASK_AGENT_API_KEY = "example-local-env-secret-value";
+  try {
+    const privateText = redactSensitiveText(
+      "contact alice@example.test; token " + process.env.WEB_TASK_AGENT_API_KEY + "; file " +
+      path.join(os.homedir(), "client", "report.md")
+    );
+    assert.match(privateText, /\[REDACTED_EMAIL\]/);
+    assert.match(privateText, /\[REDACTED\]/);
+    assert.match(privateText, /\[LOCAL_PATH\]/);
+    assert.doesNotMatch(privateText, /alice@example\.test|example-local-env-secret-value/);
+    assert.equal(privateText.includes(os.homedir()), false);
+  } finally {
+    if (previousSecret === undefined) delete process.env.WEB_TASK_AGENT_API_KEY;
+    else process.env.WEB_TASK_AGENT_API_KEY = previousSecret;
+  }
+
   assert.deepEqual(
     redactSensitiveValue({
       apiKey: "example-provider-key",
-      nested: { refreshToken: "plain-refresh-token", password: "plain-password", tokenCount: 3 }
+      nested: {
+        refreshToken: "plain-refresh-token",
+        password: "plain-password",
+        tokenCount: 3,
+        reportPath: path.join(os.homedir(), "client", "report.md"),
+        evidencePath: "evidence/source.md",
+        email: "alice@example.test"
+      }
     }),
     {
       apiKey: "[REDACTED]",
-      nested: { refreshToken: "[REDACTED]", password: "[REDACTED]", tokenCount: 3 }
+      nested: {
+        refreshToken: "[REDACTED]",
+        password: "[REDACTED]",
+        tokenCount: 3,
+        reportPath: "[LOCAL_PATH]",
+        evidencePath: "evidence/source.md",
+        email: "[REDACTED_EMAIL]"
+      }
     }
   );
 });

@@ -6,9 +6,25 @@ const SECRET_PATTERNS: RegExp[] = [
   /\bBasic\s+[A-Za-z0-9+/=]{12,}/gi,
   /\b((?:[A-Z0-9]+[_-])*(?:API[_-]?(?:KEY|TOKEN)|ACCESS[_-]?(?:KEY|TOKEN)|AUTH(?:ORIZATION|[_-]?TOKEN)|CLIENT[_-]?SECRET|PRIVATE[_-]?KEY|PASSWORD|PASSPHRASE|SECRET|TOKEN|COOKIE|CREDENTIALS?))(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s"'&,;]+)/gi
 ];
+const EMAIL_ADDRESS_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 
-export function redactSensitiveText(value: string): string {
+function escapeRegExp(value: string): string {
+  return value.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+}
+
+export function redactSensitiveText(
+  value: string,
+  localPaths: readonly string[] = [],
+  sensitiveValues: readonly string[] = []
+): string {
   let output = value;
+  for (const sensitiveValue of sensitiveValues.filter((item) => item.length >= 8).sort((a, b) => b.length - a.length)) {
+    output = output.replaceAll(sensitiveValue, "[REDACTED]");
+  }
+  for (const localPath of new Set(localPaths.filter((item) => item.length >= 4))) {
+    const pathPattern = new RegExp(escapeRegExp(localPath) + "(?:[\\\\/][^\\s\"'<>;,)]*)*", "g");
+    output = output.replace(pathPattern, "[LOCAL_PATH]");
+  }
   for (const pattern of SECRET_PATTERNS) {
     output = output.replace(pattern, (match, key: unknown, separator: unknown) => {
       if (typeof key !== "string" || typeof separator !== "string") return "[REDACTED]";
@@ -19,5 +35,5 @@ export function redactSensitiveText(value: string): string {
       return `${key}${separator}${quote}[REDACTED]${quote}`;
     });
   }
-  return output;
+  return output.replace(EMAIL_ADDRESS_PATTERN, "[REDACTED_EMAIL]");
 }

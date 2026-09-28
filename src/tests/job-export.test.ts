@@ -83,6 +83,19 @@ test("job export renders local source data in Markdown, JSON, and CSV with redac
     assert.match(renderJobExport(data, "csv"), /https:\/\/docs\.example\.com\/guide/);
     assert.doesNotMatch(renderJobExport(data, "json", true), /ghp_abcdefghijklmnop/);
 
+    const privateData = structuredClone(data);
+    privateData.job.reportPath = path.join(os.homedir(), "customer", "report.md");
+    privateData.artifacts.push({
+      key: "report",
+      type: "markdown",
+      path: path.join(os.homedir(), "customer", "report.md")
+    });
+    privateData.decisionExcerpt = "Contact alice@example.test for the private report.";
+    const redacted = renderJobExport(privateData, "json", true);
+    assert.match(redacted, /\[LOCAL_PATH\]/);
+    assert.match(redacted, /\[REDACTED_EMAIL\]/);
+    assert.doesNotMatch(redacted, /alice@example\.test|customer[\\/]report\.md/);
+
     const hostile = structuredClone(data);
     const title = "![pixel](https://example.invalid/track) ``title``";
     const excerpt = "![pixel](https://example.invalid/track) ``decision``";
