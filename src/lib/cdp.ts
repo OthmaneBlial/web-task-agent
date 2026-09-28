@@ -20,6 +20,7 @@ export const DEBUG_PORT = Number(process.env.CDP_PORT ?? process.env.CHROME_PORT
 const execFileAsync = promisify(execFile);
 const LIGHTPANDA_START_SCRIPT = path.resolve(__dirname, "../../scripts/start-lightpanda.sh");
 const CDP_COMMAND_TIMEOUT_MS = 30_000;
+const CDP_CLEANUP_TIMEOUT_MS = 5_000;
 
 type CdpEventListener = (...args: unknown[]) => void;
 
@@ -415,7 +416,8 @@ export async function closePageSessionResources(
   client: CDP.Client,
   targetId: string | undefined,
   browserContextId: string | undefined,
-  stopTrackingNetworkActivity: () => void
+  stopTrackingNetworkActivity: () => void,
+  cleanupTimeoutMs: number = CDP_CLEANUP_TIMEOUT_MS
 ): Promise<void> {
   try {
     stopTrackingNetworkActivity();
@@ -424,7 +426,11 @@ export async function closePageSessionResources(
   }
   if (targetId) {
     try {
-      await waitForCdpCommand(client.Target.closeTarget({ targetId }), "Target.closeTarget");
+      await waitForCdpCommand(
+        client.Target.closeTarget({ targetId }),
+        "Target.closeTarget",
+        cleanupTimeoutMs
+      );
     } catch {
       // Continue disposing the context if the target already closed.
     }
@@ -433,7 +439,8 @@ export async function closePageSessionResources(
     try {
       await waitForCdpCommand(
         client.Target.disposeBrowserContext({ browserContextId }),
-        "Target.disposeBrowserContext"
+        "Target.disposeBrowserContext",
+        cleanupTimeoutMs
       );
     } catch {
       // The browser may already have disposed the context.

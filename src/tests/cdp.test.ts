@@ -128,6 +128,26 @@ test("page session cleanup disposes a partially-created context and closes the c
   assert.deepEqual(calls, ["listeners", "context:context-2", "connection"]);
 });
 
+test("page session cleanup continues after a stalled target close", async () => {
+  const calls: string[] = [];
+  const client = {
+    Target: {
+      closeTarget: async () => {
+        calls.push("target");
+        return new Promise<never>(() => {});
+      },
+      disposeBrowserContext: async ({ browserContextId }: { browserContextId: string }) => {
+        calls.push(`context:${browserContextId}`);
+      }
+    },
+    close: async () => calls.push("connection")
+  } as unknown as CDPClient;
+
+  await closePageSessionResources(client, "target-3", "context-3", () => calls.push("listeners"), 5);
+
+  assert.deepEqual(calls, ["listeners", "target", "context:context-3", "connection"]);
+});
+
 test("network idle ignores malformed request IDs and removes its listeners", async () => {
   const { client, listeners } = createNetworkEventClient();
 
