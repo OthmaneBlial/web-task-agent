@@ -992,6 +992,8 @@ function validateReceiptShape(
 
   const sources = Array.isArray(candidate.sources) ? candidate.sources : [];
   const sourceIds = new Set<string>();
+  const sourcesById = new Map<string, DecisionReceiptSource>();
+  const snapshotTextByPath = new Map<string, string>();
   for (const source of sources) {
     if (!source || typeof source !== "object") {
       errors.push("receipt contains a malformed source");
@@ -1002,6 +1004,7 @@ function validateReceiptShape(
       errors.push(`duplicate or empty source id: ${String(typed.id)}`);
     }
     sourceIds.add(typed.id);
+    if (typeof typed.id === "string" && !sourcesById.has(typed.id)) sourcesById.set(typed.id, typed);
     if (!validateHttpsUrl(String(typed.url))) {
       errors.push(`unsafe source URL for ${typed.id}: ${String(typed.url)}`);
     } else {
@@ -1056,11 +1059,18 @@ function validateReceiptShape(
       if (!trimText(String(reference.excerpt))) {
         errors.push(`claim ${typed.id} has an empty evidence excerpt`);
       }
-      const source = sources.find((item) => item && typeof item === "object" && (item as DecisionReceiptSource).id === reference.sourceId) as DecisionReceiptSource | undefined;
+      const source = sourcesById.get(reference.sourceId);
       if (source?.snapshotPath) {
         const snapshot = readFile.read(source.snapshotPath);
-        if (snapshot && !snapshot.toString("utf8").includes(reference.excerpt)) {
-          errors.push(`evidence excerpt ${reference.id} is absent from ${source.snapshotPath}`);
+        if (snapshot) {
+          let snapshotText = snapshotTextByPath.get(source.snapshotPath);
+          if (snapshotText === undefined) {
+            snapshotText = snapshot.toString("utf8");
+            snapshotTextByPath.set(source.snapshotPath, snapshotText);
+          }
+          if (!snapshotText.includes(reference.excerpt)) {
+            errors.push(`evidence excerpt ${reference.id} is absent from ${source.snapshotPath}`);
+          }
         }
       }
     }

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import type { DecisionReceipt } from "../../packages/decision-receipt/dist";
 import { listDemoFixtures, writeDemoPackage } from "../demos";
 import {
   compareDecisionReceipts,
@@ -30,6 +31,53 @@ test("deterministic demo packages include a verifiable decision receipt", () => 
     assert.ok(result.receipt?.claims.every((claim) => claim.evidence.length > 0));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("receipt verification checks multiple sources sharing one snapshot", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-shared-snapshot-"));
+  try {
+    writeDemoPackage({ id: "local-first-risk-review", outputDir: root });
+    const receiptPath = path.join(root, "receipt.json");
+    const manifestPath = path.join(root, "integrity-manifest.json");
+    const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8")) as DecisionReceipt;
+    const source = receipt.sources[0]!;
+    const snapshotPath = source.snapshotPath!;
+    const snapshotFile = path.join(root, snapshotPath);
+    const excerpt = "A second source can cite this same saved snapshot.";
+    fs.appendFileSync(snapshotFile, `\n${excerpt}\n`, "utf8");
+    source.snapshotSha256 = createHash("sha256").update(fs.readFileSync(snapshotFile)).digest("hex");
+    const secondSourceId = "source-shared-snapshot";
+    receipt.sources.push({ ...source, id: secondSourceId });
+    receipt.claims[0]!.evidence.push({
+      ...receipt.claims[0]!.evidence[0]!,
+      id: "evidence-shared-snapshot",
+      sourceId: secondSourceId,
+      excerpt
+    });
+
+    const refreshPackage = (): void => {
+      fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+        generatedAt: string;
+        files: Array<{ path: string }>;
+      };
+      writeReceiptIntegrityManifest({
+        rootDir: root,
+        files: manifest.files.map((entry) => path.join(root, entry.path)),
+        generatedAt: manifest.generatedAt
+      });
+    };
+    refreshPackage();
+    assert.equal(verifyReceiptDirectory(root).valid, true);
+
+    receipt.claims[0]!.evidence[1]!.excerpt = "missing from the shared snapshot";
+    refreshPackage();
+    const invalid = verifyReceiptDirectory(root);
+    assert.equal(invalid.valid, false);
+    assert.ok(invalid.errors.some((error) => error.includes("evidence-shared-snapshot")));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

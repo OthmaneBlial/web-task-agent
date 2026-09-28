@@ -52,6 +52,51 @@ test("standalone core verifies every public example and identifies the falsified
   assert.ok(malformed.issues.some((issue) => issue.code === "manifest_file_invalid"));
 });
 
+test("receipt bundle verification checks evidence by source when snapshots are shared", async () => {
+  const bundle = readBundle(path.join("packages", "decision-receipt", "examples", "minimal"));
+  const receipt = JSON.parse(String(bundle["receipt.json"])) as DecisionReceipt;
+  const source = receipt.sources[0]!;
+  const snapshotPath = source.snapshotPath!;
+  const excerpt = "A second source can cite this same saved snapshot.";
+  const snapshot = `${String(bundle[snapshotPath])}\n${excerpt}\n`;
+  const snapshotBytes = Buffer.from(snapshot);
+  source.snapshotSha256 = createHash("sha256").update(snapshotBytes).digest("hex");
+  bundle[snapshotPath] = snapshotBytes;
+  const secondSourceId = "source-shared-snapshot";
+  receipt.sources.push({ ...source, id: secondSourceId, title: "Second example source" });
+  receipt.claims[0]!.evidence.push({
+    ...receipt.claims[0]!.evidence[0]!,
+    id: "evidence-shared-snapshot",
+    sourceId: secondSourceId,
+    excerpt
+  });
+
+  const refreshBundle = (): void => {
+    const receiptBytes = Buffer.from(JSON.stringify(receipt));
+    bundle["receipt.json"] = receiptBytes;
+    const manifest = JSON.parse(String(bundle["integrity-manifest.json"])) as {
+      files: Array<{ path: string; sha256: string; bytes: number }>;
+    };
+    for (const filePath of ["receipt.json", snapshotPath]) {
+      const file = bundle[filePath]!;
+      const fileBytes = Buffer.from(typeof file === "string" ? file : new Uint8Array(file));
+      const entry = manifest.files.find((item) => item.path === filePath)!;
+      entry.sha256 = createHash("sha256").update(fileBytes).digest("hex");
+      entry.bytes = fileBytes.byteLength;
+    }
+    bundle["integrity-manifest.json"] = JSON.stringify(manifest);
+  };
+  refreshBundle();
+  const valid = await verifyReceiptBundle(bundle);
+  assert.equal(valid.valid, true, valid.errors.join("; "));
+
+  receipt.claims[0]!.evidence[1]!.excerpt = "missing from the shared snapshot";
+  refreshBundle();
+  const invalid = await verifyReceiptBundle(bundle);
+  assert.equal(invalid.valid, false);
+  assert.ok(invalid.issues.some((issue) => issue.code === "evidence_excerpt_absent" && issue.path.includes("evidence-shared-snapshot")));
+});
+
 test("standalone CLI redacts local home paths in errors", () => {
   const cliPath = path.resolve("packages", "decision-receipt", "dist", "cli.js");
   const missingPath = path.join(

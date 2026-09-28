@@ -3,6 +3,7 @@ import {
   DECISION_RECEIPT_SCHEMA_VERSION,
   DECISION_RECEIPT_SPEC_VERSION,
   type DecisionReceipt,
+  type DecisionReceiptEvidenceRef,
   type ReceiptBundle,
   type ReceiptBundleFile,
   type ReceiptBundleVerificationResult,
@@ -191,6 +192,15 @@ export async function verifyReceiptBundle(input: ReceiptBundle): Promise<Receipt
   }
 
   if (receipt) {
+    const evidenceBySourceId = new Map<string, Array<{ claimId: string; evidence: DecisionReceiptEvidenceRef }>>();
+    for (const claim of receipt.claims) {
+      for (const evidence of claim.evidence) {
+        const references = evidenceBySourceId.get(evidence.sourceId) ?? [];
+        references.push({ claimId: claim.id, evidence });
+        evidenceBySourceId.set(evidence.sourceId, references);
+      }
+    }
+    const snapshotTextByPath = new Map<string, string>();
     for (const source of receipt.sources) {
       if (!source.snapshotPath) continue;
       const snapshot = bundle[source.snapshotPath];
@@ -201,12 +211,14 @@ export async function verifyReceiptBundle(input: ReceiptBundle): Promise<Receipt
       if (source.snapshotSha256 && await sha256Hex(snapshot) !== source.snapshotSha256) {
         issue(issues, `/sources/${source.id}/snapshotSha256`, "snapshot_hash_mismatch", `Source snapshot hash mismatch: ${source.id}.`);
       }
-      const snapshotText = text(snapshot);
-      for (const claim of receipt.claims) {
-        for (const evidence of claim.evidence.filter((item) => item.sourceId === source.id)) {
-          if (!snapshotText.includes(evidence.excerpt)) {
-            issue(issues, `/claims/${claim.id}/evidence/${evidence.id}`, "evidence_excerpt_absent", `Evidence excerpt is absent from ${source.snapshotPath}.`);
-          }
+      let snapshotText = snapshotTextByPath.get(source.snapshotPath);
+      if (snapshotText === undefined) {
+        snapshotText = text(snapshot);
+        snapshotTextByPath.set(source.snapshotPath, snapshotText);
+      }
+      for (const { claimId, evidence } of evidenceBySourceId.get(source.id) ?? []) {
+        if (!snapshotText.includes(evidence.excerpt)) {
+          issue(issues, `/claims/${claimId}/evidence/${evidence.id}`, "evidence_excerpt_absent", `Evidence excerpt is absent from ${source.snapshotPath}.`);
         }
       }
     }
