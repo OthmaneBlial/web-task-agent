@@ -33,6 +33,7 @@ Set the domain request cap to `0` only to deliberately disable it. Domains on `W
 Use a redacted preview before writing an export:
 
 On POSIX systems, imported receipts, resumable cache files, and prompt traces use owner-only permissions (`0600`).
+SQLite databases and WAL/SHM files also use `0600`; the default database directory and newly created database directories use `0700`.
 
 ```bash
 web-task-agent job export <job-id> --format markdown --redact --dry-run

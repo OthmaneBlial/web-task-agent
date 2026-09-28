@@ -48,6 +48,24 @@ test("job store closes its database when schema initialization fails", () => {
   }
 });
 
+test("job store database and WAL files use private permissions", () => {
+  if (process.platform === "win32") return;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-private-database-"));
+  const databaseDir = path.join(tempDir, "private");
+  const databasePath = path.join(databaseDir, "jobs.sqlite");
+
+  try {
+    getJobStoreSchemaVersion({ databasePath });
+    assert.equal(fs.statSync(databaseDir).mode & 0o777, 0o700);
+    for (const filePath of [databasePath, `${databasePath}-wal`, `${databasePath}-shm`]) {
+      assert.equal(fs.statSync(filePath).mode & 0o777, 0o600);
+    }
+  } finally {
+    closeSharedJobDatabase(databasePath);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("job store maintenance tracks schema version, canonical urls, and artifact metadata", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-storage-policy-"));
   const databasePath = path.join(tempDir, "jobs.sqlite");
@@ -228,6 +246,9 @@ test("storage backup and restore preserve a consistent prior database with a saf
     });
     const restored = restoreJobStore({ databasePath, inputPath: backupPath, force: true });
     assert.ok(restored.safetyBackupPath);
+    if (process.platform !== "win32") {
+      assert.equal(fs.statSync(databasePath).mode & 0o777, 0o600);
+    }
     assert.equal(maintainJobStore({ databasePath }).jobs, 1);
 
     const unrelatedPath = path.join(tempDir, "unrelated.sqlite");

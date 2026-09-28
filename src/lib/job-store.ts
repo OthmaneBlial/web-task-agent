@@ -1018,7 +1018,30 @@ function scoreClusterTrend(input: {
 
 function ensureParentDir(filePath: string): void {
   const dirPath = path.dirname(filePath);
-  fs.mkdirSync(dirPath, { recursive: true });
+  fs.mkdirSync(dirPath, { recursive: true, mode: 0o700 });
+}
+
+export function secureJobDatabasePermissions(databasePath: string): void {
+  if (process.platform === "win32") return;
+  const databaseDir = path.dirname(path.resolve(databasePath));
+  if (databaseDir === path.dirname(DEFAULT_DATABASE_PATH)) {
+    const stats = fs.lstatSync(databaseDir);
+    if (stats.isSymbolicLink() || !stats.isDirectory()) {
+      throw new Error(`refusing unsafe job database directory: ${databaseDir}`);
+    }
+    fs.chmodSync(databaseDir, 0o700);
+  }
+  for (const filePath of [databasePath, `${databasePath}-wal`, `${databasePath}-shm`]) {
+    try {
+      const stats = fs.lstatSync(filePath);
+      if (stats.isSymbolicLink() || !stats.isFile() || stats.nlink > 1) {
+        throw new Error(`refusing unsafe job database artifact: ${filePath}`);
+      }
+      fs.chmodSync(filePath, 0o600);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
 }
 
 export function resolveJobDatabasePath(customPath?: string): string {
@@ -1253,6 +1276,7 @@ export function restoreJobStore(options: {
   const temporaryPath = `${databasePath}.restore-${process.pid}-${Date.now()}.tmp`;
   try {
     fs.copyFileSync(inputPath, temporaryPath, fs.constants.COPYFILE_EXCL);
+    if (process.platform !== "win32") fs.chmodSync(temporaryPath, 0o600);
     assertJobStoreBackupFile(temporaryPath);
     fs.renameSync(temporaryPath, databasePath);
   } finally {
@@ -1610,9 +1634,12 @@ function getDatabase(customPath?: string): { db: DatabaseSync; databasePath: str
 
   if (!sharedDatabase) {
     ensureParentDir(databasePath);
+    secureJobDatabasePermissions(databasePath);
     const database = new DatabaseSync(databasePath);
     try {
+      secureJobDatabasePermissions(databasePath);
       initializeSchema(database);
+      secureJobDatabasePermissions(databasePath);
     } catch (error) {
       try {
         database.close();

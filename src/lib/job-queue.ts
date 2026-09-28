@@ -4,7 +4,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 import type { AgentRunOptions, QueueControlAction } from "../types";
-import { resolveJobDatabasePath } from "./job-store";
+import { resolveJobDatabasePath, secureJobDatabasePermissions } from "./job-store";
 import { redactSensitiveText } from "./redaction";
 
 type QueuedJobStatus =
@@ -47,7 +47,7 @@ function nowIso(): string {
 }
 
 function ensureParentDir(filePath: string): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
 }
 
 function serializeJson(value: unknown): string {
@@ -238,9 +238,11 @@ export function getQueuedJobSummary(options?: {
 function getQueueDatabase(customPath?: string): { db: DatabaseSync; databasePath: string } {
   const databasePath = resolveJobDatabasePath(customPath);
   ensureParentDir(databasePath);
+  secureJobDatabasePermissions(databasePath);
   const db = new DatabaseSync(databasePath);
 
   try {
+    secureJobDatabasePermissions(databasePath);
     db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA foreign_keys = ON;
@@ -280,6 +282,7 @@ function getQueueDatabase(customPath?: string): { db: DatabaseSync; databasePath
       CREATE INDEX IF NOT EXISTS idx_queued_jobs_lease_expires_at ON queued_jobs(lease_expires_at);
       CREATE INDEX IF NOT EXISTS idx_queued_jobs_job_id ON queued_jobs(job_id, updated_at);
     `);
+    secureJobDatabasePermissions(databasePath);
 
     return {
       db,
