@@ -141,6 +141,10 @@ async function bringElementIntoViewport(
   let lastLocated = await locateElement(client, query);
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (lastLocated.status === "ambiguous" || lastLocated.status === "invalid_selector") {
+      return lastLocated;
+    }
+
     if (lastLocated.status === "ok" && lastLocated.bbox) {
       const viewport = await getViewportSize(client);
       const aboveViewport = lastLocated.bbox.centerY < 40;

@@ -913,7 +913,25 @@ export async function locateElement(client: CDPClient, query: string): Promise<L
     client,
     `(rawQuery) => {
       const query = String(rawQuery || "").trim();
+      // ponytail: cap DOM scans at 5,000 candidates and labels at 500 characters/200 text nodes; raise if real pages need more.
+      const MAX_DOM_CANDIDATES = 5000;
       const normalize = (value) => (value || "").replace(/\\s+/g, " ").trim().toLowerCase();
+      const readText = (element) => {
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        let value = "";
+        let nodesRead = 0;
+        for (let node = walker.nextNode(); node && value.length < 500 && nodesRead < 200; node = walker.nextNode()) {
+          nodesRead += 1;
+          value += (node.nodeValue || "").slice(0, 500 - value.length);
+        }
+        return value;
+      };
+      const tooManyCandidates = (count) => ({
+        status: "ambiguous",
+        query,
+        count,
+        matches: []
+      });
       const isSelector = (value) => {
         const raw = value.startsWith("css=") ? value.slice(4) : value;
         return raw.startsWith("#") ||
@@ -941,14 +959,14 @@ export async function locateElement(client: CDPClient, query: string): Promise<L
         element.hasAttribute("disabled") ||
         element.getAttribute("aria-disabled") === "true";
       const labelOf = (element) => {
-        const candidate = [
-          element.getAttribute("aria-label"),
-          element.getAttribute("title"),
-          element.textContent,
-          element.getAttribute("data-testid"),
-          element.getAttribute("href")
-        ].find((value) => Boolean(value));
-        return (candidate || "").replace(/\\s+/g, " ").trim();
+        const candidate =
+          element.getAttribute("aria-label") ||
+          element.getAttribute("title") ||
+          readText(element) ||
+          element.getAttribute("data-testid") ||
+          element.getAttribute("href") ||
+          "";
+        return candidate.slice(0, 500).replace(/\\s+/g, " ").trim();
       };
       const build = (element) => {
         const rect = element.getBoundingClientRect();
@@ -983,7 +1001,11 @@ export async function locateElement(client: CDPClient, query: string): Promise<L
         const selector = query.startsWith("css=") ? query.slice(4) : query;
         let selected;
         try {
-          selected = Array.from(document.querySelectorAll(selector)).filter(visible);
+          const matches = document.querySelectorAll(selector);
+          if (matches.length > MAX_DOM_CANDIDATES) {
+            return tooManyCandidates(matches.length);
+          }
+          selected = Array.from(matches).filter(visible);
         } catch (error) {
           return {
             status: "invalid_selector",
@@ -1015,7 +1037,11 @@ export async function locateElement(client: CDPClient, query: string): Promise<L
       const selector =
         'a,button,[role="button"],[role="link"],summary,input[type="button"],input[type="submit"],label,div[tabindex],span[tabindex]';
 
-      const pool = Array.from(document.querySelectorAll(selector))
+      const candidates = document.querySelectorAll(selector);
+      if (candidates.length > MAX_DOM_CANDIDATES) {
+        return tooManyCandidates(candidates.length);
+      }
+      const pool = Array.from(candidates)
         .filter(visible)
         .map((element) => ({
           element,
