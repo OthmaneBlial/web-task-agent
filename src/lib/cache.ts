@@ -7,7 +7,7 @@ import type { CacheEnvelope } from "../types";
 const CACHE_VERSION = 1;
 
 export function ensureDir(dirPath: string): string {
-  fs.mkdirSync(dirPath, { recursive: true });
+  fs.mkdirSync(dirPath, { recursive: true, mode: 0o700 });
   return dirPath;
 }
 
@@ -31,7 +31,7 @@ function writeAtomic(filePath: string, contents: string | Buffer, options: { mod
   const tempPath = `${filePath}.${randomUUID()}.tmp`;
 
   try {
-    fs.writeFileSync(tempPath, contents, { encoding: "utf8", flag: "wx", mode: options.mode });
+    fs.writeFileSync(tempPath, contents, { encoding: "utf8", flag: "wx", mode: options.mode ?? 0o600 });
     fs.renameSync(tempPath, filePath);
   } catch (error) {
     try {

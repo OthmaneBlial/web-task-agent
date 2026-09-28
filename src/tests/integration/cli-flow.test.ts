@@ -288,3 +288,24 @@ test("CLI file outputs preserve existing files unless force is explicit", () => 
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test("new CLI output files and directories are private on POSIX", () => {
+  if (process.platform === "win32") return;
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cli-private-output-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  const outputDir = path.join(tempDir, "private", "reports");
+  const outputPath = path.join(outputDir, "plan.md");
+
+  try {
+    runCli(
+      ["pack", "plan", "validate-an-idea", "--topic", "safe output", "--output", outputPath],
+      { WEB_TASK_AGENT_DB_PATH: databasePath },
+      tempDir
+    );
+    assert.equal(fs.statSync(outputPath).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(outputDir).mode & 0o777, 0o700);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

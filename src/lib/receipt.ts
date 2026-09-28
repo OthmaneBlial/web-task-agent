@@ -267,7 +267,7 @@ function ensureImportSnapshotDirectory(rootDir: string, directoryParts: string[]
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      fs.mkdirSync(current);
+      fs.mkdirSync(current, { mode: 0o700 });
     }
   }
   return current;

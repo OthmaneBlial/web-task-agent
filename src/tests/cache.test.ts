@@ -66,6 +66,25 @@ test("atomic binary writes preserve byte contents", () => {
   }
 });
 
+test("new atomic outputs and their directories are private", (context) => {
+  if (process.platform === "win32") {
+    context.skip("POSIX permission bits are not enforced on Windows");
+    return;
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cache-output-mode-"));
+  const outputDir = path.join(tempDir, "private", "reports");
+  const outputPath = path.join(outputDir, "report.md");
+
+  try {
+    writeTextAtomic(outputPath, "private report");
+    assert.equal(fs.statSync(outputPath).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(outputDir).mode & 0o777, 0o700);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("saved resumable task state uses private file permissions", () => {
   if (process.platform === "win32") return;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cache-private-"));

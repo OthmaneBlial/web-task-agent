@@ -146,7 +146,7 @@ function exportExtension(format: JobExportFormat): string {
 }
 
 function writeLocalOutput(outputPath: string, content: string, force: boolean): void {
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true, mode: 0o700 });
   try {
     const stats = fs.lstatSync(outputPath);
     if (stats.isSymbolicLink() || !stats.isFile() || stats.nlink > 1) {
@@ -165,7 +165,7 @@ function writeLocalOutput(outputPath: string, content: string, force: boolean): 
     (force ? 0 : fs.constants.O_EXCL);
   let descriptor: number;
   try {
-    descriptor = fs.openSync(outputPath, flags, 0o666);
+    descriptor = fs.openSync(outputPath, flags, 0o600);
   } catch (error) {
     if (!force && (error as NodeJS.ErrnoException).code === "EEXIST") {
       throw new Error(`refusing to overwrite ${outputPath}; pass --force to replace it.`);
