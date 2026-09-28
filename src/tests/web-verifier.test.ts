@@ -27,6 +27,7 @@ function browserVerifier(): {
   unpackReceiptZip(input: Uint8Array): Promise<ReceiptBundle>;
   verifyReceiptBundle(input: ReceiptBundle): ReturnType<typeof verifyReceiptBundle>;
   compareDecisionReceipts: typeof compareDecisionReceipts;
+  receiptInputLimits: { maxEntries: number; maxFiles: number };
 } {
   const context: Record<string, unknown> = {
     crypto: webcrypto,
@@ -50,6 +51,7 @@ test("local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe 
   assert.match(html, /webkitdirectory/);
   assert.match(html, /accept="\.zip,application\/zip"/);
   assert.match(html, /No upload path exists/);
+  assert.match(html, /2,000 ZIP entries/);
   assert.match(html, /Integrity verified ≠ decision is true/);
   assert.match(html, /verification-report\.json/);
   assert.match(css, /prefers-reduced-motion/);
@@ -94,6 +96,8 @@ test("embedded valid, tampered, and changed fixtures preserve their promised out
 
 test("actual browser bundle streams a rooted ZIP and rejects path traversal", async () => {
   const verifier = browserVerifier();
+  assert.equal(verifier.receiptInputLimits.maxEntries, 2_000);
+  assert.equal(verifier.receiptInputLimits.maxFiles, 500);
   const fixture = embeddedFixtures().valid!;
   const rooted = Object.fromEntries(Object.entries(fixture.files).map(([name, content]) => [`receipt-package/${name}`, strToU8(content)]));
   const unpacked = await verifier.unpackReceiptZip(zipSync(rooted));
@@ -161,6 +165,11 @@ test("actual browser bundle streams a rooted ZIP and rejects path traversal", as
     verifier.unpackReceiptZip(zipSync({ "../private.txt": strToU8("private") })),
     /unsafe path/
   );
+
+  const directoryFlood = Object.fromEntries(
+    Array.from({ length: 2_001 }, (_, index) => [`empty-${index}/`, new Uint8Array()])
+  );
+  await assert.rejects(verifier.unpackReceiptZip(zipSync(directoryFlood)), /2000-entry limit/);
 });
 
 test("browser verifier reports a changed snapshot when its source URL stays the same", () => {

@@ -6,6 +6,7 @@ const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES = 50 * 1024 * 1024;
 const MAX_FILES = 500;
+const MAX_ENTRIES = 2_000;
 
 function safeArchivePath(value: string): boolean {
   if (!value || value.includes("\\") || value.startsWith("/") || /^[a-zA-Z]:/.test(value)) return false;
@@ -30,7 +31,7 @@ function joinChunks(chunks: Uint8Array[], total: number): Uint8Array {
   return output;
 }
 
-/** Stream a ZIP with explicit file-count and expansion budgets before verification. */
+/** Stream a ZIP with explicit entry-count and expansion budgets before verification. */
 export function unpackReceiptZip(input: ArrayBuffer | Uint8Array): Promise<Record<string, Uint8Array>> {
   const archive = input instanceof Uint8Array ? input : new Uint8Array(input);
   if (archive.byteLength > MAX_ARCHIVE_BYTES) {
@@ -41,6 +42,7 @@ export function unpackReceiptZip(input: ArrayBuffer | Uint8Array): Promise<Recor
     const output = Object.create(null) as Record<string, Uint8Array>;
     const active = new Set<UnzipFile>();
     const seenPaths = new Set<string>();
+    let entries = 0;
     let files = 0;
     let extracted = 0;
     let inputFinished = false;
@@ -60,6 +62,11 @@ export function unpackReceiptZip(input: ArrayBuffer | Uint8Array): Promise<Recor
     };
     const unzip = new Unzip((file) => {
       if (settled) return;
+      entries += 1;
+      if (entries > MAX_ENTRIES) {
+        fail(new Error(`ZIP exceeds the ${MAX_ENTRIES}-entry limit.`));
+        return;
+      }
       const directory = file.name.endsWith("/");
       if (!safeArchivePath(file.name)) {
         fail(new Error(`ZIP contains an unsafe path: ${file.name}.`));
@@ -131,5 +138,6 @@ export const receiptInputLimits = Object.freeze({
   maxArchiveBytes: MAX_ARCHIVE_BYTES,
   maxFileBytes: MAX_FILE_BYTES,
   maxExtractedBytes: MAX_EXTRACTED_BYTES,
+  maxEntries: MAX_ENTRIES,
   maxFiles: MAX_FILES
 });
