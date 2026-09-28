@@ -40,10 +40,12 @@ test("parseBingRssResults rejects HTML and incomplete feeds", () => {
   }
 });
 
-test("Bing RSS search applies a request deadline", async () => {
+test("Bing RSS search applies a deadline and refuses redirects", async () => {
   let requestSignal: AbortSignal | null | undefined;
+  let requestRedirect: RequestRedirect | undefined;
   const adapter = new BingRssSearchAdapter(() => undefined, async (_url, init) => {
     requestSignal = init?.signal;
+    requestRedirect = init?.redirect;
     return new Response("<rss><channel></channel></rss>", { status: 200 });
   });
 
@@ -51,6 +53,7 @@ test("Bing RSS search applies a request deadline", async () => {
 
   assert.ok(requestSignal instanceof AbortSignal);
   assert.equal(requestSignal.aborted, false);
+  assert.equal(requestRedirect, "error");
 });
 
 test("Bing RSS search cancels and rejects oversized responses", async () => {
