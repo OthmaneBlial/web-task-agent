@@ -11,7 +11,7 @@ Web Task Agent is local-first: it has no required hosted control plane and does 
 
 ## What can leave the machine
 
-Live research intentionally contacts public web sources through the configured browser/CDP runtime. When an LLM-backed job is run, selected instructions and research content are sent to the LLM endpoint configured by the operator. The bundled demos, catalog, pack plans, previews, scaffolds, and standard test suite do not need an LLM key.
+Live research intentionally contacts public web sources through the configured browser/CDP runtime. When an LLM-backed job is run, selected instructions, research content, and any loaded product-memory file are sent to the LLM endpoint configured by the operator. The CLI reads `agent-memory.md` or `agent-memory.txt` by default, or the file passed with `--memory`; memory files are limited to 16 KB and checked before the job database or browser starts. The bundled demos, catalog, pack plans, previews, scaffolds, and standard test suite do not need an LLM key.
 
 You are responsible for choosing an endpoint and credentials appropriate for the data you include in a job. Do not put secrets, customer data, private URLs, browser cookies, or regulated material into an instruction unless the configured model provider and your policy explicitly allow it.
 

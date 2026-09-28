@@ -545,7 +545,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .option("--resume", "Resume the latest cached agent run")
     .option("--cache <path>", "Use a specific cache file")
     .option("--report <path>", "Write the Markdown report to a specific path")
-    .option("--memory <path>", "Load product context from a Markdown or text file")
+    .option("--memory <path>", "Load product context from a Markdown or text file (max 16 KB)")
     .option(
       "--max-queries <number>",
       "Maximum number of research queries to execute",
@@ -615,7 +615,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .description("Queue a long-form agent job for a worker")
     .option("--cache <path>", "Use a specific cache file")
     .option("--report <path>", "Write the Markdown report to a specific path")
-    .option("--memory <path>", "Load product context from a Markdown or text file")
+    .option("--memory <path>", "Load product context from a Markdown or text file (max 16 KB)")
     .option(
       "--max-queries <number>",
       "Maximum number of research queries to execute",
@@ -836,7 +836,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .option("--resume", "Resume the latest cached workflow run")
     .option("--cache <path>", "Use a specific cache file")
     .option("--report <path>", "Write the Markdown report to a specific path")
-    .option("--memory <path>", "Load product context from a Markdown or text file")
+    .option("--memory <path>", "Load product context from a Markdown or text file (max 16 KB)")
     .option(
       "--max-queries <number>",
       "Override the template query budget",
@@ -929,7 +929,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .option("--preset <name>", "Workflow preset: fast, standard, or deep", "standard")
     .option("--cache <path>", "Use a specific cache file")
     .option("--report <path>", "Write the Markdown report to a specific path")
-    .option("--memory <path>", "Load product context from a Markdown or text file")
+    .option("--memory <path>", "Load product context from a Markdown or text file (max 16 KB)")
     .option(
       "--max-queries <number>",
       "Override the template query budget",

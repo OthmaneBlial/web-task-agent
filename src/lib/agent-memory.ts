@@ -1,12 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { readBoundedTextFileSync } from "./bounded-file";
+
 export interface AgentMemorySnapshot {
   path: string;
   content: string;
 }
 
 const DEFAULT_MEMORY_FILES = ["agent-memory.md", "agent-memory.txt"];
+const MAX_AGENT_MEMORY_BYTES = 16 * 1024;
 
 export function loadAgentMemory(customPath?: string): AgentMemorySnapshot | null {
   const candidates = customPath
@@ -18,7 +21,7 @@ export function loadAgentMemory(customPath?: string): AgentMemorySnapshot | null
       continue;
     }
 
-    const content = fs.readFileSync(candidate, "utf8").trim();
+    const content = readBoundedTextFileSync(candidate, "agent memory", MAX_AGENT_MEMORY_BYTES).trim();
     if (!content) {
       continue;
     }

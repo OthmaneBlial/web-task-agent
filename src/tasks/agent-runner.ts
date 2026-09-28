@@ -985,6 +985,7 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
       cacheDir: this.options.cacheDir,
       createInitialState: () => buildInitialState(this.options)
     });
+    const memory = loadAgentMemory(this.options.memoryPath ?? state.input.memoryPath ?? undefined);
 
     ensureDir(state.artifactDir);
     normalizeRuntimeState(state, this.options);
@@ -1176,8 +1177,6 @@ export class AgentRunnerTask extends BaseTask<AgentRunOptions, AgentTaskResult> 
 
     await ensureDebuggerReady();
     this.log("attached to Lightpanda CDP server");
-
-    const memory = loadAgentMemory(this.options.memoryPath ?? state.input.memoryPath ?? undefined);
 
     try {
       state.runtime.leaseOwnerId = nextLeaseOwnerId(state.runId);

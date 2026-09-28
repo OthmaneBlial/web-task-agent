@@ -58,6 +58,7 @@ web-task-agent server run --port 4317
 - `pack plan --dry-run` when you need the full ordered plan and its aggregate run bounds without writing a file.
 - `pack plan` writes under `reports/packs/` by default or to `--output`. Existing files are preserved unless you pass `--force`.
 - `workflow validate` when you want to check a proposal's required decision, source-policy, query, deliverable, freshness, invalidation, bounded-cost, and risk fields before review.
+- `--memory <path>` to add local Markdown or text product context to agent prompts. The agent also checks `agent-memory.md` and `agent-memory.txt` by default; memory files are capped at 16 KB.
 - `workflow run` when you want a full research package immediately.
 - `agent run` when you want a free-form instruction without a template.
 - `queue list` and `job logs` when you are already operating a long run.
