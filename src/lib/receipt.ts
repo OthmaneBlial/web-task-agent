@@ -575,7 +575,7 @@ export function importExternalDecisionResult(input: {
     writeImportedSnapshot(outputDir, relativePath, content)
   );
   const receiptPath = path.join(outputDir, "receipt.json");
-  writeTextAtomic(receiptPath, JSON.stringify(receipt, null, 2), { mode: 0o600 });
+  writeJsonAtomic(receiptPath, receipt, { mode: 0o600 });
   const integrityManifestPath = writeReceiptIntegrityManifest({
     rootDir: outputDir,
     files: [receiptPath, ...snapshotPaths],
@@ -833,7 +833,7 @@ export function signReceiptDirectory(input: {
   if (signedReceiptBytes.byteLength > MAX_RECEIPT_FILE_BYTES || signedManifestBytes > MAX_RECEIPT_FILE_BYTES || outputBytes > MAX_RECEIPT_TOTAL_BYTES) {
     throw new Error("signed receipt package exceeds verification limits");
   }
-  writeTextAtomic(receiptPath, JSON.stringify(signedReceipt, null, 2), { mode: receiptStats.mode & 0o777 });
+  writeJsonAtomic(receiptPath, signedReceipt, { mode: receiptStats.mode & 0o777 });
   writeReceiptIntegrityManifest({ rootDir, files, generatedAt });
   return receiptPath;
 }

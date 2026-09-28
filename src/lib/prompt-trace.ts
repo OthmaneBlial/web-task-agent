@@ -130,7 +130,7 @@ export class PromptTraceRecorder {
   private persist(): void {
     pruneManifest(this.manifest, this.maxTraces);
     this.manifest.updatedAt = nowIso();
-    writeJsonAtomic(this.outputPath, this.manifest);
+    writeJsonAtomic(this.outputPath, this.manifest, { mode: 0o600 });
   }
 
   private updateRecord(
@@ -241,7 +241,7 @@ export function maintainPromptTraceRetention(input: {
   const afterCount = manifest.traces.length;
 
   if (!dryRun && afterCount !== beforeCount) {
-    writeJsonAtomic(tracePath, manifest);
+    writeJsonAtomic(tracePath, manifest, { mode: 0o600 });
   }
 
   return {

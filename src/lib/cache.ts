@@ -51,8 +51,8 @@ export function writeBufferAtomic(filePath: string, contents: Buffer, options: {
   writeAtomic(filePath, contents, options);
 }
 
-export function writeJsonAtomic(filePath: string, payload: unknown): void {
-  writeTextAtomic(filePath, JSON.stringify(payload, null, 2));
+export function writeJsonAtomic(filePath: string, payload: unknown, options: { mode?: number } = {}): void {
+  writeTextAtomic(filePath, JSON.stringify(payload, null, 2), options);
 }
 
 export function saveTaskState<T extends { runId: string }>(
@@ -67,7 +67,7 @@ export function saveTaskState<T extends { runId: string }>(
     savedAt: new Date().toISOString(),
     state
   };
-  writeTextAtomic(filePath, JSON.stringify(envelope, null, 2), { mode: 0o600 });
+  writeJsonAtomic(filePath, envelope, { mode: 0o600 });
   return filePath;
 }
 

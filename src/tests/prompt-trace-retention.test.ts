@@ -54,6 +54,9 @@ test("prompt trace retention prunes old records without touching evidence files"
       JSON.parse(after).traces.map((trace: { traceId: string }) => trace.traceId),
       ["trace_b", "trace_c"]
     );
+    if (process.platform !== "win32") {
+      assert.equal(fs.statSync(tracePath).mode & 0o777, 0o600);
+    }
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

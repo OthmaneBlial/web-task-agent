@@ -18,6 +18,9 @@ test("prompt trace recorder persists local prompt/version history", () => {
         events.push({ eventType, message });
       }
     });
+    if (process.platform !== "win32") {
+      assert.equal(fs.statSync(tracePath).mode & 0o777, 0o600);
+    }
     const hooks = recorder.createHooks();
 
     hooks.onStart?.({

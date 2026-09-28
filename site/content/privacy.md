@@ -32,7 +32,7 @@ Set the domain request cap to `0` only to deliberately disable it. Domains on `W
 
 Use a redacted preview before writing an export:
 
-On POSIX systems, resumable cache files use owner-only permissions (`0600`).
+On POSIX systems, imported receipts, resumable cache files, and prompt traces use owner-only permissions (`0600`).
 
 ```bash
 web-task-agent job export <job-id> --format markdown --redact --dry-run

@@ -6,7 +6,7 @@ Web Task Agent is local-first: it has no required hosted control plane and does 
 
 - Job state, queue state, source metadata, evidence links, and artifact metadata are stored in the local SQLite database.
 - Resumable caches, reports, workflow packages, prompt traces, and exports are written to local paths chosen by the operator.
-- On POSIX systems, resumable cache files use owner-only permissions (`0600`).
+- On POSIX systems, imported receipts, resumable cache files, and prompt traces use owner-only permissions (`0600`).
 - The local dashboard only accepts loopback bindings (`127.0.0.1` or `::1`); it refuses LAN and public interfaces because it can inspect and control local jobs.
 - `job export` and `job compare` only write local files; they do not upload or synchronize a package.
 
