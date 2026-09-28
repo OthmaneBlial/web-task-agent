@@ -80,18 +80,6 @@ check_port_owner() {
   fi
 }
 
-kill_port_occupant() {
-  # Try to find and kill whatever is using the port.
-  local pids
-  pids="$(lsof -ti :"${PORT}" 2>/dev/null || fuser "${PORT}/tcp" 2>/dev/null | tr -s ' ' '\n' || echo "")"
-
-  if [[ -n "${pids}" ]]; then
-    echo "killing process(es) on port ${PORT}: ${pids}"
-    echo "${pids}" | xargs kill -9 2>/dev/null || true
-    sleep 1
-  fi
-}
-
 case "${ACTION}" in
   start)
     local_owner="$(check_port_owner)"
@@ -102,8 +90,8 @@ case "${ACTION}" in
     fi
 
     if [[ "${local_owner}" == "chrome" || "${local_owner}" == "unknown" ]]; then
-      echo "port ${PORT} occupied by ${local_owner} — killing it to start lightpanda..."
-      kill_port_occupant
+      echo "cannot start Lightpanda: port ${PORT} is occupied by ${local_owner}; choose another CDP_PORT or stop it yourself" >&2
+      exit 1
     fi
 
     # Download binary if not present.
@@ -186,7 +174,7 @@ Usage: ./scripts/start-lightpanda.sh [start|stop|restart|status|update]
 
 Commands:
   start   Download (if needed) and start the Lightpanda CDP server (default)
-          Automatically kills Chrome/other browsers if they occupy the port.
+          Refuses to stop another browser occupying the configured port.
   stop    Stop the Lightpanda process
   restart Stop and start the Lightpanda process
   status  Check if the CDP server is reachable and what browser is running
