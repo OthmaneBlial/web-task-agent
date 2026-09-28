@@ -288,7 +288,12 @@ export async function ensureDebuggerReady(options?: {
   forceRestart?: boolean;
   reason?: string;
 }): Promise<void> {
-  if (!options?.forceRestart) {
+  if (options?.forceRestart) {
+    const backend = await inspectCdpBackend();
+    if (backend.reachable && backend.backend !== "lightpanda") {
+      return;
+    }
+  } else {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       if (await isDebuggerReachable()) {
         return;

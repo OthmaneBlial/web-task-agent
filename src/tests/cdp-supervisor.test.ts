@@ -47,9 +47,12 @@ test("withLightpandaRecovery restarts Lightpanda and retries once on recoverable
   });
 
   global.fetch = (async () =>
-    ({
-      ok: true
-    }) as Response) as typeof fetch;
+    new Response(JSON.stringify({
+      Browser: "Lightpanda/1.0"
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    })) as typeof fetch;
 
   try {
     const result = await withLightpandaRecovery({
@@ -66,6 +69,42 @@ test("withLightpandaRecovery restarts Lightpanda and retries once on recoverable
     assert.equal(result, "ok");
     assert.equal(operationAttempts, 2);
     assert.equal(restartCalls, 1);
+  } finally {
+    global.fetch = originalFetch;
+    configureLightpandaCommandRunnerForTests(null);
+  }
+});
+
+test("withLightpandaRecovery preserves a reachable Chrome CDP server", async () => {
+  const originalFetch = global.fetch;
+  let restartCalls = 0;
+  let operationAttempts = 0;
+
+  configureLightpandaCommandRunnerForTests(async () => {
+    restartCalls += 1;
+  });
+
+  global.fetch = (async () =>
+    new Response(JSON.stringify({
+      Browser: "Chrome/140.0.0.0"
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    })) as typeof fetch;
+
+  try {
+    const result = await withLightpandaRecovery({
+      label: "test Chrome recovery",
+      task: async () => {
+        operationAttempts += 1;
+        if (operationAttempts === 1) throw new Error("WebSocket connection closed");
+        return "ok";
+      }
+    });
+
+    assert.equal(result, "ok");
+    assert.equal(operationAttempts, 2);
+    assert.equal(restartCalls, 0);
   } finally {
     global.fetch = originalFetch;
     configureLightpandaCommandRunnerForTests(null);
