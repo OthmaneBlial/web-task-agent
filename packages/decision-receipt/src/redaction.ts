@@ -1,4 +1,5 @@
 const SECRET_PATTERNS: RegExp[] = [
+  /\bnpm_[A-Fa-f0-9]{20,}\b/g,
   /\bsk-(?:ant-)?[A-Za-z0-9_-]{8,}\b/g,
   /\b(?:ghp|gho|github_pat)_[A-Za-z0-9_]{12,}\b/g,
   /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g,

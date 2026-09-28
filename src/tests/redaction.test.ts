@@ -23,12 +23,14 @@ class LoggingTestTask extends BaseTask<Record<string, never>, void> {
 }
 
 test("redaction removes common API and GitHub tokens from text and nested log details", () => {
-  const raw = "ANTHROPIC_API_KEY=sk-ant-example_token_123456 ghp_123456789012345678901234567890";
+  const npmToken = "npm_0123456789abcdef0123456789abcdef";
+  const raw = `ANTHROPIC_API_KEY=sk-ant-example_token_123456 ghp_123456789012345678901234567890 ${npmToken}`;
   const redacted = redactSensitiveText(raw);
 
   assert.match(redacted, /ANTHROPIC_API_KEY=\[REDACTED\]/);
   assert.doesNotMatch(redacted, /sk-ant-example/);
   assert.doesNotMatch(redacted, /ghp_123/);
+  assert.doesNotMatch(redacted, /npm_012/);
   assert.deepEqual(redactSensitiveValue({ token: "Bearer abcdefghijklmnop", nested: [raw] }), {
     token: "[REDACTED]",
     nested: [redacted]
