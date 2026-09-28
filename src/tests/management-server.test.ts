@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { enqueueQueuedAgentJob, listQueuedJobs } from "../lib/job-queue";
-import { JobStore } from "../lib/job-store";
+import { JobStore, listSequencedJobRunEvents } from "../lib/job-store";
 import { createManagementServer } from "../server/management-server";
 
 test("management server exposes controls and log endpoints", async () => {
@@ -145,6 +145,8 @@ test("management server exposes controls and log endpoints", async () => {
     const rerunPayload = await rerunResponse.json();
     assert.ok(typeof rerunPayload.queueId === "string" && rerunPayload.queueId.length > 0);
 
+    const streamCursorAt = listSequencedJobRunEvents({ databasePath, jobId: "job_server", limit: 200 }).at(-1)?.event.createdAt;
+    assert.ok(streamCursorAt);
     const streamAbort = new AbortController();
     const streamResponse = await fetch(`${baseUrl}/api/jobs/job_server/events/stream`, { signal: streamAbort.signal });
     assert.equal(streamResponse.status, 200);
@@ -155,6 +157,15 @@ test("management server exposes controls and log endpoints", async () => {
     let streamText = Buffer.from(firstChunk?.value ?? new Uint8Array()).toString("utf8");
     assert.match(streamText, /event: snapshot/);
     job.appendRunEvent("log", "server test live stream update");
+    const streamDb = new DatabaseSync(databasePath);
+    try {
+      const appended = streamDb.prepare("SELECT id FROM job_run_events WHERE job_id = ? AND message = ?")
+        .get("job_server", "server test live stream update") as { id: string } | undefined;
+      assert.ok(appended);
+      streamDb.prepare("UPDATE job_run_events SET created_at = ? WHERE id = ?").run(streamCursorAt, appended.id);
+    } finally {
+      streamDb.close();
+    }
     const streamTimeout = setTimeout(() => streamAbort.abort(), 3_000);
     try {
       while (!streamText.includes("server test live stream update")) {

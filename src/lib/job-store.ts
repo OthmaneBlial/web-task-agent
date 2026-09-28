@@ -1847,12 +1847,46 @@ export function listJobRunEvents(options: {
     Math.max(1, Math.min(1000, options.limit ?? 200))
   ) as Array<Record<string, unknown>>;
 
-  return rows.map((row) => ({
+  return rows.map(mapJobRunEvent);
+}
+
+function mapJobRunEvent(row: Record<string, unknown>): JobRunEventRecord {
+  return {
     id: String(row.id ?? ""),
     eventType: String(row.event_type ?? "log"),
     message: String(row.message ?? ""),
     metadata: parseJsonValue<Record<string, unknown>>(row.metadata_json, {}),
     createdAt: String(row.created_at ?? "")
+  };
+}
+
+export function listSequencedJobRunEvents(options: {
+  databasePath?: string;
+  jobId: string;
+  afterSequence?: number;
+  limit?: number;
+}): Array<{ sequence: number; event: JobRunEventRecord }> {
+  const { db } = getDatabase(options.databasePath);
+  const limit = Math.max(1, Math.min(1000, options.limit ?? 200));
+  const rows = options.afterSequence === undefined
+    ? (db.prepare(`
+        SELECT rowid AS sequence, id, event_type, message, metadata_json, created_at
+        FROM job_run_events
+        WHERE job_id = ?
+        ORDER BY rowid DESC
+        LIMIT ?
+      `).all(options.jobId, limit) as Array<Record<string, unknown>>).reverse()
+    : db.prepare(`
+        SELECT rowid AS sequence, id, event_type, message, metadata_json, created_at
+        FROM job_run_events
+        WHERE job_id = ? AND rowid > ?
+        ORDER BY rowid ASC
+        LIMIT ?
+      `).all(options.jobId, options.afterSequence, limit) as Array<Record<string, unknown>>;
+
+  return rows.map((row) => ({
+    sequence: Number(row.sequence),
+    event: mapJobRunEvent(row)
   }));
 }
 

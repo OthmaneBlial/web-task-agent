@@ -7,6 +7,7 @@ import { redactSensitiveValue } from "../lib/redaction";
 import {
   getStoredJobDetail,
   listJobRunEvents,
+  listSequencedJobRunEvents,
   listRecoverableJobs,
   listStoredJobs
 } from "../lib/job-store";
@@ -1032,26 +1033,26 @@ export function createManagementServer(options?: ManagementServerOptions): http.
           parsedUrl.pathname.replace("/api/jobs/", "").replace("/events/stream", "")
         );
         sendSseHeaders(res);
-        const initial = listJobRunEvents({
+        const initial = listSequencedJobRunEvents({
           databasePath: options?.databasePath,
           jobId,
           limit: 200
         });
-        let cursor = initial.at(-1)?.createdAt ?? null;
+        let cursor = initial.at(-1)?.sequence ?? 0;
         sendSseEvent(res, "snapshot", {
-          events: initial
+          events: initial.map(({ event }) => event)
         });
 
         const timer = setInterval(() => {
-          const events = listJobRunEvents({
+          const events = listSequencedJobRunEvents({
             databasePath: options?.databasePath,
             jobId,
-            afterCreatedAt: cursor,
+            afterSequence: cursor,
             limit: 200
           });
           if (events.length > 0) {
-            cursor = events.at(-1)?.createdAt ?? cursor;
-            for (const event of events) {
+            for (const { sequence, event } of events) {
+              cursor = sequence;
               sendSseEvent(res, "log", event);
             }
           }
