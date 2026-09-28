@@ -41,6 +41,20 @@ function directoryFor(input: string): string {
   throw new Error("Expected a receipt bundle directory or its receipt.json file.");
 }
 
+function readBoundedFile(descriptor: number, label: string): Buffer {
+  const stat = fs.fstatSync(descriptor);
+  if (!stat.isFile()) throw new Error(`${label} must be a regular file.`);
+  if (stat.size > MAX_FILE_BYTES) throw new Error(`${label} exceeds 10 MB.`);
+  const contents = Buffer.allocUnsafe(stat.size);
+  let offset = 0;
+  while (offset < contents.length) {
+    const bytesRead = fs.readSync(descriptor, contents, offset, contents.length - offset, null);
+    if (bytesRead === 0) throw new Error(`${label} ended while it was being read.`);
+    offset += bytesRead;
+  }
+  return contents;
+}
+
 function readBundle(input: string): ReceiptBundle {
   const root = directoryFor(input);
   const bundle = Object.create(null) as ReceiptBundle;
@@ -75,12 +89,10 @@ function readBundle(input: string): ReceiptBundle {
         if (files > MAX_FILES) throw new Error("Bundle exceeds the " + MAX_FILES + "-file limit.");
         const descriptor = fs.openSync(absolute, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
         try {
-          const stat = fs.fstatSync(descriptor);
-          if (!stat.isFile()) throw new Error("Bundle entries must be regular files.");
-          if (stat.size > MAX_FILE_BYTES) throw new Error("Bundle file exceeds 10 MB.");
-          total += stat.size;
+          const contents = readBoundedFile(descriptor, "Bundle file");
+          total += contents.byteLength;
           if (total > MAX_TOTAL_BYTES) throw new Error("Bundle exceeds the 50 MB total limit.");
-          bundle[path.relative(root, absolute).split(path.sep).join("/")] = fs.readFileSync(descriptor);
+          bundle[path.relative(root, absolute).split(path.sep).join("/")] = contents;
         } finally {
           fs.closeSync(descriptor);
         }
@@ -122,7 +134,14 @@ async function compareCommand(earlierPath: string, laterPath: string, json: bool
 }
 
 function migrateCommand(inputPath: string, outputPath: string): number {
-  const input = JSON.parse(fs.readFileSync(path.resolve(inputPath), "utf8")) as unknown;
+  const descriptor = fs.openSync(path.resolve(inputPath), fs.constants.O_RDONLY);
+  let contents: Buffer;
+  try {
+    contents = readBoundedFile(descriptor, "Migration input");
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  const input = JSON.parse(contents.toString("utf8")) as unknown;
   const migration = migrateDecisionReceipt(input);
   const target = path.resolve(outputPath);
   fs.mkdirSync(path.dirname(target), { recursive: true });

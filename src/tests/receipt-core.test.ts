@@ -127,6 +127,24 @@ test("standalone CLI bounds total filesystem entries", () => {
   }
 });
 
+test("standalone CLI rejects oversized migration input before parsing or writing", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-migration-limit-"));
+  try {
+    const inputPath = path.join(tempDir, "oversized-receipt.json");
+    const outputPath = path.join(tempDir, "migrated-receipt.json");
+    fs.closeSync(fs.openSync(inputPath, "w"));
+    fs.truncateSync(inputPath, 10 * 1024 * 1024 + 1);
+
+    const cliPath = path.resolve("packages", "decision-receipt", "dist", "cli.js");
+    const result = spawnSync(process.execPath, [cliPath, "migrate", inputPath, "--out", outputPath], { encoding: "utf8" });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Migration input exceeds 10 MB/);
+    assert.equal(fs.existsSync(outputPath), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("receipt manifest covers receipt.json and every referenced source snapshot", async () => {
   const original = readBundle(path.join("packages", "decision-receipt", "examples", "minimal"));
   const receipt = JSON.parse(String(original["receipt.json"])) as DecisionReceipt;

@@ -36,6 +36,7 @@ npx @othmaneblial/decision-receipt compare ./before ./after
 ```
 
 The CLI scans at most 2,000 filesystem entries and 500 files (10 MB per file, 50 MB total).
+Migration JSON input is also limited to 10 MB.
 
 Until the registry publication gate is complete, use the release tarball or this repository checkout; do not treat the command above as live-registry proof.
 
