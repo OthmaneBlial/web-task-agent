@@ -487,8 +487,6 @@ export function recoverStaleQueuedJobs(options?: {
       SET
         status = 'queued',
         payload_json = ?,
-        control_action = NULL,
-        control_requested_at = NULL,
         leased_by = NULL,
         leased_at = NULL,
         lease_expires_at = NULL,

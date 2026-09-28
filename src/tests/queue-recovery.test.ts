@@ -12,6 +12,7 @@ import {
   controlQueuedJob,
   enqueueQueuedAgentJob,
   failQueuedJob,
+  getQueuedJob,
   getQueuedJobSummary,
   heartbeatQueuedJob,
   ownsQueuedJobLease,
@@ -119,6 +120,50 @@ test("stale queued job recovery forces resume from saved cache state", () => {
     assert.equal(resumed.state.marker, "persisted-state");
   } finally {
     queueDb?.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("stale queue recovery preserves a pending pause for the replacement worker", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-pending-pause-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+  let db: DatabaseSync | null = null;
+
+  try {
+    const queued = enqueueQueuedAgentJob({
+      databasePath,
+      payload: {
+        taskType: "agent",
+        mode: "agent",
+        label: "Pending pause recovery test",
+        options: { instruction: "Preserve the pause request", resume: false }
+      }
+    });
+    assert.ok(claimNextQueuedJob({
+      databasePath,
+      workerId: "worker-before-recovery",
+      leaseTtlSeconds: 60
+    }));
+    assert.equal(
+      controlQueuedJob({ databasePath, queueId: queued.queueId, action: "pause" })?.controlAction,
+      "pause"
+    );
+
+    db = new DatabaseSync(databasePath);
+    db.prepare("UPDATE queued_jobs SET lease_expires_at = ? WHERE id = ?")
+      .run("2000-01-01T00:00:00.000Z", queued.queueId);
+    assert.equal(recoverStaleQueuedJobs({ databasePath }), 1);
+    assert.equal(getQueuedJob({ databasePath, queueId: queued.queueId })?.status, "queued");
+    assert.equal(getQueuedJob({ databasePath, queueId: queued.queueId })?.controlAction, "pause");
+
+    const reclaimed = claimNextQueuedJob({
+      databasePath,
+      workerId: "worker-after-recovery",
+      leaseTtlSeconds: 60
+    });
+    assert.equal(reclaimed?.controlAction, "pause");
+  } finally {
+    db?.close();
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
