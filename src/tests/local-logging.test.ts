@@ -37,6 +37,17 @@ test("structured local logging writes jsonl entries", () => {
     assert.equal(parsed.level, "info");
     assert.equal(parsed.message, "structured message");
     assert.equal(parsed.details.jobId, "job_1");
+    if (process.platform !== "win32") {
+      assert.equal(fs.statSync(logPath).mode & 0o777, 0o600);
+      fs.chmodSync(logPath, 0o644);
+      appendStructuredLog({
+        timestamp: "2026-04-22T12:00:01.000Z",
+        level: "info",
+        scope: "unit-test",
+        message: "existing log"
+      }, logPath);
+      assert.equal(fs.statSync(logPath).mode & 0o777, 0o600);
+    }
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
