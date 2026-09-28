@@ -45,7 +45,8 @@
     "PRIVACY.md",
     "SUPPORT.md",
     "CODE_OF_CONDUCT.md",
-    "RELEASE_CHECKLIST.md"
+    "RELEASE_CHECKLIST.md",
+    "scripts/start-lightpanda.sh"
   ],
   "repository": {
     "type": "git",

@@ -23,6 +23,15 @@ test("first-success script does not require model or browser credentials", () =>
   assert.doesNotMatch(script, /ANTHROPIC_API_KEY|CDP_PORT/);
 });
 
+test("npm package includes the Lightpanda launcher required for live research", () => {
+  const output = execFileSync("npm", ["pack", "--dry-run", "--json"], {
+    cwd: process.cwd(),
+    encoding: "utf8"
+  });
+  const [manifest] = JSON.parse(output) as Array<{ files: Array<{ path: string }> }>;
+  assert.ok(manifest?.files.some(({ path: filePath }) => filePath === "scripts/start-lightpanda.sh"));
+});
+
 test("npm publication preflight preserves the tokenless OIDC and immutable-version boundary", () => {
   const output = execFileSync(process.execPath, ["scripts/npm-publication-preflight.mjs", "--json"], {
     cwd: process.cwd(),

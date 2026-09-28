@@ -18,7 +18,7 @@ import type {
 
 export const DEBUG_PORT = Number(process.env.CDP_PORT ?? process.env.CHROME_PORT ?? "9222");
 const execFileAsync = promisify(execFile);
-const LIGHTPANDA_START_SCRIPT = path.resolve(process.cwd(), "scripts", "start-lightpanda.sh");
+const LIGHTPANDA_START_SCRIPT = path.resolve(__dirname, "../../scripts/start-lightpanda.sh");
 
 type CdpEventListener = (...args: unknown[]) => void;
 
