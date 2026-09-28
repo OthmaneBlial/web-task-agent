@@ -36,3 +36,26 @@ test("CDP discovery rejects redirects and non-local WebSocket targets", async ()
     global.fetch = originalFetch;
   }
 });
+
+test("CDP version responses are bounded during inspection and session creation", async () => {
+  const originalFetch = global.fetch;
+  let canceledBodies = 0;
+  global.fetch = (async () => new Response(new ReadableStream<Uint8Array>({
+    pull(controller) {
+      controller.enqueue(new Uint8Array(64 * 1024 + 1));
+    },
+    cancel() {
+      canceledBodies += 1;
+    }
+  }), { status: 200 })) as typeof fetch;
+
+  try {
+    const status = await inspectCdpBackend();
+    assert.equal(status.backend, "unavailable");
+    assert.match(status.message, /CDP version response exceeded 65536 bytes/);
+    await assert.rejects(createPageSession(), /CDP version response exceeded 65536 bytes/);
+    assert.equal(canceledBodies, 3);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

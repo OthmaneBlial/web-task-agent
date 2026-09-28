@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import CDP = require("chrome-remote-interface");
 
 import { writeBufferAtomic } from "./cache";
+import { readBoundedResponseText } from "./read-bounded-response-text";
 import { redactSensitiveText } from "./redaction";
 import { SourceAcquisitionPolicy } from "./source-acquisition-policy";
 import type { SourceAcquisitionDecision } from "./source-acquisition-policy";
@@ -21,6 +22,7 @@ const execFileAsync = promisify(execFile);
 const LIGHTPANDA_START_SCRIPT = path.resolve(__dirname, "../../scripts/start-lightpanda.sh");
 const CDP_COMMAND_TIMEOUT_MS = 30_000;
 const CDP_CLEANUP_TIMEOUT_MS = 5_000;
+const MAX_CDP_VERSION_RESPONSE_BYTES = 64 * 1024;
 
 type CdpEventListener = (...args: unknown[]) => void;
 
@@ -150,6 +152,7 @@ export async function inspectCdpBackend(timeoutMs: number = 1_500): Promise<CdpB
       redirect: "error"
     });
     if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
       return {
         endpoint,
         port: DEBUG_PORT,
@@ -161,7 +164,9 @@ export async function inspectCdpBackend(timeoutMs: number = 1_500): Promise<CdpB
       };
     }
 
-    const payload = (await response.json()) as { Browser?: unknown; "Protocol-Version"?: unknown };
+    const payload = JSON.parse(
+      await readBoundedResponseText(response, MAX_CDP_VERSION_RESPONSE_BYTES, "CDP version")
+    ) as { Browser?: unknown; "Protocol-Version"?: unknown };
     const browser = typeof payload.Browser === "string" ? payload.Browser : null;
     const protocolVersion =
       typeof payload["Protocol-Version"] === "string" ? payload["Protocol-Version"] : null;
@@ -204,6 +209,7 @@ async function isDebuggerReachable(timeoutMs: number = 1_500): Promise<boolean> 
       signal: controller.signal,
       redirect: "error"
     });
+    await response.body?.cancel().catch(() => undefined);
     return response.ok;
   } catch {
     return false;
@@ -465,9 +471,12 @@ export async function createPageSession(url?: string, options?: CreatePageSessio
     signal: AbortSignal.timeout(1_500)
   });
   if (!versionResp.ok) {
+    await versionResp.body?.cancel().catch(() => undefined);
     throw new Error(`failed to get json/version from lightpanda (HTTP ${versionResp.status})`);
   }
-  const versionInfo: unknown = await versionResp.json();
+  const versionInfo: unknown = JSON.parse(
+    await readBoundedResponseText(versionResp, MAX_CDP_VERSION_RESPONSE_BYTES, "CDP version")
+  );
   if (
     !versionInfo ||
     typeof versionInfo !== "object" ||
