@@ -36,18 +36,40 @@ detect_platform() {
   esac
 }
 
-download_binary() {
-  local binary_name
+download_binary() (
+  local binary_name download_dir release_metadata binary_path expected_digest actual_digest
   binary_name="$(detect_platform)"
-
   mkdir -p "${LIGHTPANDA_DIR}"
+  download_dir="$(mktemp -d "${LIGHTPANDA_DIR}/.lightpanda-download.XXXXXX")"
+  trap 'rm -rf "${download_dir}"' EXIT
 
   echo "downloading lightpanda nightly binary..."
-  curl -L -o "${LIGHTPANDA_BIN}" \
+  release_metadata="${download_dir}/release.json"
+  binary_path="${download_dir}/${binary_name}"
+  curl -fsSL --connect-timeout 10 --max-time 30 \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -o "${release_metadata}" \
+    "https://api.github.com/repos/lightpanda-io/browser/releases/tags/nightly"
+
+  if ! expected_digest="$(node -e 'const fs = require("node:fs"); const release = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const asset = release.assets?.find(({ name }) => name === process.argv[2]); const digest = asset?.digest; if (typeof digest !== "string" || !/^sha256:[0-9a-f]{64}$/i.test(digest)) process.exit(1); process.stdout.write(digest.slice(7).toLowerCase());' "${release_metadata}" "${binary_name}" 2>/dev/null)"; then
+    echo "GitHub did not publish a valid SHA-256 digest for ${binary_name}" >&2
+    exit 1
+  fi
+
+  curl -fL --connect-timeout 10 --max-time 300 --retry 2 -o "${binary_path}" \
     "https://github.com/lightpanda-io/browser/releases/download/nightly/${binary_name}"
-  chmod a+x "${LIGHTPANDA_BIN}"
+
+  actual_digest="$(node -e 'const { createHash } = require("node:crypto"); const { createReadStream } = require("node:fs"); const hash = createHash("sha256"); const input = createReadStream(process.argv[1]); input.on("data", (chunk) => hash.update(chunk)); input.on("end", () => process.stdout.write(hash.digest("hex"))); input.on("error", () => { process.exitCode = 1; });' "${binary_path}")"
+  if [[ "${actual_digest}" != "${expected_digest}" ]]; then
+    echo "Lightpanda SHA-256 mismatch for ${binary_name}; installed binary was preserved" >&2
+    exit 1
+  fi
+
+  chmod a+x "${binary_path}"
+  mv -f "${binary_path}" "${LIGHTPANDA_BIN}"
   echo "lightpanda binary installed at ${LIGHTPANDA_BIN}"
-}
+)
 
 is_running() {
   if [[ -f "${PID_FILE}" ]]; then
@@ -159,14 +181,13 @@ case "${ACTION}" in
     ;;
 
   update)
+    download_binary
     if is_running; then
       echo "stopping lightpanda before update..."
       kill "$(cat "${PID_FILE}")" 2>/dev/null || true
       rm -f "${PID_FILE}"
       sleep 0.5
     fi
-    rm -f "${LIGHTPANDA_BIN}"
-    download_binary
     echo "lightpanda updated. run '$0 start' to start."
     ;;
 
@@ -180,7 +201,7 @@ Commands:
   stop    Stop the Lightpanda process
   restart Stop and start the Lightpanda process
   status  Check if the CDP server is reachable and what browser is running
-  update  Re-download the latest nightly binary
+  update  Download and verify the latest nightly binary
 
 Environment:
   CDP_PORT=9222                          CDP server port (default 9222)
