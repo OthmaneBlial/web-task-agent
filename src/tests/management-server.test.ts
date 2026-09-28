@@ -145,14 +145,27 @@ test("management server exposes controls and log endpoints", async () => {
     const rerunPayload = await rerunResponse.json();
     assert.ok(typeof rerunPayload.queueId === "string" && rerunPayload.queueId.length > 0);
 
-    const streamResponse = await fetch(`${baseUrl}/api/jobs/job_server/events/stream`);
+    const streamAbort = new AbortController();
+    const streamResponse = await fetch(`${baseUrl}/api/jobs/job_server/events/stream`, { signal: streamAbort.signal });
     assert.equal(streamResponse.status, 200);
     assert.equal(streamResponse.headers.get("content-type")?.includes("text/event-stream"), true);
     const reader = streamResponse.body?.getReader();
     assert.ok(reader);
     const firstChunk = await reader?.read();
-    const firstText = Buffer.from(firstChunk?.value ?? new Uint8Array()).toString("utf8");
-    assert.match(firstText, /event: snapshot/);
+    let streamText = Buffer.from(firstChunk?.value ?? new Uint8Array()).toString("utf8");
+    assert.match(streamText, /event: snapshot/);
+    job.appendRunEvent("log", "server test live stream update");
+    const streamTimeout = setTimeout(() => streamAbort.abort(), 3_000);
+    try {
+      while (!streamText.includes("server test live stream update")) {
+        const nextChunk = await reader?.read();
+        assert.equal(nextChunk?.done, false);
+        streamText += Buffer.from(nextChunk?.value ?? new Uint8Array()).toString("utf8");
+      }
+    } finally {
+      clearTimeout(streamTimeout);
+    }
+    assert.match(streamText, /event: log/);
     await reader?.cancel();
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));

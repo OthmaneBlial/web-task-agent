@@ -1062,7 +1062,7 @@ export function createManagementServer(options?: ManagementServerOptions): http.
           }
         }, 15000);
 
-        req.on("close", () => {
+        res.on("close", () => {
           clearInterval(timer);
           clearInterval(heartbeat);
           res.end();
