@@ -155,9 +155,14 @@ test("receipt imports store snapshots with private file permissions", () => {
 
   try {
     const imported = importExternalDecisionResult({ result, outputDir });
+    assert.equal(fs.statSync(imported.receiptPath).mode & 0o777, 0o600);
     for (const snapshotPath of imported.snapshotPaths) {
       assert.equal(fs.statSync(snapshotPath).mode & 0o777, 0o600);
     }
+
+    const keys = generateKeyPairSync("ed25519");
+    signReceiptDirectory({ directory: outputDir, privateKey: keys.privateKey, keyId: "private-receipt-test" });
+    assert.equal(fs.statSync(imported.receiptPath).mode & 0o777, 0o600);
     assert.equal(verifyReceiptDirectory(outputDir).valid, true);
   } finally {
     fs.rmSync(outputDir, { recursive: true, force: true });

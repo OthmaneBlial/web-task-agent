@@ -51,6 +51,8 @@ The scaffold is a strict pass-through mapper and includes a clearly synthetic ra
 
 The generated adapter reads regular input files up to 2 MB and rejects files that change size during reading.
 
+On POSIX systems, imports write `receipt.json` and snapshots with owner-only permissions (`0600`). Signing preserves the receipt file's permissions.
+
 The existing `examples/interop/browser-use-result.json` remains a synthetic contract fixture and now says so in machine-readable provenance. It is not one of the two authentic external runs required by P4.
 
 Two authentic runs are documented separately:

@@ -575,7 +575,7 @@ export function importExternalDecisionResult(input: {
     writeImportedSnapshot(outputDir, relativePath, content)
   );
   const receiptPath = path.join(outputDir, "receipt.json");
-  writeJsonAtomic(receiptPath, receipt);
+  writeTextAtomic(receiptPath, JSON.stringify(receipt, null, 2), { mode: 0o600 });
   const integrityManifestPath = writeReceiptIntegrityManifest({
     rootDir: outputDir,
     files: [receiptPath, ...snapshotPaths],
@@ -747,6 +747,10 @@ export function signReceiptDirectory(input: {
   const readFile = createReceiptFileReader(rootDir);
   const receiptBytes = readFile.read("receipt.json");
   if (!receiptBytes) throw new Error("receipt.json is missing, unsafe, or exceeds receipt verification limits");
+  const receiptStats = fs.lstatSync(receiptPath);
+  if (receiptStats.isSymbolicLink() || !receiptStats.isFile()) {
+    throw new Error("receipt.json must be a regular package file");
+  }
   const parsedReceipt: unknown = JSON.parse(receiptBytes.toString("utf8"));
   const validation = validateDecisionReceipt(parsedReceipt);
   if (!validation.valid || !validation.receipt) {
@@ -829,7 +833,7 @@ export function signReceiptDirectory(input: {
   if (signedReceiptBytes.byteLength > MAX_RECEIPT_FILE_BYTES || signedManifestBytes > MAX_RECEIPT_FILE_BYTES || outputBytes > MAX_RECEIPT_TOTAL_BYTES) {
     throw new Error("signed receipt package exceeds verification limits");
   }
-  writeJsonAtomic(receiptPath, signedReceipt);
+  writeTextAtomic(receiptPath, JSON.stringify(signedReceipt, null, 2), { mode: receiptStats.mode & 0o777 });
   writeReceiptIntegrityManifest({ rootDir, files, generatedAt });
   return receiptPath;
 }
