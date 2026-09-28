@@ -1331,7 +1331,7 @@ function insertJobRunEvent(
       id, job_id, event_type, message, metadata_json, created_at
     ) VALUES (?, ?, ?, ?, ?, ?)
   `).run(
-    `evt_${hashValue(`${jobId}:${eventType}:${timestamp}:${safeMessage}`).slice(0, 24)}`,
+    `evt_${randomUUID()}`,
     jobId,
     eventType,
     safeMessage,

@@ -65,6 +65,23 @@ function createAgentJobStore(
   });
 }
 
+test("job logs accept repeated identical events within the same millisecond", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-job-repeated-log-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+
+  try {
+    const job = createAgentJobStore(databasePath, "job_repeated_logs", "paused");
+    for (let index = 0; index < 100; index += 1) {
+      job.appendRunEvent("log", "same event");
+    }
+    const repeatedEvents = listJobRunEvents({ databasePath, jobId: "job_repeated_logs", limit: 1_000 })
+      .filter((event) => event.message === "same event");
+    assert.equal(repeatedEvents.length, 100);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("job rerun preserves prototype-named workflow inputs", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-job-prototype-input-"));
   try {
