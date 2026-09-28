@@ -21,7 +21,11 @@ export function appendStructuredLog(entry: StructuredLogEntry, logPath = resolve
   fs.mkdirSync(path.dirname(logPath), { recursive: true, mode: 0o700 });
   const descriptor = fs.openSync(
     logPath,
-    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_APPEND | (fs.constants.O_NOFOLLOW ?? 0),
+    fs.constants.O_WRONLY |
+      fs.constants.O_CREAT |
+      fs.constants.O_APPEND |
+      (fs.constants.O_NOFOLLOW ?? 0) |
+      (fs.constants.O_NONBLOCK ?? 0),
     0o600
   );
   try {
