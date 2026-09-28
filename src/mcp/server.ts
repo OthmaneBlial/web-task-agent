@@ -16,7 +16,8 @@ import {
 const SERVER_VERSION = "0.1.0";
 const PROTOCOL_VERSION = "2025-11-25";
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
-const MAX_RESULT_BYTES = 2 * 1024 * 1024;
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+const MAX_STRING_ID_BYTES = 256;
 const MAX_CONCURRENT_REQUESTS = 2;
 const MAX_PENDING_REQUESTS = 4;
 
@@ -110,7 +111,7 @@ function renderReceipt(receipt: DecisionReceipt, format: "markdown" | "json"): s
 }
 
 function boundedText(text: string): string {
-  if (Buffer.byteLength(text, "utf8") > MAX_RESULT_BYTES) throw new Error("tool result exceeds the 2 MB local response limit");
+  if (Buffer.byteLength(text, "utf8") > MAX_RESPONSE_BYTES) throw new Error("tool result exceeds the 2 MB local response limit");
   return text;
 }
 
@@ -228,7 +229,9 @@ async function callTool(paramsValue: unknown): Promise<Record<string, unknown>> 
 }
 
 function writeMessage(message: unknown): void {
-  process.stdout.write(`${JSON.stringify(message)}\n`);
+  const line = `${JSON.stringify(message)}\n`;
+  if (Buffer.byteLength(line, "utf8") > MAX_RESPONSE_BYTES) throw new Error("MCP response exceeds the 2 MB limit");
+  process.stdout.write(line);
 }
 
 function result(id: JsonRpcId, value: unknown): void {
@@ -293,8 +296,8 @@ function processLine(line: string): void {
     return;
   }
   if (request.id === undefined) return;
-  if (!isJsonRpcId(request.id)) {
-    error(null, -32600, "Invalid Request: id must be a string or safe integer");
+  if (!isJsonRpcId(request.id) || (typeof request.id === "string" && Buffer.byteLength(request.id, "utf8") > MAX_STRING_ID_BYTES)) {
+    error(null, -32600, "Invalid Request: id must be a string up to 256 bytes or a safe integer");
     return;
   }
   if (request.method.startsWith("notifications/")) {

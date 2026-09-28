@@ -9,7 +9,7 @@
 | `import_result` | Convert a provider-neutral local JSON result into a receipt directory | Yes, inside the configured root |
 | `render_receipt` | Render a verified receipt as Markdown or JSON | No |
 
-It has no navigation, HTTP, browser, shell, cookie, authentication, or external-write tool. Paths are relative to `DECISION_RECEIPT_ROOT`; escapes and symbolic links are rejected. Requests and responses are bounded to 2 MB. The server runs two requests at once, queues four more, then returns `-32000` so clients can retry.
+It has no navigation, HTTP, browser, shell, cookie, authentication, or external-write tool. Paths are relative to `DECISION_RECEIPT_ROOT`; escapes and symbolic links are rejected. Requests and responses are bounded to 2 MB; string request IDs are limited to 256 bytes. The server runs two requests at once, queues four more, then returns `-32000` so clients can retry.
 
 ## Install from this checkout
 

@@ -149,7 +149,7 @@ test("local MCP ignores notifications instead of responding to them", async () =
   }
 });
 
-test("local MCP rejects null and non-integer request IDs", async () => {
+test("local MCP validates request IDs and bounds oversized error responses", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-mcp-invalid-id-"));
   const guard = path.join(root, "deny-network.cjs");
   fs.writeFileSync(guard, [
@@ -171,11 +171,28 @@ test("local MCP rejects null and non-integer request IDs", async () => {
       assert.equal(response.result, undefined);
     }
 
+    const oversizedIdResponse = client.waitForUnsolicitedMessage();
+    client.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: "x".repeat(257), method: "tools/list" })}\n`);
+    const oversizedId = await oversizedIdResponse;
+    assert.equal(oversizedId.id, null);
+    assert.equal(oversizedId.error?.code, -32600);
+
     const stringIdResponse = client.waitForUnsolicitedMessage();
     client.child.stdin.write('{"jsonrpc":"2.0","id":"valid-string-id","method":"tools/list"}\n');
     const validStringId = await stringIdResponse;
     assert.equal(validStringId.id, "valid-string-id");
     assert.ok((validStringId.result as Record<string, unknown>).tools);
+
+    const methodPrefixBytes = Buffer.byteLength(JSON.stringify({ jsonrpc: "2.0", id: 7, method: "" }));
+    const method = "x".repeat(2 * 1024 * 1024 - methodPrefixBytes);
+    const oversizedRequest = JSON.stringify({ jsonrpc: "2.0", id: 7, method });
+    assert.equal(Buffer.byteLength(oversizedRequest), 2 * 1024 * 1024);
+    const oversizedErrorResponse = client.waitForUnsolicitedMessage();
+    client.child.stdin.write(`${oversizedRequest}\n`);
+    const boundedError = await oversizedErrorResponse;
+    assert.equal(boundedError.error?.code, -32603);
+    assert.equal(boundedError.error?.message, "MCP response exceeds the 2 MB limit");
+    assert.ok(Buffer.byteLength(`${JSON.stringify(boundedError)}\n`) <= 2 * 1024 * 1024);
 
     const notificationWithId = client.waitForUnsolicitedMessage();
     client.child.stdin.write('{"jsonrpc":"2.0","id":99,"method":"notifications/initialized"}\n');
