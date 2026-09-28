@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -50,6 +50,21 @@ test("standalone core verifies every public example and identifies the falsified
   const malformed = await verifyReceiptBundle(malformedBundle);
   assert.equal(malformed.valid, false);
   assert.ok(malformed.issues.some((issue) => issue.code === "manifest_file_invalid"));
+});
+
+test("standalone CLI redacts credential-like filesystem errors", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "decision-receipt-redaction-"));
+  try {
+    const cliPath = path.resolve("packages", "decision-receipt", "dist", "cli.js");
+    const result = spawnSync(process.execPath, [cliPath, "verify", path.join(tempDir, "password=example-secret")], {
+      encoding: "utf8"
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /password=\[REDACTED\]/);
+    assert.doesNotMatch(result.stderr, /example-secret/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("receipt manifest covers receipt.json and every referenced source snapshot", async () => {

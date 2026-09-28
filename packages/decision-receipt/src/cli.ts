@@ -9,6 +9,7 @@ import {
   renderDecisionReceiptComparison,
   verifyReceiptBundle
 } from "./index";
+import { redactSensitiveText } from "./redaction";
 import type { ReceiptBundle } from "./types";
 
 const MAX_FILES = 500;
@@ -127,6 +128,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  process.stderr.write(`decision-receipt: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`decision-receipt: ${redactSensitiveText(error instanceof Error ? error.message : String(error))}\n`);
   process.exitCode = 1;
 });
