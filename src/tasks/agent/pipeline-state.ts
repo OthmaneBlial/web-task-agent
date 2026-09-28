@@ -55,6 +55,10 @@ function buildCompletedWorkItem(result: AgentResearchResult): AgentPipelineWorkI
   };
 }
 
+function isAgentPipelineStage(value: unknown): value is AgentPipelineStage {
+  return value === "search" || value === "fetch" || value === "extract" || value === "completed";
+}
+
 function firstPendingFetchIndex(results: AgentSearchResult[]): number {
   const firstPendingIndex = results.findIndex(
     (result) => !result.page && !result.reviewStatus
@@ -77,6 +81,10 @@ export function ensurePipelineState(input: {
   const existingItems = new Map<string, AgentPipelineWorkItem>();
 
   for (const item of input.pipeline?.workItems ?? []) {
+    const savedNextStage: unknown = item.nextStage;
+    if (savedNextStage !== undefined && !isAgentPipelineStage(savedNextStage)) {
+      throw new Error(`Agent pipeline cache contains unsupported nextStage: ${String(savedNextStage)}.`);
+    }
     existingItems.set(item.queryKey, {
       ...buildEmptyWorkItem(item.query),
       ...item,
