@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -247,6 +247,53 @@ test("receipt directory verification rejects duplicate manifest paths", () => {
     const result = verifyReceiptDirectory(bundle);
     assert.equal(result.valid, false);
     assert.ok(result.errors.some((error) => error.includes("integrity manifest path is duplicated")), result.errors.join("; "));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("receipt verification bounds file count, file size, and total bytes", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-limits-"));
+  try {
+    const oversizedDir = path.join(root, "oversized-file");
+    writeDemoPackage({ id: "local-first-risk-review", outputDir: oversizedDir });
+    const oversizedReceipt = JSON.parse(fs.readFileSync(path.join(oversizedDir, "receipt.json"), "utf8")) as {
+      sources: Array<{ snapshotPath: string }>;
+    };
+    fs.truncateSync(path.join(oversizedDir, oversizedReceipt.sources[0]!.snapshotPath), 10 * 1024 * 1024 + 1);
+    assert.match(verifyReceiptDirectory(oversizedDir).errors.join("; "), /exceeds verification limits/);
+
+    const oversizedManifestDir = path.join(root, "oversized-manifest");
+    writeDemoPackage({ id: "local-first-risk-review", outputDir: oversizedManifestDir });
+    const oversizedManifestPath = path.join(oversizedManifestDir, "integrity-manifest.json");
+    const oversizedManifest = JSON.parse(fs.readFileSync(oversizedManifestPath, "utf8")) as {
+      files: Array<{ path: string; sha256: string; bytes: number }>;
+    };
+    oversizedManifest.files = Array.from({ length: 501 }, () => oversizedManifest.files[0]!);
+    fs.writeFileSync(oversizedManifestPath, `${JSON.stringify(oversizedManifest)}\n`);
+    assert.match(verifyReceiptDirectory(oversizedManifestDir).errors.join("; "), /500-file verification limit/);
+
+    const oversizedTotalDir = path.join(root, "oversized-total");
+    writeDemoPackage({ id: "local-first-risk-review", outputDir: oversizedTotalDir });
+    const totalManifestPath = path.join(oversizedTotalDir, "integrity-manifest.json");
+    const totalManifest = JSON.parse(fs.readFileSync(totalManifestPath, "utf8")) as {
+      files: Array<{ path: string; sha256: string; bytes: number }>;
+    };
+    const fileBytes = 10 * 1024 * 1024;
+    const zeroHash = createHash("sha256");
+    const zeroBlock = Buffer.alloc(1024 * 1024);
+    for (let index = 0; index < 10; index += 1) zeroHash.update(zeroBlock);
+    const sha256 = zeroHash.digest("hex");
+    for (let index = 0; index < 5; index += 1) {
+      const relativePath = `extra/${index}.bin`;
+      const filePath = path.join(oversizedTotalDir, relativePath);
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.closeSync(fs.openSync(filePath, "w"));
+      fs.truncateSync(filePath, fileBytes);
+      totalManifest.files.push({ path: relativePath, sha256, bytes: fileBytes });
+    }
+    fs.writeFileSync(totalManifestPath, `${JSON.stringify(totalManifest)}\n`);
+    assert.match(verifyReceiptDirectory(oversizedTotalDir).errors.join("; "), /exceeds verification limits/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
