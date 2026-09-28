@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { SourceAcquisitionPolicy } from "../lib/source-acquisition-policy";
 import { BrowserPageFetcher } from "../tasks/agent/fetchers/browser-fetcher";
+import type { CDPClient } from "../types";
 
 const cdpModule = require("../lib/cdp") as typeof import("../lib/cdp");
 
@@ -189,7 +190,7 @@ test("browser fetcher blocks a redirect to a private address before connecting",
 
   cdpModule.createPageSession = async (_url, options) => {
     await cdpModule.installRequestPolicy(
-      client,
+      client as unknown as CDPClient,
       options!.requestTargetPolicy!,
       options!.onMainFrameBlocked
     );

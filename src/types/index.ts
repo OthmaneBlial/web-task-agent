@@ -1,4 +1,6 @@
-export type CDPClient = any;
+import type CDP = require("chrome-remote-interface");
+
+export type CDPClient = CDP.Client;
 
 export interface BoundingBox {
   x: number;

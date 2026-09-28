@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import test from "node:test";
 
-import { locateElement } from "../lib/cdp";
+import { locateElement, waitForNetworkIdle } from "../lib/cdp";
 import { humanClick } from "../lib/humanizer";
+import type { CDPClient } from "../types";
 
 function createOversizedDomClient() {
   const matches = {
@@ -28,7 +29,7 @@ function createOversizedDomClient() {
       }
     }
   };
-  return { client, evaluationCount: () => evaluations };
+  return { client: client as unknown as CDPClient, evaluationCount: () => evaluations };
 }
 
 test("element lookup refuses oversized DOM scans before iterating matches", async () => {
@@ -48,4 +49,27 @@ test("click reports ambiguous matches without scrolling the page", async () => {
 
   await assert.rejects(humanClick(client, "css=.target"), /matched 5001 elements/);
   assert.equal(evaluationCount(), 1);
+});
+
+test("network idle ignores malformed request IDs and removes its listeners", async () => {
+  const listeners = new Map<string, (...args: unknown[]) => void>();
+  const client = {
+    Network: { enable: async () => undefined },
+    on: (event: string, listener: (...args: unknown[]) => void) => listeners.set(event, listener),
+    off: (event: string, listener: (...args: unknown[]) => void) => {
+      if (listeners.get(event) === listener) listeners.delete(event);
+    }
+  } as unknown as CDPClient;
+
+  const idle = waitForNetworkIdle(client, { idleTimeMs: 5, timeoutMs: 500 });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const requestStarted = listeners.get("Network.requestWillBeSent");
+  const requestFinished = listeners.get("Network.loadingFinished");
+  assert.ok(requestStarted);
+  assert.ok(requestFinished);
+  requestStarted({ requestId: 42 });
+  requestFinished({ requestId: "42" });
+
+  await idle;
+  assert.equal(listeners.size, 0);
 });

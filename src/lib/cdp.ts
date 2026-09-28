@@ -20,6 +20,32 @@ export const DEBUG_PORT = Number(process.env.CDP_PORT ?? process.env.CHROME_PORT
 const execFileAsync = promisify(execFile);
 const LIGHTPANDA_START_SCRIPT = path.resolve(process.cwd(), "scripts", "start-lightpanda.sh");
 
+type CdpEventListener = (...args: unknown[]) => void;
+
+type CdpEventEmitter = {
+  on(event: string, listener: CdpEventListener): unknown;
+  once(event: string, listener: CdpEventListener): unknown;
+  removeListener(event: string, listener: CdpEventListener): unknown;
+  off?: (event: string, listener: CdpEventListener) => unknown;
+};
+
+type SessionCommandSender = (
+  method: string,
+  params: object | undefined,
+  sessionId: string
+) => Promise<unknown>;
+
+function sendSessionCommand(
+  client: CDP.Client,
+  method: string,
+  params: object | undefined,
+  sessionId: string
+): Promise<unknown> {
+  // CRI types `send` with generated command names; this session proxy receives a dynamic name.
+  const send = client.send as unknown as SessionCommandSender;
+  return send.call(client, method, params, sessionId);
+}
+
 export type CdpBackendKind = "lightpanda" | "chrome" | "unknown" | "unavailable";
 
 export interface CdpBackendStatus {
@@ -390,10 +416,10 @@ export async function createPageSession(url?: string, options?: CreatePageSessio
   }
 
   // Connect to the root browser WebSocket
-  const rootClient = (await CDP({
+  const rootClient = await CDP({
     target: webSocketDebuggerUrl.toString(),
     local: true
-  })) as CDPClient;
+  });
 
   // Create a new independent browser context and target
   const { browserContextId } = await rootClient.Target.createBrowserContext();
@@ -411,7 +437,7 @@ export async function createPageSession(url?: string, options?: CreatePageSessio
   // Create a Proxy over the root client that automatically injects the sessionId
   // into all domain commands, making it look like a regular per-target CDPClient.
   const proxyClient = new Proxy(rootClient, {
-    get(target: any, prop: string) {
+    get(target, prop) {
       if (prop === 'close') {
         return async () => {
           try {
@@ -423,36 +449,44 @@ export async function createPageSession(url?: string, options?: CreatePageSessio
         };
       }
       if (prop === 'send') {
-        return (method: string, params?: object) => target.send(method, params, sessionId);
+        return (method: string, params?: object) => sendSessionCommand(target, method, params, sessionId);
       }
 
       // If accessing a Domain like 'Page', return a wrapped object
-      if (typeof target[prop] === 'object' && target[prop] !== null) {
-        return new Proxy(target[prop], {
-          get(domainTarget: any, domainProp: string) {
-            if (typeof domainTarget[domainProp] === 'function') {
-              // Intercept the domain method call (e.g., Page.navigate)
-              return (params?: object) => target.send(`${prop}.${domainProp}`, params, sessionId);
+      if (typeof prop === "string") {
+        const domain: unknown = Reflect.get(target, prop);
+        if (typeof domain === 'object' && domain !== null) {
+          return new Proxy(domain, {
+            get(domainTarget, domainProp) {
+              const domainMember: unknown = Reflect.get(domainTarget, domainProp);
+              if (typeof domainMember === 'function' && typeof domainProp === "string") {
+                // Intercept the domain method call (e.g., Page.navigate)
+                return (params?: object) => sendSessionCommand(target, `${prop}.${domainProp}`, params, sessionId);
+              }
+              return domainMember;
             }
-            return domainTarget[domainProp];
-          }
-        });
+          });
+        }
       }
 
       // If accessing an event binding, we need to bind event listeners specifying the sessionId
       // actually CRI handles events automatically if flatten:true is used during CDP() creation.
       // But we attached manually. CRI emits `${method}.${sessionId}` events.
       if (prop === 'on') {
-        return (event: string, handler: Function) => target.on(`${event}.${sessionId}`, handler);
+        const eventTarget = target as CDP.Client & CdpEventEmitter;
+        return (event: string, listener: CdpEventListener) => eventTarget.on(`${event}.${sessionId}`, listener);
       }
       if (prop === 'once') {
-        return (event: string, handler: Function) => target.once(`${event}.${sessionId}`, handler);
+        const eventTarget = target as CDP.Client & CdpEventEmitter;
+        return (event: string, listener: CdpEventListener) => eventTarget.once(`${event}.${sessionId}`, listener);
       }
       if (prop === 'removeListener' || prop === 'off') {
-        return (event: string, handler: Function) => target.removeListener(`${event}.${sessionId}`, handler);
+        const eventTarget = target as CDP.Client & CdpEventEmitter;
+        return (event: string, listener: CdpEventListener) =>
+          eventTarget.removeListener(`${event}.${sessionId}`, listener);
       }
 
-      return target[prop];
+      return Reflect.get(target, prop);
     }
   }) as CDPClient;
 
@@ -826,11 +860,12 @@ export async function waitForAnySelector(
 function attachClientEvent(
   client: CDPClient,
   eventName: string,
-  handler: (...args: any[]) => void
+  handler: CdpEventListener
 ): () => void {
-  if (typeof client.on === "function" && typeof client.off === "function") {
-    client.on(eventName, handler);
-    return () => client.off(eventName, handler);
+  const eventClient = client as CDPClient & CdpEventEmitter;
+  if (typeof eventClient.on === "function" && typeof eventClient.off === "function") {
+    eventClient.on(eventName, handler);
+    return () => eventClient.off?.(eventName, handler);
   }
 
   return () => undefined;
@@ -852,16 +887,23 @@ export async function waitForNetworkIdle(
     lastActivityAt = Date.now();
   };
 
-  const onRequest = (params: { requestId?: string }): void => {
-    if (params.requestId) {
-      inFlight.add(params.requestId);
+  const readRequestId = (params: unknown): string | undefined => {
+    if (!params || typeof params !== "object" || !("requestId" in params)) return undefined;
+    return typeof params.requestId === "string" ? params.requestId : undefined;
+  };
+
+  const onRequest: CdpEventListener = (...args) => {
+    const requestId = readRequestId(args[0]);
+    if (requestId) {
+      inFlight.add(requestId);
     }
     markActivity();
   };
 
-  const onComplete = (params: { requestId?: string }): void => {
-    if (params.requestId) {
-      inFlight.delete(params.requestId);
+  const onComplete: CdpEventListener = (...args) => {
+    const requestId = readRequestId(args[0]);
+    if (requestId) {
+      inFlight.delete(requestId);
     }
     markActivity();
   };
