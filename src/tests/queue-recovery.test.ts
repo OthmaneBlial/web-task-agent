@@ -169,6 +169,53 @@ test("stale queue recovery preserves a pending pause for the replacement worker"
   }
 });
 
+test("queue controls preserve running leases and cancel queued jobs atomically", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-control-state-"));
+  const databasePath = path.join(tempDir, "jobs.sqlite");
+
+  try {
+    const running = enqueueQueuedAgentJob({
+      databasePath,
+      payload: {
+        taskType: "agent",
+        mode: "agent",
+        label: "Running control test",
+        options: { instruction: "Keep the active lease", resume: false }
+      }
+    });
+    assert.ok(claimNextQueuedJob({ databasePath, workerId: "worker-control", leaseTtlSeconds: 60 }));
+
+    const paused = controlQueuedJob({ databasePath, queueId: running.queueId, action: "pause" });
+    assert.equal(paused?.status, "running");
+    assert.equal(paused?.controlAction, "pause");
+    assert.equal(ownsQueuedJobLease({ databasePath, queueId: running.queueId, workerId: "worker-control" }), true);
+
+    const cancelled = controlQueuedJob({ databasePath, queueId: running.queueId, action: "cancel" });
+    assert.equal(cancelled?.status, "running");
+    assert.equal(cancelled?.controlAction, "cancel");
+    assert.equal(ownsQueuedJobLease({ databasePath, queueId: running.queueId, workerId: "worker-control" }), true);
+
+    const queued = enqueueQueuedAgentJob({
+      databasePath,
+      payload: {
+        taskType: "agent",
+        mode: "agent",
+        label: "Queued cancel test",
+        options: { instruction: "Cancel before claim", resume: false }
+      }
+    });
+    const cancelledBeforeClaim = controlQueuedJob({
+      databasePath,
+      queueId: queued.queueId,
+      action: "cancel"
+    });
+    assert.equal(cancelledBeforeClaim?.status, "cancelled");
+    assert.equal(ownsQueuedJobLease({ databasePath, queueId: queued.queueId, workerId: "worker-control" }), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("queue listing and claiming use a stable ID tie-breaker", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-queue-order-"));
   const databasePath = path.join(tempDir, "jobs.sqlite");

@@ -592,26 +592,15 @@ export function controlQueuedJob(input: {
     });
 
     if (input.action === "pause") {
-      if (job.status === "queued") {
-        db.prepare(`
-          UPDATE queued_jobs
-          SET
-            status = 'paused',
-            control_action = NULL,
-            control_requested_at = NULL,
-            updated_at = ?
-          WHERE id = ?
-        `).run(timestamp, input.queueId);
-      } else if (job.status === "running") {
-        db.prepare(`
-          UPDATE queued_jobs
-          SET
-            control_action = 'pause',
-            control_requested_at = ?,
-            updated_at = ?
-          WHERE id = ?
-        `).run(timestamp, timestamp, input.queueId);
-      }
+      db.prepare(`
+        UPDATE queued_jobs
+        SET
+          status = CASE WHEN status = 'queued' THEN 'paused' ELSE status END,
+          control_action = CASE WHEN status = 'running' THEN 'pause' ELSE NULL END,
+          control_requested_at = CASE WHEN status = 'running' THEN ? ELSE NULL END,
+          updated_at = ?
+        WHERE id = ? AND status IN ('queued', 'running')
+      `).run(timestamp, timestamp, input.queueId);
     }
 
     if (input.action === "resume" && job.status === "paused") {
@@ -625,7 +614,7 @@ export function controlQueuedJob(input: {
           run_after = ?,
           completed_at = NULL,
           updated_at = ?
-        WHERE id = ?
+        WHERE id = ? AND status = 'paused'
       `).run(
         serializeJson(payload),
         timestamp,
@@ -635,34 +624,19 @@ export function controlQueuedJob(input: {
     }
 
     if (input.action === "cancel") {
-      if (job.status === "running") {
-        db.prepare(`
-          UPDATE queued_jobs
-          SET
-            control_action = 'cancel',
-            control_requested_at = ?,
-            updated_at = ?
-          WHERE id = ?
-        `).run(timestamp, timestamp, input.queueId);
-      } else if (job.status !== "completed" && job.status !== "cancelled") {
-        db.prepare(`
-          UPDATE queued_jobs
-          SET
-            status = 'cancelled',
-            control_action = NULL,
-            control_requested_at = NULL,
-            lease_expires_at = NULL,
-            leased_at = NULL,
-            leased_by = NULL,
-            updated_at = ?,
-            completed_at = ?
-          WHERE id = ?
-        `).run(
-          timestamp,
-          timestamp,
-          input.queueId
-        );
-      }
+      db.prepare(`
+        UPDATE queued_jobs
+        SET
+          status = CASE WHEN status = 'running' THEN status ELSE 'cancelled' END,
+          control_action = CASE WHEN status = 'running' THEN 'cancel' ELSE NULL END,
+          control_requested_at = CASE WHEN status = 'running' THEN ? ELSE NULL END,
+          lease_expires_at = CASE WHEN status = 'running' THEN lease_expires_at ELSE NULL END,
+          leased_at = CASE WHEN status = 'running' THEN leased_at ELSE NULL END,
+          leased_by = CASE WHEN status = 'running' THEN leased_by ELSE NULL END,
+          updated_at = ?,
+          completed_at = CASE WHEN status = 'running' THEN completed_at ELSE ? END
+        WHERE id = ? AND status IN ('queued', 'running', 'paused', 'failed')
+      `).run(timestamp, timestamp, timestamp, input.queueId);
     }
 
     if (input.action === "retry" && (job.status === "failed" || job.status === "cancelled")) {
@@ -676,9 +650,9 @@ export function controlQueuedJob(input: {
           run_after = ?,
           completed_at = NULL,
           updated_at = ?
-        WHERE id = ?
+        WHERE id = ? AND status IN ('failed', 'cancelled')
       `).run(
-        serializeJson(parseQueuedPayload(row.payload_json, { forceResume: true })),
+        serializeJson(payload),
         timestamp,
         timestamp,
         input.queueId
