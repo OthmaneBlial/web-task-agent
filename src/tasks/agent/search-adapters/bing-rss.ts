@@ -34,6 +34,11 @@ function hostnameOf(rawUrl: string): string {
 }
 
 export function parseBingRssResults(xml: string, maxResults: number): AgentSearchResult[] {
+  const feed = xml.match(/<rss\b[^>]*>([\s\S]*?)<\/rss\s*>/i)?.[1];
+  if (feed === undefined || !/<channel\b[^>]*>[\s\S]*<\/channel\s*>/i.test(feed)) {
+    throw new Error("bing rss response did not contain a complete RSS feed");
+  }
+
   const results: AgentSearchResult[] = [];
   const seenUrls = new Set<string>();
   const items = xml.match(/<item>[\s\S]*?<\/item>/gi) ?? [];

@@ -31,6 +31,15 @@ test("parseBingRssResults extracts result items from RSS xml", () => {
   assert.equal(results[1]?.site, "play.google.com");
 });
 
+test("parseBingRssResults rejects HTML and incomplete feeds", () => {
+  for (const response of [
+    "<html><body>Search temporarily unavailable</body></html>",
+    "<rss><channel><item><title>Partial result</title></channel>"
+  ]) {
+    assert.throws(() => parseBingRssResults(response, 5), /complete RSS feed/);
+  }
+});
+
 test("Bing RSS search applies a request deadline", async () => {
   let requestSignal: AbortSignal | null | undefined;
   const adapter = new BingRssSearchAdapter(() => undefined, async (_url, init) => {
@@ -107,6 +116,37 @@ test("ResilientSearchAdapter falls back when the primary provider fails", async 
   assert.equal(result.results.length, 1);
   assert.ok(events.some((message) => message.includes("DuckDuckGo HTML failed")));
   assert.ok(events.some((message) => message.includes("fallback provider Bing RSS succeeded")));
+});
+
+test("ResilientSearchAdapter falls back when Bing returns an HTML challenge page", async () => {
+  const events: string[] = [];
+  const bing = new BingRssSearchAdapter(
+    () => undefined,
+    async () => new Response("<html><body>Verify you are human</body></html>", { status: 200 })
+  );
+  const fallback: AgentSearchAdapter = {
+    id: "fallback",
+    label: "Fallback provider",
+    buildSearchUrl: () => "https://fallback.example/search",
+    async search(query) {
+      return {
+        query,
+        searchedAt: "2026-03-21T10:00:00.000Z",
+        searchUrl: "https://fallback.example/search",
+        searchProvider: "fallback",
+        pagesVisited: 1,
+        exhausted: true,
+        results: []
+      };
+    }
+  };
+
+  const result = await new ResilientSearchAdapter((message) => events.push(message), [bing, fallback])
+    .search("sample query", 5);
+
+  assert.equal(result.searchProvider, "fallback");
+  assert.ok(events.some((message) => message.includes("Bing RSS failed")));
+  assert.ok(events.some((message) => message.includes("fallback provider Fallback provider succeeded")));
 });
 
 test("ResilientSearchAdapter prefers non-DuckDuckGo providers for structured queries", async () => {
