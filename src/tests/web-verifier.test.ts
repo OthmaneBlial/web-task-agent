@@ -71,7 +71,9 @@ function browserVerifierUi(): {
     return element;
   };
   const context: Record<string, unknown> = {
-    DecisionReceiptVerifier: {},
+    DecisionReceiptVerifier: {
+      receiptInputLimits: { maxArchiveBytes: 25 * 1024 * 1024, maxEntries: 2_000 }
+    },
     WEB_VERIFIER_FIXTURES: {},
     TextDecoder,
     URLSearchParams,
@@ -256,6 +258,32 @@ test("browser folder drops reject duplicate paths instead of overwriting files",
     dataTransfer: { items: Array.from({ length: 2 }, () => ({ webkitGetAsEntry: () => fileEntry })) }
   });
   assert.match(ui.announcer.textContent, /Folder contains a duplicate path: same\.txt/);
+});
+
+test("browser rejects an oversized ZIP before reading it into memory", async () => {
+  const ui = browserVerifierUi();
+  let read = false;
+  const file = {
+    name: "oversized.zip",
+    size: 25 * 1024 * 1024 + 1,
+    arrayBuffer: async () => {
+      read = true;
+      return new ArrayBuffer(0);
+    }
+  };
+  const zipEntry = {
+    name: file.name,
+    isFile: true,
+    file(callback: (value: typeof file) => void) { callback(file); }
+  };
+  const drop = ui.dropZone.listeners.get("drop");
+  assert.ok(drop);
+  await drop({
+    preventDefault() {},
+    dataTransfer: { items: [{ webkitGetAsEntry: () => zipEntry }] }
+  });
+  assert.equal(read, false);
+  assert.match(ui.announcer.textContent, /ZIP exceeds the 25 MB compressed limit/);
 });
 
 test("browser verifier reports a changed snapshot when its source URL stays the same", () => {
