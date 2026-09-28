@@ -15,7 +15,9 @@ function run(command, args, cwd = root) {
   return execFileSync(command, args, {
     cwd,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 180_000,
+    maxBuffer: 8 * 1024 * 1024
   });
 }
 
