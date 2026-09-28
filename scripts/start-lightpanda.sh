@@ -114,6 +114,8 @@ case "${ACTION}" in
       --host 127.0.0.1 \
       --port "${PORT}" \
       --log_level "${LOG_LEVEL}" \
+      --block-private-networks \
+      --block-cidrs 100.64.0.0/10 \
       >"${LOG_FILE}" 2>&1 &
 
     echo $! > "${PID_FILE}"
