@@ -234,10 +234,18 @@ test("storage backup and restore preserve a consistent prior database with a saf
     const unrelatedDatabase = new DatabaseSync(unrelatedPath);
     unrelatedDatabase.exec("CREATE TABLE unrelated (value TEXT)");
     unrelatedDatabase.close();
-    assert.throws(
-      () => restoreJobStore({ databasePath, inputPath: unrelatedPath, force: true }),
-      /not a Web Task Agent job store backup/i
-    );
+    const originalReadFileSync = fs.readFileSync;
+    fs.readFileSync = (() => {
+      throw new Error("backup header validation must not load the whole file");
+    }) as typeof fs.readFileSync;
+    try {
+      assert.throws(
+        () => restoreJobStore({ databasePath, inputPath: unrelatedPath, force: true }),
+        /not a Web Task Agent job store backup/i
+      );
+    } finally {
+      fs.readFileSync = originalReadFileSync;
+    }
     assert.equal(maintainJobStore({ databasePath }).jobs, 1);
 
     const futureSchemaPath = path.join(tempDir, "future-schema.sqlite");

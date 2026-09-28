@@ -1106,7 +1106,21 @@ function quoteSqlString(value: string): string {
 }
 
 function assertJobStoreBackupFile(filePath: string): void {
-  const header = fs.readFileSync(filePath).subarray(0, 16).toString("utf8");
+  const descriptor = fs.openSync(
+    filePath,
+    fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0)
+  );
+  let header: string;
+  try {
+    if (!fs.fstatSync(descriptor).isFile()) {
+      throw new Error(`backup is not a regular file: ${filePath}`);
+    }
+    const bytes = Buffer.alloc(16);
+    fs.readSync(descriptor, bytes, 0, bytes.length, 0);
+    header = bytes.toString("utf8");
+  } finally {
+    fs.closeSync(descriptor);
+  }
   if (header !== "SQLite format 3\u0000") {
     throw new Error(`backup is not a SQLite database: ${filePath}`);
   }
