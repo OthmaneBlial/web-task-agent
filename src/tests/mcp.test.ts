@@ -257,6 +257,15 @@ test("local MCP exposes exactly four bounded offline receipt tools", async () =>
     assert.equal((imported.structuredContent as { valid: boolean }).valid, true);
     assert.equal(fs.existsSync(path.join(root, "imports", "browser-use", "receipt.json")), true);
 
+    fs.writeFileSync(path.join(root, "oversized-result.json"), Buffer.alloc(2 * 1024 * 1024 + 1, 0x20));
+    const oversizedImport = resultObject(await client.request("tools/call", {
+      name: "import_result",
+      arguments: { input_path: "oversized-result.json", output_path: "imports/oversized" }
+    }));
+    assert.equal(oversizedImport.isError, true);
+    assert.match(JSON.stringify(oversizedImport.content), /input result exceeds the 2 MB limit/);
+    assert.equal(fs.existsSync(path.join(root, "imports", "oversized")), false);
+
     const escaped = resultObject(await client.request("tools/call", {
       name: "verify_receipt",
       arguments: { path: "../outside" }

@@ -1,6 +1,6 @@
-import fs from "node:fs";
 import path from "node:path";
 
+import { readBoundedTextFileSync } from "../lib/bounded-file";
 import { normalizeWorkflowProposalId } from "./scaffold";
 
 type JsonObject = Record<string, unknown>;
@@ -147,7 +147,7 @@ export function validateWorkflowProposalDefinition(
 export function validateWorkflowProposalFile(inputPath: string): WorkflowProposalValidationResult {
   const definitionPath = path.resolve(inputPath);
   try {
-    const raw = fs.readFileSync(definitionPath, "utf8");
+    const raw = readBoundedTextFileSync(definitionPath, "workflow definition");
     return validateWorkflowProposalDefinition(JSON.parse(raw), definitionPath);
   } catch (error) {
     return {

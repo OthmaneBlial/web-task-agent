@@ -112,3 +112,16 @@ test("workflow proposal validation requires a complete, reviewable source and ri
   assert.ok(missingFreshnessAndCost.errors.some((error) => error.startsWith("cost must define")));
   assert.ok(missingFreshnessAndCost.errors.some((error) => error.startsWith("invalidation must be an array")));
 });
+
+test("workflow proposal validation bounds definition file reads", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-proposal-limit-"));
+  const definitionPath = path.join(tempDir, "workflow.json");
+  try {
+    fs.writeFileSync(definitionPath, Buffer.alloc(2 * 1024 * 1024 + 1, 0x20));
+    const result = validateWorkflowProposalFile(definitionPath);
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some((error) => error.includes("workflow definition exceeds the 2 MB limit")));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

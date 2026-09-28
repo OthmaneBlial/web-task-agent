@@ -43,6 +43,7 @@ import { maintainPromptTraceRetention } from "./lib/prompt-trace";
 import { logStructured } from "./lib/local-logging";
 import { assessStorageHealth } from "./lib/storage-validation";
 import { validateDecisionReceiptAdapterResult } from "./lib/adapter-contract";
+import { readBoundedTextFileSync } from "./lib/bounded-file";
 import { createAdapterScaffold } from "./lib/adapter-scaffold";
 import {
   compareDecisionReceipts,
@@ -91,27 +92,6 @@ function parsePositiveInteger(value: string, label: string): number {
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const MAX_WORKER_POLL_SECONDS = Math.floor(MAX_TIMER_DELAY_MS / 1000);
-const MAX_JSON_INPUT_BYTES = 2 * 1024 * 1024;
-
-function readBoundedTextFileSync(filePath: string, label: string): string {
-  const descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
-  try {
-    const stat = fs.fstatSync(descriptor);
-    if (!stat.isFile()) throw new Error(`${label} must be a regular file`);
-    if (stat.size > MAX_JSON_INPUT_BYTES) throw new Error(`${label} exceeds the 2 MB limit`);
-    const buffer = Buffer.allocUnsafe(MAX_JSON_INPUT_BYTES + 1);
-    let bytesRead = 0;
-    while (bytesRead < buffer.length) {
-      const count = fs.readSync(descriptor, buffer, bytesRead, buffer.length - bytesRead, null);
-      if (count === 0) break;
-      bytesRead += count;
-    }
-    if (bytesRead > MAX_JSON_INPUT_BYTES) throw new Error(`${label} exceeds the 2 MB limit`);
-    return buffer.toString("utf8", 0, bytesRead);
-  } finally {
-    fs.closeSync(descriptor);
-  }
-}
 
 function parseWorkerPollIntervalSeconds(value: string): number {
   const seconds = parsePositiveInteger(value, "poll-interval-seconds");

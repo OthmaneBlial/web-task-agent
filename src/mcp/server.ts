@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { readBoundedTextFileSync } from "../lib/bounded-file";
 import {
   compareDecisionReceipts,
   importExternalDecisionResult,
@@ -200,8 +201,7 @@ async function callTool(paramsValue: unknown): Promise<Record<string, unknown>> 
     const inputPath = localPath(stringArgument(args, "input_path"));
     const outputPath = localPath(stringArgument(args, "output_path"));
     if (!fs.existsSync(inputPath) || !fs.statSync(inputPath).isFile()) throw new Error("input_path must name an existing JSON file");
-    if (fs.statSync(inputPath).size > MAX_REQUEST_BYTES) throw new Error("input result exceeds the 2 MB limit");
-    const parsed = JSON.parse(fs.readFileSync(inputPath, "utf8")) as ExternalDecisionResult;
+    const parsed = JSON.parse(readBoundedTextFileSync(inputPath, "input result")) as ExternalDecisionResult;
     const written = importExternalDecisionResult({ result: parsed, outputDir: outputPath, force: optionalBoolean(args, "force") });
     const verification = verifyReceiptDirectory(outputPath);
     if (!verification.valid) throw new Error(`imported receipt failed verification: ${verification.errors.join("; ")}`);
