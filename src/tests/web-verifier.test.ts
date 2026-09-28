@@ -44,6 +44,44 @@ function browserVerifier(): {
   return context.DecisionReceiptVerifier as ReturnType<typeof browserVerifier>;
 }
 
+function browserVerifierUi(): {
+  dropZone: { listeners: Map<string, (event: unknown) => unknown> };
+  announcer: { textContent: string };
+} {
+  type Listener = (event: unknown) => unknown;
+  const elements = new Map<string, {
+    listeners: Map<string, Listener>;
+    textContent: string;
+    value: string;
+    classList: { add(value: string): void; remove(value: string): void };
+    addEventListener(type: string, listener: Listener): void;
+  }>();
+  const getElement = (id: string) => {
+    let element = elements.get(id);
+    if (!element) {
+      element = {
+        listeners: new Map(),
+        textContent: "",
+        value: "",
+        classList: { add() {}, remove() {} },
+        addEventListener(type, listener) { this.listeners.set(type, listener); }
+      };
+      elements.set(id, element);
+    }
+    return element;
+  };
+  const context: Record<string, unknown> = {
+    DecisionReceiptVerifier: {},
+    WEB_VERIFIER_FIXTURES: {},
+    TextDecoder,
+    URLSearchParams,
+    document: { getElementById: getElement, querySelectorAll: () => [] },
+    window: { location: { search: "" } }
+  };
+  vm.runInNewContext(fs.readFileSync("docs/verifier.js", "utf8"), context);
+  return { dropZone: getElement("receipt-drop-zone"), announcer: getElement("verifier-announcer") };
+}
+
 test("local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe report controls", () => {
   const html = fs.readFileSync("docs/verify.html", "utf8");
   const app = fs.readFileSync("docs/verifier.js", "utf8");
@@ -51,7 +89,7 @@ test("local verifier page exposes folder, ZIP, fixtures, diff, and privacy-safe 
   assert.match(html, /webkitdirectory/);
   assert.match(html, /accept="\.zip,application\/zip"/);
   assert.match(html, /No upload path exists/);
-  assert.match(html, /2,000 ZIP entries/);
+  assert.match(html, /2,000 entries per ZIP or folder drop/);
   assert.match(html, /Integrity verified ≠ decision is true/);
   assert.match(html, /verification-report\.json/);
   assert.match(css, /prefers-reduced-motion/);
@@ -170,6 +208,36 @@ test("actual browser bundle streams a rooted ZIP and rejects path traversal", as
     Array.from({ length: 2_001 }, (_, index) => [`empty-${index}/`, new Uint8Array()])
   );
   await assert.rejects(verifier.unpackReceiptZip(zipSync(directoryFlood)), /2000-entry limit/);
+});
+
+test("browser folder drops bound empty directory entries", async () => {
+  const ui = browserVerifierUi();
+  interface MockDirectory {
+    name: string;
+    isDirectory: true;
+    createReader(): { readEntries(callback: (entries: MockDirectory[]) => void): void };
+  }
+  const directory = (name: string, children: MockDirectory[] = []): MockDirectory => {
+    let read = false;
+    return {
+      name,
+      isDirectory: true,
+      createReader: () => ({
+        readEntries(callback: (entries: MockDirectory[]) => void) {
+          callback(read ? [] : children);
+          read = true;
+        }
+      })
+    };
+  };
+  const root = directory("receipt", Array.from({ length: 2_000 }, (_, index) => directory(`empty-${index}`)));
+  const drop = ui.dropZone.listeners.get("drop");
+  assert.ok(drop);
+  await drop({
+    preventDefault() {},
+    dataTransfer: { items: [{ webkitGetAsEntry: () => root }] }
+  });
+  assert.match(ui.announcer.textContent, /Folder drop exceeds the 2000-entry limit/);
 });
 
 test("browser verifier reports a changed snapshot when its source URL stays the same", () => {
