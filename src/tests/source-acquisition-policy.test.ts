@@ -180,6 +180,23 @@ test("positive fractional domain request limits keep a one-request cap", async (
   }
 });
 
+test("positive fractional constructor limits keep a one-request cap", async () => {
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    maxRequestsPerDomain: 0.4,
+    resolveHostname: resolvePublicHostname,
+    fetchRobots: async () => robotsResponse("User-agent: *\nAllow: /\n")
+  });
+
+  const first = await policy.prepare("https://docs.example.com/one");
+  const second = await policy.prepare("https://docs.example.com/two");
+
+  assert.equal(first.action, "allow");
+  assert.equal(first.domainRequestLimit, 1);
+  assert.equal(second.action, "deny");
+  assert.equal(second.domainRequestLimit, 1);
+});
+
 test("source acquisition refreshes cached robots rules after 24 hours", async () => {
   let now = 1_000;
   let robotsCalls = 0;

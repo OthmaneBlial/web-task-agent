@@ -329,7 +329,7 @@ export class SourceAcquisitionPolicy {
       ? configuredDomainRequestLimit()
       : options.maxRequestsPerDomain === null || options.maxRequestsPerDomain <= 0
         ? null
-        : Math.min(100, Math.round(options.maxRequestsPerDomain));
+        : Math.max(1, Math.min(100, Math.round(options.maxRequestsPerDomain)));
     this.reviewDomains = [
       ...(options.reviewDomains ?? []),
       ...configuredDomains(process.env.WEB_TASK_AGENT_REVIEW_DOMAINS)
