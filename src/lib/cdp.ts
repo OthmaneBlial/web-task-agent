@@ -454,7 +454,8 @@ export async function createPageSession(url?: string, options?: CreatePageSessio
   await ensureDebuggerReady();
 
   const versionResp = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`, {
-    redirect: "error"
+    redirect: "error",
+    signal: AbortSignal.timeout(1_500)
   });
   if (!versionResp.ok) {
     throw new Error(`failed to get json/version from lightpanda (HTTP ${versionResp.status})`);

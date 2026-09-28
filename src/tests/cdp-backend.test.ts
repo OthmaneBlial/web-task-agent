@@ -31,6 +31,7 @@ test("CDP discovery rejects redirects and non-local WebSocket targets", async ()
     await assert.rejects(createPageSession(), /refusing non-local CDP WebSocket URL/);
     assert.equal(fetchOptions.length, 3);
     assert.ok(fetchOptions.every((options) => options?.redirect === "error"));
+    assert.ok(fetchOptions.every((options) => options?.signal instanceof AbortSignal));
   } finally {
     global.fetch = originalFetch;
   }
