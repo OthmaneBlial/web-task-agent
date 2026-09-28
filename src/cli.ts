@@ -83,10 +83,21 @@ import {
 
 function parsePositiveInteger(value: string, label: string): number {
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(`${label} must be a positive integer`);
   }
   return parsed;
+}
+
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+const MAX_WORKER_POLL_SECONDS = Math.floor(MAX_TIMER_DELAY_MS / 1000);
+
+function parseWorkerPollIntervalSeconds(value: string): number {
+  const seconds = parsePositiveInteger(value, "poll-interval-seconds");
+  if (seconds > MAX_WORKER_POLL_SECONDS) {
+    throw new Error(`poll-interval-seconds must not exceed ${MAX_WORKER_POLL_SECONDS}`);
+  }
+  return seconds;
 }
 
 function parseDurationMinutes(value: string, label: string): number {
@@ -1553,7 +1564,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .option(
       "--poll-interval-seconds <number>",
       "How long an idle worker waits before polling again",
-      (value) => parsePositiveInteger(value, "poll-interval-seconds"),
+      parseWorkerPollIntervalSeconds,
       15
     )
     .option(

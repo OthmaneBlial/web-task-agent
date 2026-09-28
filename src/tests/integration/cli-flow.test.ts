@@ -51,6 +51,13 @@ function createCompletedJob(databasePath: string, jobId: string): JobStore {
   });
 }
 
+test("worker rejects poll intervals that overflow Node timers", () => {
+  assert.throws(
+    () => runCli(["worker", "run", "--poll-interval-seconds", "2147484"], {}),
+    /poll-interval-seconds must not exceed 2147483/
+  );
+});
+
 test("job report command prints a recovery recommendation for paused jobs", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-cli-report-"));
   const databasePath = path.join(tempDir, "jobs.sqlite");
