@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   ensureLlmRuntimeEnvironment,
-  getFirstConfiguredEnvValue
+  getFirstConfiguredEnvValue,
+  parseLlmTimeoutMs
 } from "../lib/runtime-env";
 
 test("runtime env helper returns the first configured value", () => {
@@ -32,5 +33,18 @@ test("runtime env helper rejects missing llm api keys with a clear message", () 
     process.env.ANTHROPIC_API_KEY = previousValues.ANTHROPIC_API_KEY;
     process.env.ZAI_API_KEY = previousValues.ZAI_API_KEY;
     process.env.ANTHROPIC_AUTH_TOKEN = previousValues.ANTHROPIC_AUTH_TOKEN;
+  }
+});
+
+test("LLM timeout uses its default when unset and accepts bounded integer milliseconds", () => {
+  assert.equal(parseLlmTimeoutMs(undefined), 90_000);
+  assert.equal(parseLlmTimeoutMs(""), 90_000);
+  assert.equal(parseLlmTimeoutMs("120000"), 120_000);
+  assert.equal(parseLlmTimeoutMs("600000"), 600_000);
+});
+
+test("LLM timeout rejects invalid and overlong values", () => {
+  for (const value of ["NaN", "Infinity", "0", "-1", "1.5", "600001"]) {
+    assert.throws(() => parseLlmTimeoutMs(value), /ANTHROPIC_TIMEOUT_MS must be a whole number/);
   }
 });

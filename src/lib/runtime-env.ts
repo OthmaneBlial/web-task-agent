@@ -1,4 +1,16 @@
 const LLM_API_KEY_ENV_VARS = ["ANTHROPIC_API_KEY", "ZAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"] as const;
+const DEFAULT_LLM_TIMEOUT_MS = 90_000;
+const MAX_LLM_TIMEOUT_MS = 10 * 60 * 1_000;
+
+export function parseLlmTimeoutMs(value: string | undefined): number {
+  if (value === undefined || value.trim() === "") return DEFAULT_LLM_TIMEOUT_MS;
+
+  const timeoutMs = Number(value);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_LLM_TIMEOUT_MS) {
+    throw new Error(`ANTHROPIC_TIMEOUT_MS must be a whole number from 1 to ${MAX_LLM_TIMEOUT_MS} milliseconds.`);
+  }
+  return timeoutMs;
+}
 
 export function getFirstConfiguredEnvValue(envVars: readonly string[]): string | null {
   for (const envVar of envVars) {

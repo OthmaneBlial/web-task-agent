@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
 
+import { parseLlmTimeoutMs } from "./runtime-env";
 import type {
   AgentEvidenceBundle,
   AgentCommentsDraft,
@@ -103,8 +104,6 @@ const DEFAULT_API_KEY =
   process.env.ANTHROPIC_API_KEY ?? process.env.ZAI_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN;
 const DEFAULT_MODEL =
   process.env.ANTHROPIC_MODEL ?? process.env.ZAI_MODEL ?? "claude-sonnet-4-20250514";
-const DEFAULT_TIMEOUT_MS = Number(process.env.ANTHROPIC_TIMEOUT_MS ?? "90000");
-
 function clampScore(score: number): number {
   if (!Number.isFinite(score)) {
     return 0;
@@ -675,7 +674,7 @@ export class LlmService {
     this.anthropic = new Anthropic({
       apiKey: DEFAULT_API_KEY,
       baseURL: DEFAULT_BASE_URL,
-      timeout: DEFAULT_TIMEOUT_MS,
+      timeout: parseLlmTimeoutMs(process.env.ANTHROPIC_TIMEOUT_MS),
       maxRetries: 1
     });
     this.model = model;
