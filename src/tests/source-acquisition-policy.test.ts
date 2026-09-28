@@ -9,6 +9,15 @@ import { evaluateRobotsText, SourceAcquisitionPolicy, type RobotsFetchResponse }
 
 const resolvePublicHostname = async () => [{ address: "93.184.216.34", family: 4 }];
 
+function robotsResponse(text: string, status = 200): RobotsFetchResponse {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    body: new Response(text).body,
+    text: async () => text
+  };
+}
+
 test("robots policy honors the most specific matching rule and user agent group", () => {
   const robotsText = [
     "User-agent: *",
@@ -97,7 +106,7 @@ test("source acquisition caches robots decisions and paces repeated domains", as
     },
     fetchRobots: async () => {
       robotsCalls += 1;
-      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+      return robotsResponse("User-agent: *\nAllow: /\n");
     },
     resolveHostname: resolvePublicHostname
   });
@@ -126,7 +135,7 @@ test("invalid numeric options retain configured source acquisition bounds", asyn
       now: () => 1_000,
       sleep: async (milliseconds) => { waits.push(milliseconds); },
       resolveHostname: resolvePublicHostname,
-      fetchRobots: async () => ({ ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" })
+      fetchRobots: async () => robotsResponse("User-agent: *\nAllow: /\n")
     });
 
     const first = await policy.prepare("https://docs.example.com/one");
@@ -155,7 +164,7 @@ test("positive fractional domain request limits keep a one-request cap", async (
     const policy = new SourceAcquisitionPolicy({
       minDomainDelayMs: 0,
       resolveHostname: resolvePublicHostname,
-      fetchRobots: async () => ({ ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" })
+      fetchRobots: async () => robotsResponse("User-agent: *\nAllow: /\n")
     });
 
     const first = await policy.prepare("https://docs.example.com/one");
@@ -180,7 +189,7 @@ test("source acquisition refreshes cached robots rules after 24 hours", async ()
     resolveHostname: resolvePublicHostname,
     fetchRobots: async () => {
       robotsCalls += 1;
-      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+      return robotsResponse("User-agent: *\nAllow: /\n");
     }
   });
 
@@ -201,7 +210,7 @@ test("denied robots fetches retry after a short cooldown", async () => {
     resolveHostname: resolvePublicHostname,
     fetchRobots: async () => {
       robotsCalls += 1;
-      return { ok: status === 200, status, text: async () => "User-agent: *\nAllow: /\n" };
+      return robotsResponse("User-agent: *\nAllow: /\n", status);
     }
   });
 
@@ -234,7 +243,7 @@ test("concurrent source acquisition coalesces robots requests and reserves paced
   );
   await new Promise<void>((resolve) => setImmediate(resolve));
   for (const resolveRobots of robotsResolvers) {
-    resolveRobots({ ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" });
+    resolveRobots(robotsResponse("User-agent: *\nAllow: /\n"));
   }
   const decisions = await Promise.all(pending);
 
@@ -247,7 +256,7 @@ test("concurrent source acquisition coalesces robots requests and reserves paced
 test("source acquisition denies known robots exclusions and records unavailable robots", async () => {
   const denyPolicy = new SourceAcquisitionPolicy({
     minDomainDelayMs: 0,
-    fetchRobots: async () => ({ ok: true, status: 200, text: async () => "User-agent: *\nDisallow: /private\n" }),
+    fetchRobots: async () => robotsResponse("User-agent: *\nDisallow: /private\n"),
     resolveHostname: resolvePublicHostname
   });
   const unavailablePolicy = new SourceAcquisitionPolicy({
@@ -276,7 +285,7 @@ test("source acquisition follows safe robots redirects and applies rules to the 
           text: async () => ""
         };
       }
-      return { ok: true, status: 200, text: async () => "User-agent: *\nDisallow: /private\n" };
+      return robotsResponse("User-agent: *\nDisallow: /private\n");
     }
   });
 
@@ -384,6 +393,28 @@ test("robots response parsing stops at 512 KiB and cancels the remaining body", 
   assert.equal(canceled, true);
 });
 
+test("robots response without a stream fails closed without buffering text", async () => {
+  let textRead = false;
+  const policy = new SourceAcquisitionPolicy({
+    minDomainDelayMs: 0,
+    resolveHostname: resolvePublicHostname,
+    fetchRobots: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => {
+        textRead = true;
+        return "User-agent: *\nAllow: /\n";
+      }
+    })
+  });
+
+  const decision = await policy.prepare("https://docs.example.com/guide");
+
+  assert.equal(decision.action, "deny");
+  assert.ok(decision.signals.includes("robots_unreachable"));
+  assert.equal(textRead, false);
+});
+
 test("source acquisition enforces a per-domain budget and leaves sensitive domains for human review", async () => {
   let robotsCalls = 0;
   const policy = new SourceAcquisitionPolicy({
@@ -392,7 +423,7 @@ test("source acquisition enforces a per-domain budget and leaves sensitive domai
     reviewDomains: ["sensitive.example.com"],
     fetchRobots: async () => {
       robotsCalls += 1;
-      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+      return robotsResponse("User-agent: *\nAllow: /\n");
     },
     resolveHostname: resolvePublicHostname
   });
@@ -423,7 +454,7 @@ test("source acquisition denies DNS answers that point at private networks befor
     resolveHostname: async () => [{ address: "10.0.0.7", family: 4 }],
     fetchRobots: async () => {
       robotsCalls += 1;
-      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+      return robotsResponse("User-agent: *\nAllow: /\n");
     }
   });
 
@@ -442,7 +473,7 @@ test("network target checks reject private redirect destinations without robots 
     resolveHostname: async () => [{ address: "10.0.0.7", family: 4 }],
     fetchRobots: async () => {
       robotsCalls += 1;
-      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+      return robotsResponse("User-agent: *\nAllow: /\n");
     }
   });
 
@@ -467,7 +498,7 @@ test("source acquisition resolves the exact requested hostname before browser na
     },
     fetchRobots: async () => {
       robotsCalls += 1;
-      return { ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" };
+      return robotsResponse("User-agent: *\nAllow: /\n");
     }
   });
 

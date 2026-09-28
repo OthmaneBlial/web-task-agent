@@ -63,7 +63,8 @@ const ROBOTS_DENIAL_RETRY_MS = 60 * 1_000;
 
 async function readRobotsText(response: RobotsFetchResponse): Promise<string> {
   if (!response.body) {
-    return Buffer.from(await response.text(), "utf8").subarray(0, MAX_ROBOTS_BYTES).toString("utf8");
+    if (response.status === 204 || response.status === 205) return "";
+    throw new Error("robots.txt response body is unavailable");
   }
 
   const reader = response.body.getReader();

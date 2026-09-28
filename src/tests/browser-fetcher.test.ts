@@ -201,7 +201,12 @@ test("browser fetcher blocks a redirect to a private address before connecting",
     const policy = new SourceAcquisitionPolicy({
       minDomainDelayMs: 0,
       resolveHostname: async () => [{ address: "93.184.216.34", family: 4 }],
-      fetchRobots: async () => ({ ok: true, status: 200, text: async () => "User-agent: *\nAllow: /\n" })
+      fetchRobots: async () => ({
+        ok: true,
+        status: 200,
+        body: new Response("User-agent: *\nAllow: /\n").body,
+        text: async () => "User-agent: *\nAllow: /\n"
+      })
     });
     const fetcher = new BrowserPageFetcher(() => undefined, policy);
     const [result] = await fetcher.fetchResults([{
