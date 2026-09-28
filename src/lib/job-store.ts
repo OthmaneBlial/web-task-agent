@@ -287,7 +287,7 @@ function canonicalizeUrl(rawUrl: string): string {
   }
 
   const sortedParams = Array.from(parsed.searchParams.entries()).sort(([left], [right]) =>
-    left.localeCompare(right)
+    left < right ? -1 : left > right ? 1 : 0
   );
   parsed.search = "";
   for (const [key, value] of sortedParams) {

@@ -85,12 +85,12 @@ test("job store maintenance tracks schema version, canonical urls, and artifact 
       results: [
         {
           title: "Canonical storage page",
-          url: "https://www.example.com/index.html?utm_source=newsletter#fragment",
+          url: "https://www.example.com/index.html?utm_source=newsletter&a=1&A=2#fragment",
           snippet: "Testing canonical URL storage.",
           site: "example.com",
           page: {
             title: "Canonical storage page",
-            url: "https://www.example.com/index.html?utm_source=newsletter#fragment",
+            url: "https://www.example.com/index.html?utm_source=newsletter&a=1&A=2#fragment",
             description: "Testing canonical URL storage.",
             h1: "Canonical storage page",
             headings: ["Storage policy", "Source canonicalization"],
@@ -125,10 +125,10 @@ test("job store maintenance tracks schema version, canonical urls, and artifact 
       LIMIT 1
     `).get() as Record<string, unknown> | undefined;
     assert.ok(sourceRow);
-    assert.equal(String(sourceRow?.canonical_url ?? ""), "https://example.com/");
+    assert.equal(String(sourceRow?.canonical_url ?? ""), "https://example.com/?A=2&a=1");
     assert.equal(
       String(sourceRow?.raw_url ?? ""),
-      "https://www.example.com/index.html?utm_source=newsletter#fragment"
+      "https://www.example.com/index.html?utm_source=newsletter&a=1&A=2#fragment"
     );
 
     const artifactRow = db.prepare(`
