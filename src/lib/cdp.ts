@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import CDP = require("chrome-remote-interface");
 
 import { writeBufferAtomic } from "./cache";
+import { redactSensitiveText } from "./redaction";
 import { SourceAcquisitionPolicy } from "./source-acquisition-policy";
 import type { SourceAcquisitionDecision } from "./source-acquisition-policy";
 import type {
@@ -72,7 +73,7 @@ export async function sleep(ms: number, jitterRatio: number = 0.18): Promise<voi
 
 function logLightpandaSupervisor(message: string): void {
   const stamp = new Date().toISOString();
-  console.log(`[${stamp}] ${message}`);
+  console.log(`[${stamp}] ${redactSensitiveText(message)}`);
 }
 
 export function classifyCdpBackend(browser: string | null | undefined): CdpBackendKind {

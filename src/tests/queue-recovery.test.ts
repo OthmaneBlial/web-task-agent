@@ -506,11 +506,11 @@ test("successful manual retries clear the previous queue error", () => {
       databasePath,
       queueId: queued.queueId,
       workerId: "worker-first",
-      errorMessage: "first attempt failed"
+      errorMessage: "first attempt failed with password=plain-password"
     });
     assert.equal(
       controlQueuedJob({ databasePath, queueId: queued.queueId, action: "retry" })?.lastError,
-      "first attempt failed"
+      "first attempt failed with password=[REDACTED]"
     );
 
     db = new DatabaseSync(databasePath);

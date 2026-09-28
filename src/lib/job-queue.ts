@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import type { AgentRunOptions, QueueControlAction } from "../types";
 import { resolveJobDatabasePath } from "./job-store";
+import { redactSensitiveText } from "./redaction";
 
 type QueuedJobStatus =
   | "queued"
@@ -883,6 +884,7 @@ export function failQueuedJob(input: {
 }): void {
   withQueueDatabase(input.databasePath, (db) => {
     const timestamp = nowIso();
+    const errorMessage = redactSensitiveText(input.errorMessage);
     const row = db.prepare(`
       SELECT attempts, max_attempts, payload_json
       FROM queued_jobs
@@ -904,7 +906,7 @@ export function failQueuedJob(input: {
       : null;
     const resultPayload = {
       status: shouldRetry ? "queued" : "failed",
-      errorMessage: input.errorMessage,
+      errorMessage,
       attempts,
       maxAttempts,
       retryAt
@@ -931,7 +933,7 @@ export function failQueuedJob(input: {
       shouldRetry ? "queued" : "failed",
       serializeJson(payload),
       serializeJson(resultPayload),
-      input.errorMessage,
+      errorMessage,
       shouldRetry ? retryAt : timestamp,
       timestamp,
       shouldRetry ? "queued" : "failed",

@@ -96,6 +96,16 @@ test("management server exposes controls and log endpoints", async () => {
     assert.ok(Array.isArray(events));
     assert.ok(events.some((event) => event.message === "server test boot"));
 
+    const invalidQueueControl = await fetch(`${baseUrl}/api/queue/${queued.queueId}/control`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "password=plain-password" })
+    });
+    assert.equal(invalidQueueControl.status, 400);
+    const invalidControlBody = await invalidQueueControl.text();
+    assert.match(invalidControlBody, /password=\[REDACTED\]/);
+    assert.doesNotMatch(invalidControlBody, /plain-password/);
+
     const queuePauseResponse = await fetch(`${baseUrl}/api/queue/${queued.queueId}/control`, {
       method: "POST",
       headers: {

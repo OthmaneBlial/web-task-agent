@@ -1,3 +1,5 @@
+import { redactSensitiveText } from "./redaction";
+
 export function formatCliErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     const message = error.message.trim();
@@ -15,8 +17,8 @@ export function formatCliErrorMessage(error: unknown): string {
       hints.push("Run `web-task-agent --help` or `<command> --help` for usage.");
     }
 
-    return [message, ...hints].join("\n");
+    return redactSensitiveText([message, ...hints].join("\n"));
   }
 
-  return String(error);
+  return redactSensitiveText(String(error));
 }

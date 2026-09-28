@@ -3,6 +3,7 @@ import { URL } from "node:url";
 
 import { requestAgentJobControl, resumeAgentJob, rerunAgentJob } from "../lib/job-operations";
 import { controlQueuedJob, getQueuedJob, listQueuedJobs } from "../lib/job-queue";
+import { redactSensitiveValue } from "../lib/redaction";
 import {
   getStoredJobDetail,
   listJobRunEvents,
@@ -87,7 +88,7 @@ function sendApiError(
   message: string,
   details?: Record<string, unknown>
 ): void {
-  sendJson(res, statusCode, createApiError(error, message, details));
+  sendJson(res, statusCode, redactSensitiveValue(createApiError(error, message, details)));
 }
 
 function decodePathSegment(value: string): string {

@@ -30,6 +30,7 @@ import {
   classifyResearchContentType
 } from "../tasks/agent/shared";
 import { formatStoredJobRuntimeSummary } from "./runtime-summary";
+import { redactSensitiveText, redactSensitiveValue } from "./redaction";
 
 const DEFAULT_DATABASE_PATH = path.join(process.cwd(), ".data", "web-task-agent.sqlite");
 const JOB_STORE_SCHEMA_VERSION = 2;
@@ -125,9 +126,13 @@ function parseJsonValue<T>(value: unknown, fallback: T): T {
 
 function normalizeError(error: unknown): string {
   if (error instanceof Error) {
-    return error.stack ?? error.message;
+    return redactSensitiveText(error.stack ?? error.message);
   }
-  return String(error);
+  return redactSensitiveText(String(error));
+}
+
+function redactErrorMessage(message: string | null | undefined): string | null | undefined {
+  return message == null ? message : redactSensitiveText(message);
 }
 
 function normalizeJobLifecycleStatus(value: unknown): JobLifecycleStatus {
@@ -1281,16 +1286,18 @@ function insertJobRunEvent(
   metadata?: unknown
 ): void {
   const timestamp = nowIso();
+  const safeMessage = redactSensitiveText(message);
+  const safeMetadata = redactSensitiveValue(metadata);
   db.prepare(`
     INSERT INTO job_run_events (
       id, job_id, event_type, message, metadata_json, created_at
     ) VALUES (?, ?, ?, ?, ?, ?)
   `).run(
-    `evt_${hashValue(`${jobId}:${eventType}:${timestamp}:${message}`).slice(0, 24)}`,
+    `evt_${hashValue(`${jobId}:${eventType}:${timestamp}:${safeMessage}`).slice(0, 24)}`,
     jobId,
     eventType,
-    message,
-    serializeJson(metadata),
+    safeMessage,
+    serializeJson(safeMetadata),
     timestamp
   );
 }
@@ -2025,7 +2032,7 @@ export class JobStore {
       input: options.input ?? {},
       budget: options.budget ?? {},
       output: options.output ?? {},
-      errorMessage: options.errorMessage ?? null
+      errorMessage: redactErrorMessage(options.errorMessage) ?? null
     };
 
     if (!this.getExecutionLease()) {
@@ -2445,7 +2452,7 @@ export class JobStore {
       updatedAt,
       completedAt,
       durationMs,
-      options.errorMessage ?? null,
+      redactErrorMessage(options.errorMessage) ?? null,
       serializeJson(step.input),
       serializeJson(options.output)
     );
@@ -2466,7 +2473,10 @@ export class JobStore {
       input: patch.input ?? this.job.input,
       budget: patch.budget ?? this.job.budget,
       output: patch.output ?? this.job.output,
-      errorMessage: patch.errorMessage !== undefined ? patch.errorMessage ?? null : this.job.errorMessage,
+      errorMessage:
+        patch.errorMessage !== undefined
+          ? redactErrorMessage(patch.errorMessage) ?? null
+          : this.job.errorMessage,
       updatedAt: patch.updatedAt ?? nowIso()
     };
     this.upsertJob();

@@ -22,3 +22,9 @@ test("cli error formatter gives job and queue lookup hints", () => {
     /Run `web-task-agent job inspect <job-id>`, `web-task-agent job report <job-id>`, `web-task-agent job budget <job-id>`, or `web-task-agent queue list`/
   );
 });
+
+test("cli error formatter redacts secrets from provider errors", () => {
+  const message = formatCliErrorMessage(new Error("provider rejected password=plain-password"));
+  assert.match(message, /password=\[REDACTED\]/);
+  assert.doesNotMatch(message, /plain-password/);
+});
