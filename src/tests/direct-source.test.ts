@@ -90,6 +90,27 @@ test("oversized Play Store responses do not become read evidence", async () => {
   }
 });
 
+test("failed Play Store responses cancel their unread body", async () => {
+  const originalFetch = globalThis.fetch;
+  let canceled = false;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) { controller.enqueue(new Uint8Array([1])); },
+    cancel() { canceled = true; }
+  });
+  globalThis.fetch = async () => new Response(body, { status: 503 });
+
+  try {
+    const result = await enrichProvidedSourceSeedResult(
+      buildProvidedSourceSeedResult("https://play.google.com/store/apps/details?id=com.example.app")
+    );
+
+    assert.notEqual(result.reviewStatus, "read");
+    assert.equal(canceled, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Play Store metadata never follows a redirect outside the official HTTPS host", async () => {
   const originalFetch = globalThis.fetch;
   const requests: Array<{ url: string; redirect?: RequestRedirect }> = [];

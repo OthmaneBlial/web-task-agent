@@ -288,6 +288,7 @@ test("source acquisition denies known robots exclusions and records unavailable 
 
 test("source acquisition follows safe robots redirects and applies rules to the original origin", async () => {
   const requestedUrls: string[] = [];
+  let redirectBodyCanceled = false;
   const policy = new SourceAcquisitionPolicy({
     minDomainDelayMs: 0,
     resolveHostname: resolvePublicHostname,
@@ -299,6 +300,10 @@ test("source acquisition follows safe robots redirects and applies rules to the 
           ok: false,
           status: 302,
           headers: { get: () => "https://policy.example.net/robots.txt" },
+          body: new ReadableStream<Uint8Array>({
+            start(controller) { controller.enqueue(new Uint8Array([1])); },
+            cancel() { redirectBodyCanceled = true; }
+          }),
           text: async () => ""
         };
       }
@@ -310,6 +315,7 @@ test("source acquisition follows safe robots redirects and applies rules to the 
 
   assert.equal(decision.action, "deny");
   assert.ok(decision.signals.includes("robots_disallow"));
+  assert.equal(redirectBodyCanceled, true);
   assert.deepEqual(requestedUrls, [
     "https://docs.example.com/robots.txt",
     "https://policy.example.net/robots.txt"
@@ -365,14 +371,20 @@ test("robots server errors, access denial, and network failures deny source acqu
     { ok: false, status: 429, signal: "robots_rate_limited" }
   ];
   for (const { ok, status, signal } of failedResponses) {
+    let bodyCanceled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new Uint8Array([1])); },
+      cancel() { bodyCanceled = true; }
+    });
     const policy = new SourceAcquisitionPolicy({
       minDomainDelayMs: 0,
       resolveHostname: resolvePublicHostname,
-      fetchRobots: async () => ({ ok, status, text: async () => "" })
+      fetchRobots: async () => ({ ok, status, body, text: async () => "" })
     });
     const decision = await policy.prepare("https://docs.example.com/guide");
     assert.equal(decision.action, "deny", String(status));
     assert.ok(decision.signals.includes(signal), String(status));
+    assert.equal(bodyCanceled, true, String(status));
   }
 
   const offlinePolicy = new SourceAcquisitionPolicy({

@@ -1,5 +1,5 @@
 import type { AgentPageDigest, AgentResearchResult, AgentSearchResult } from "../../types";
-import { readBoundedResponseText } from "../../lib/read-bounded-response-text";
+import { cancelResponseBody, readBoundedResponseText } from "../../lib/read-bounded-response-text";
 
 const MAX_PLAY_STORE_RESPONSE_BYTES = 4 * 1024 * 1024;
 const MAX_PLAY_STORE_REDIRECTS = 5;
@@ -628,6 +628,7 @@ async function fetchPlayStoreAppMetadata(url: string): Promise<DirectAppMetadata
     });
 
     if (!response.ok) {
+      await cancelResponseBody(response.body);
       return null;
     }
 
@@ -685,6 +686,7 @@ async function fetchPlayStoreSearchAppIds(query: string, limit: number = 24): Pr
       signal: AbortSignal.timeout(15_000)
     });
     if (!response.ok) {
+      await cancelResponseBody(response.body);
       return [];
     }
 

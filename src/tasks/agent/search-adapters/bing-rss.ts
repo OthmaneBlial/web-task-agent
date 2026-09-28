@@ -1,5 +1,5 @@
 import type { AgentSearchResult } from "../../../types";
-import { readBoundedResponseText } from "../../../lib/read-bounded-response-text";
+import { cancelResponseBody, readBoundedResponseText } from "../../../lib/read-bounded-response-text";
 import { BING_RSS_SEARCH_PROVIDER, nowIso } from "../shared";
 import type { AgentSearchAdapter, AgentSearchStageResult } from "../search-adapter";
 
@@ -93,6 +93,7 @@ export class BingRssSearchAdapter implements AgentSearchAdapter {
       signal: AbortSignal.timeout(15_000)
     });
     if (!response.ok) {
+      await cancelResponseBody(response.body);
       throw new Error(`bing rss search failed with status ${response.status}`);
     }
 

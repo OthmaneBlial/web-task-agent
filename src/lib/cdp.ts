@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import CDP = require("chrome-remote-interface");
 
 import { writeBufferAtomic } from "./cache";
-import { readBoundedResponseText } from "./read-bounded-response-text";
+import { cancelResponseBody, readBoundedResponseText } from "./read-bounded-response-text";
 import { redactSensitiveText } from "./redaction";
 import { SourceAcquisitionPolicy } from "./source-acquisition-policy";
 import type { SourceAcquisitionDecision } from "./source-acquisition-policy";
@@ -152,7 +152,7 @@ export async function inspectCdpBackend(timeoutMs: number = 1_500): Promise<CdpB
       redirect: "error"
     });
     if (!response.ok) {
-      await response.body?.cancel().catch(() => undefined);
+      await cancelResponseBody(response.body);
       return {
         endpoint,
         port: DEBUG_PORT,
@@ -209,7 +209,7 @@ async function isDebuggerReachable(timeoutMs: number = 1_500): Promise<boolean> 
       signal: controller.signal,
       redirect: "error"
     });
-    await response.body?.cancel().catch(() => undefined);
+    await cancelResponseBody(response.body);
     return response.ok;
   } catch {
     return false;
@@ -471,7 +471,7 @@ export async function createPageSession(url?: string, options?: CreatePageSessio
     signal: AbortSignal.timeout(1_500)
   });
   if (!versionResp.ok) {
-    await versionResp.body?.cancel().catch(() => undefined);
+    await cancelResponseBody(versionResp.body);
     throw new Error(`failed to get json/version from lightpanda (HTTP ${versionResp.status})`);
   }
   const versionInfo: unknown = JSON.parse(

@@ -1,3 +1,7 @@
+export async function cancelResponseBody(body: ReadableStream<Uint8Array> | null | undefined): Promise<void> {
+  await body?.cancel().catch(() => undefined);
+}
+
 export async function readBoundedResponseText(
   response: Response,
   maxBytes: number,

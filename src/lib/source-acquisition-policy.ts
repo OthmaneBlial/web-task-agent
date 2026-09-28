@@ -3,6 +3,7 @@ import * as http from "node:http";
 import * as https from "node:https";
 import { Readable } from "node:stream";
 
+import { cancelResponseBody } from "./read-bounded-response-text";
 import { evaluateSourceUrlPolicy, isPublicInternetAddress } from "./source-policy";
 
 export interface RobotsFetchResponse {
@@ -380,6 +381,9 @@ export class SourceAcquisitionPolicy {
           }, target.addresses ?? []);
         } catch {
           return deny("source acquisition denied source because robots.txt is unreachable", ["robots_unreachable", "human_review_required"]);
+        }
+        if (response.status < 200 || response.status >= 300) {
+          await cancelResponseBody(response.body);
         }
 
         if (response.status >= 300 && response.status < 400) {

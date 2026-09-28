@@ -78,6 +78,21 @@ test("Bing RSS search cancels and rejects oversized responses", async () => {
   assert.equal(canceled, true);
 });
 
+test("Bing RSS search cancels error response bodies", async () => {
+  let canceled = false;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) { controller.enqueue(new Uint8Array([1])); },
+    cancel() { canceled = true; }
+  });
+  const adapter = new BingRssSearchAdapter(
+    () => undefined,
+    async () => new Response(body, { status: 503 })
+  );
+
+  await assert.rejects(adapter.search("failed response", 5), /status 503/);
+  assert.equal(canceled, true);
+});
+
 test("ResilientSearchAdapter falls back when the primary provider fails", async () => {
   const events: string[] = [];
   const primary: AgentSearchAdapter = {
