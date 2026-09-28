@@ -91,6 +91,27 @@ function parsePositiveInteger(value: string, label: string): number {
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const MAX_WORKER_POLL_SECONDS = Math.floor(MAX_TIMER_DELAY_MS / 1000);
+const MAX_JSON_INPUT_BYTES = 2 * 1024 * 1024;
+
+function readBoundedTextFileSync(filePath: string, label: string): string {
+  const descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
+  try {
+    const stat = fs.fstatSync(descriptor);
+    if (!stat.isFile()) throw new Error(`${label} must be a regular file`);
+    if (stat.size > MAX_JSON_INPUT_BYTES) throw new Error(`${label} exceeds the 2 MB limit`);
+    const buffer = Buffer.allocUnsafe(MAX_JSON_INPUT_BYTES + 1);
+    let bytesRead = 0;
+    while (bytesRead < buffer.length) {
+      const count = fs.readSync(descriptor, buffer, bytesRead, buffer.length - bytesRead, null);
+      if (count === 0) break;
+      bytesRead += count;
+    }
+    if (bytesRead > MAX_JSON_INPUT_BYTES) throw new Error(`${label} exceeds the 2 MB limit`);
+    return buffer.toString("utf8", 0, bytesRead);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
 
 function parseWorkerPollIntervalSeconds(value: string): number {
   const seconds = parsePositiveInteger(value, "poll-interval-seconds");
@@ -289,8 +310,7 @@ Use "web-task-agent <command> --help" for the full option list.
     .action((inputPath) => {
       const sourcePath = path.resolve(String(inputPath));
       if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) throw new Error(`adapter result file does not exist: ${sourcePath}`);
-      if (fs.statSync(sourcePath).size > 2 * 1024 * 1024) throw new Error("adapter result exceeds the 2 MB limit");
-      const parsed = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
+      const parsed = JSON.parse(readBoundedTextFileSync(sourcePath, "adapter result"));
       const validation = validateDecisionReceiptAdapterResult(parsed);
       if (!validation.valid) throw new Error(`adapter contract is invalid: ${validation.errors.join("; ")}`);
       console.log("Adapter contract: valid");
@@ -398,7 +418,7 @@ Use "web-task-agent <command> --help" for the full option list.
       }
       let parsed: unknown;
       try {
-        parsed = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
+        parsed = JSON.parse(readBoundedTextFileSync(sourcePath, "external result"));
       } catch (error) {
         throw new Error(`could not parse external result JSON: ${error instanceof Error ? error.message : String(error)}`);
       }

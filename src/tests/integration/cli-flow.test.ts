@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
 
 import { JobStore } from "../../lib/job-store";
@@ -56,6 +56,26 @@ test("worker rejects poll intervals that overflow Node timers", () => {
     () => runCli(["worker", "run", "--poll-interval-seconds", "2147484"], {}),
     /poll-interval-seconds must not exceed 2147483/
   );
+});
+
+test("receipt import rejects oversized JSON input before creating a package", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-task-agent-receipt-import-limit-"));
+  const inputPath = path.join(tempDir, "result.json");
+  const outputDir = path.join(tempDir, "receipt");
+
+  try {
+    fs.writeFileSync(inputPath, Buffer.alloc(2 * 1024 * 1024 + 1, 0x20));
+    const result = spawnSync(
+      process.execPath,
+      [path.join(process.cwd(), "dist", "cli.js"), "receipt", "import", inputPath, "--output", outputDir],
+      { encoding: "utf8" }
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /external result exceeds the 2 MB limit/);
+    assert.equal(fs.existsSync(outputDir), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("job report command prints a recovery recommendation for paused jobs", () => {
