@@ -111,7 +111,7 @@
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.0.0",
     "@types/chrome-remote-interface": "^0.34.0",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.6.3",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "esbuild": "^0.28.2",
